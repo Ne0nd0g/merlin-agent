@@ -288,7 +288,7 @@ func TestBadAuthentication(t *testing.T) {
 	// Get the client
 	config := clientConfig
 	config.AgentID = a.ID
-	config.URL = "https://127.0.0.1:8084"
+	config.URL = "https://127.0.0.1:8085"
 	config.PSK = "neverGonnaGiveYouUp"
 	a.Client, err = merlinHTTP.New(config)
 	if err != nil {
@@ -299,7 +299,8 @@ func TestBadAuthentication(t *testing.T) {
 	setup := make(chan struct{})
 	ended := make(chan struct{})
 
-	go testserver.TestServer{}.Start("8084", ended, setup, t)
+	// AppVeyor uses port 8084 for something else
+	go testserver.TestServer{}.Start("8085", ended, setup, t)
 	//wait until set up
 	<-setup
 

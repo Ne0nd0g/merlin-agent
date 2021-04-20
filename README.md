@@ -1,4 +1,4 @@
-[![AppVeyor](https://ci.appveyor.com/api/projects/status/github/Ne0nd0g/merlin-agent?branch=master&svg=true)](https://ci.appveyor.com/project/Ne0nd0g/merlin-agent)
+[![AppVeyor](https://ci.appveyor.com/api/projects/status/xi0n3ucm5i234ios/branch/master?svg=true)](https://ci.appveyor.com/project/Ne0nd0g/merlin-agent)
 [![GoReportCard](https://goreportcard.com/badge/github.com/ne0nd0g/merlin-agent)](https://goreportcard.com/badge/github.com/ne0nd0g/merlin-agent)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Release](https://img.shields.io/github/release/Ne0nd0g/merlin-agent.svg)](https://github.com/Ne0nd0g/merlin-agent/releases/latest)
