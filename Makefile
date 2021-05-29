@@ -53,6 +53,10 @@ all: windows linux darwin
 windows:
 	export GOOS=windows GOARCH=amd64;go build -trimpath ${WINAGENTLDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${W}.exe ./main.go
 
+# Compile Agent - Windows x64 Debug (Can view STDOUT)
+windows-debug:
+	export GOOS=windows GOARCH=amd64;go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-Debug-${W}.exe ./main.go
+
 # Compile Agent - Linux mips
 mips:
 	export GOOS=linux;export GOARCH=mips;go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${M} ./main.go

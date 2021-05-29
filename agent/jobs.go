@@ -81,6 +81,7 @@ func executeJob() {
 					jobsOut <- jobs.Job{
 						AgentID: job.AgentID,
 						ID:      job.ID,
+						Token:   job.Token,
 						Type:    jobs.FILETRANSFER,
 						Payload: ft,
 					}
