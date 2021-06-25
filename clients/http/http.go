@@ -87,12 +87,14 @@ type Config struct {
 // New instantiates and returns a Client that is constructed from the passed in Config
 func New(config Config) (*Client, error) {
 	cli.Message(cli.DEBUG, "Entering into clients.http.New()...")
+	cli.Message(cli.DEBUG, fmt.Sprintf("Config: %+v", config))
 	client := Client{
 		AgentID:   config.AgentID,
 		URL:       config.URL,
 		UserAgent: config.UserAgent,
 		Host:      config.Host,
 		Protocol:  config.Protocol,
+		Proxy:     config.Proxy,
 		JA3:       config.JA3,
 		psk:       config.PSK,
 	}
@@ -125,6 +127,7 @@ func New(config Config) (*Client, error) {
 	cli.Message(cli.INFO, fmt.Sprintf("\tURL: %s", client.URL))
 	cli.Message(cli.INFO, fmt.Sprintf("\tUser-Agent: %s", client.UserAgent))
 	cli.Message(cli.INFO, fmt.Sprintf("\tHTTP Host Header: %s", client.Host))
+	cli.Message(cli.INFO, fmt.Sprintf("\tProxy: %s", client.Proxy))
 	cli.Message(cli.INFO, fmt.Sprintf("\tPayload Padding Max: %d", client.PaddingMax))
 	cli.Message(cli.INFO, fmt.Sprintf("\tJA3 String: %s", client.JA3))
 
@@ -134,6 +137,7 @@ func New(config Config) (*Client, error) {
 // getClient returns a HTTP client for the passed in protocol (i.e. h2 or http3)
 func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, error) {
 	cli.Message(cli.DEBUG, "Entering into clients.http.getClient()...")
+	cli.Message(cli.DEBUG, fmt.Sprintf("Protocol: %s, Proxy: %s, JA3 String: %s", protocol, proxyURL, ja3))
 	/* #nosec G402 */
 	// G402: TLS InsecureSkipVerify set true. (Confidence: HIGH, Severity: HIGH) Allowed for testing
 	// Setup TLS configuration
@@ -144,7 +148,6 @@ func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, erro
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
 		},
-		NextProtos: []string{protocol},
 	}
 
 	// Proxy
@@ -154,7 +157,11 @@ func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, erro
 		if errProxy != nil {
 			return nil, fmt.Errorf("there was an error parsing the proxy string:\r\n%s", errProxy.Error())
 		}
+		cli.Message(cli.DEBUG, fmt.Sprintf("Parsed Proxy URL: %+v", rawURL))
 		proxy = http.ProxyURL(rawURL)
+	} else {
+		// Check for, and use, HTTP_PROXY, HTTPS_PROXY and NO_PROXY environment variables
+		proxy = http.ProxyFromEnvironment
 	}
 
 	// JA3
@@ -181,6 +188,7 @@ func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, erro
 	var transport http.RoundTripper
 	switch strings.ToLower(protocol) {
 	case "http3":
+		TLSConfig.NextProtos = []string{"h3"} // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids
 		transport = &http3.RoundTripper{
 			QuicConfig: &quic.Config{
 				// Opted for a long timeout to prevent the client from sending a PING Frame
@@ -196,6 +204,7 @@ func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, erro
 			TLSClientConfig: TLSConfig,
 		}
 	case "h2":
+		TLSConfig.NextProtos = []string{"h2"} // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids
 		transport = &http2.Transport{
 			TLSClientConfig: TLSConfig,
 		}
@@ -207,26 +216,16 @@ func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, erro
 			},
 		}
 	case "https":
-		if proxyURL != "" {
-			transport = &http.Transport{
-				TLSClientConfig: TLSConfig,
-				Proxy:           proxy,
-			}
-		} else {
-			transport = &http.Transport{
-				TLSClientConfig: TLSConfig,
-			}
+		TLSConfig.NextProtos = []string{"http/1.1"} // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids
+		transport = &http.Transport{
+			TLSClientConfig: TLSConfig,
+			MaxIdleConns:    10,
+			Proxy:           proxy,
 		}
 	case "http":
-		if proxyURL != "" {
-			transport = &http.Transport{
-				MaxIdleConns: 10,
-				Proxy:        proxy,
-			}
-		} else {
-			transport = &http.Transport{
-				MaxIdleConns: 10,
-			}
+		transport = &http.Transport{
+			MaxIdleConns: 10,
+			Proxy:        proxy,
 		}
 	default:
 		return nil, fmt.Errorf("%s is not a valid client protocol", protocol)
