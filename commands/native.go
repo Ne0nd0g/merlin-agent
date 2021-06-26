@@ -63,6 +63,12 @@ func Native(cmd jobs.Command) jobs.Results {
 			break
 		}
 		results.Stdout = listing
+	case "ifconfig":
+		ifaces, err := ifconfig()
+		if err != nil {
+			results.Stderr = fmt.Sprintf("there was an error executing the 'ifconfig' command:\n%s", err)
+		}
+		results.Stdout = ifaces
 	case "nslookup":
 		results.Stdout, results.Stderr = nslookup(cmd.Args)
 	case "pwd":
