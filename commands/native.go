@@ -69,6 +69,8 @@ func Native(cmd jobs.Command) jobs.Results {
 			results.Stderr = fmt.Sprintf("there was an error executing the 'ifconfig' command:\n%s", err)
 		}
 		results.Stdout = ifaces
+	case "killprocess":
+		results.Stdout, results.Stderr = killProcess(cmd.Args[0])
 	case "nslookup":
 		results.Stdout, results.Stderr = nslookup(cmd.Args)
 	case "pwd":
@@ -141,4 +143,33 @@ func nslookup(query []string) (string, string) {
 		}
 	}
 	return resp, stderr
+}
+
+// killProcess is used to kill a running process by its number identifier
+func killProcess(pid string) (stdout string, stderr string) {
+
+	targetpid, err := strconv.Atoi(pid)
+	if err != nil || targetpid < 0 {
+		stderr = fmt.Sprintf("There was an error converting the pid %s to an integer:\n%s", pid, err)
+		return
+	}
+
+	if targetpid < 0 {
+		stderr = fmt.Sprintf("The provided pid %d is less than zero and invalid")
+		return
+	}
+	proc, err := os.FindProcess(targetpid)
+	if err != nil { // On linux, always returns a process. Don't worry, the Kill() will fail
+		stderr = fmt.Sprintf("Could not find a process with pid %d:\r\n%s", targetpid, err)
+		return
+	}
+
+	err = proc.Kill()
+	if err != nil {
+		stderr = fmt.Sprintf("Error killing pid %d:\r\n%s", targetpid, err)
+		return
+	}
+
+	stdout = fmt.Sprintf("Successfully killed pid %d", targetpid)
+	return
 }

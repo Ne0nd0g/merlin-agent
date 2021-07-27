@@ -42,7 +42,7 @@ func (a *Agent) control(job jobs.Job) {
 	switch strings.ToLower(cmd.Command) {
 	case "agentinfo":
 		// No action required; End of function gets and returns an Agent information structure
-	case "kill":
+	case "exit":
 		os.Exit(0)
 	case "sleep":
 		cli.Message(cli.NOTE, fmt.Sprintf("Setting agent sleep time to %s", cmd.Args))
