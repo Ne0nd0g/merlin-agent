@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   - Example `-url https://127.0.0.1/news.php,https://127.0.0.1/admin/get.php`
 - When using http or https protocol, the connection only appears in netstat for one second or less
 - Added `sdelete` command to securely delete a file
+- Added `touch`, alias is `timestomp`, command that matches the destination file's timestamps with source file
 
 ### Changed
 

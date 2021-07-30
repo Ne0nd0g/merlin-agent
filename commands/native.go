@@ -83,6 +83,8 @@ func Native(cmd jobs.Command) jobs.Results {
 		}
 	case "sdelete":
 		results.Stdout, results.Stderr = sdelete(cmd.Args[1])
+	case "touch":
+		results.Stdout, results.Stderr = touch(cmd.Args[1], cmd.Args[2])
 	default:
 		results.Stderr = fmt.Sprintf("%s is not a valid NativeCMD type", cmd.Command)
 	}
@@ -241,6 +243,36 @@ func sdelete(targetfile string) (string, string) {
 		}
 		resp += fmt.Sprintf("Securely deleted file: %s\n", targetfile)
 
+		return resp, stderr
+	}
+}
+
+// touch matches the destination file's timestamps with source file
+func touch(inputsourcefile string, inputdestinationfile string) (string, string) {
+	var resp string
+	var stderr string
+
+	sourcefilename := inputsourcefile
+	destinationfilename := inputdestinationfile
+
+	// get last modified time of source file
+	sourcefile, err1 := os.Stat(sourcefilename)
+
+	if err1 != nil {
+		stderr = fmt.Sprintf("Error retrieving last modified time of: %s\n%s\n", sourcefilename, err1.Error())
+		return resp, stderr
+	}
+
+	modifiedtime := sourcefile.ModTime()
+
+	// change both atime and mtime to last modified time of source file
+	err2 := os.Chtimes(destinationfilename, modifiedtime, modifiedtime)
+
+	if err2 != nil {
+		stderr = fmt.Sprintf("Error changing last modified and accessed time of: %s\n%s\n", destinationfilename, err2.Error())
+		return resp, stderr
+	} else {
+		resp = fmt.Sprintf("File: %s\nLast modified and accessed time set to: %s\n", destinationfilename, modifiedtime)
 		return resp, stderr
 	}
 }
