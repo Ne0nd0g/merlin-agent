@@ -85,6 +85,8 @@ func executeJob() {
 						Type:    jobs.FILETRANSFER,
 						Payload: ft,
 					}
+				case "ps":
+					result = commands.PS(job.Payload.(jobs.Command))
 				default:
 					result.Stderr = fmt.Sprintf("unknown module command: %s", job.Payload.(jobs.Command).Command)
 				}

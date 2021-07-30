@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - When using http or https protocol, the connection only appears in netstat for one second or less
 - Added `sdelete` command to securely delete a file
 - Added `touch`, alias is `timestomp`, command that matches the destination file's timestamps with source file
+- Added `ps` command that returns a process listing for Windows agents
 
 ### Changed
 
