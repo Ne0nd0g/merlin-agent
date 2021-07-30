@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	// 3rd Party
 	"github.com/fatih/color"
@@ -98,7 +99,6 @@ func main() {
 		AgentID:     a.ID,
 		Protocol:    protocol,
 		Host:        host,
-		URL:         url,
 		Proxy:       proxy,
 		UserAgent:   useragent,
 		PSK:         psk,
@@ -107,6 +107,11 @@ func main() {
 		AuthPackage: "opaque",
 		Opaque:      opaque,
 	}
+
+	if url != "" {
+		clientConfig.URL = strings.Split(strings.ReplaceAll(url, " ", ""), ",")
+	}
+
 	a.Client, errClient = http.New(clientConfig)
 	if errClient != nil {
 		if *verbose {
