@@ -222,11 +222,13 @@ func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, erro
 			TLSClientConfig: TLSConfig,
 			MaxIdleConns:    10,
 			Proxy:           proxy,
+			IdleConnTimeout: 1 * time.Nanosecond,
 		}
 	case "http":
 		transport = &http.Transport{
-			MaxIdleConns: 10,
-			Proxy:        proxy,
+			MaxIdleConns:    10,
+			Proxy:           proxy,
+			IdleConnTimeout: 1 * time.Nanosecond,
 		}
 	default:
 		return nil, fmt.Errorf("%s is not a valid client protocol", protocol)
