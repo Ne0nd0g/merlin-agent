@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Added the `kill` command to kill a running process by its process ID (PID)
 - Provide a comma seperated list of URLs that Merlin will rotate through for each POST request
   - Example `-url https://127.0.0.1/news.php,https://127.0.0.1/admin/get.php`
--  When using http or https protocol, the connection only appears in netstat for one second or less
+- When using http or https protocol, the connection only appears in netstat for one second or less
+- Added `sdelete` command to securely delete a file
 
 ### Changed
 
