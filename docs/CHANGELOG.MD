@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Added `sdelete` command to securely delete a file
 - Added `touch`, alias is `timestomp`, command that matches the destination file's timestamps with source file
 - Added `ps` command that returns a process listing for Windows agents
+- Added `netstat` that displays network connection for Windows agents (tcp, tcp6, udp, udp6)
 
 ### Changed
 

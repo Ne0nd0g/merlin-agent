@@ -85,6 +85,8 @@ func executeJob() {
 						Type:    jobs.FILETRANSFER,
 						Payload: ft,
 					}
+				case "netstat":
+					result = commands.Netstat(job.Payload.(jobs.Command))
 				case "ps":
 					result = commands.PS(job.Payload.(jobs.Command))
 				default:
