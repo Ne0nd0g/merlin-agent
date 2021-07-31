@@ -28,11 +28,11 @@ import (
 	"github.com/Ne0nd0g/merlin/pkg/jobs"
 )
 
-// PS lists running processes
-// Only available on Windows
-func PS() jobs.Results {
-	cli.Message(cli.DEBUG, fmt.Sprintf("entering PS()..."))
+// Uptime retrieves the system's uptime
+// Windows only
+func Uptime() jobs.Results {
+	cli.Message(cli.DEBUG, fmt.Sprintf("entering Uptime()"))
 	return jobs.Results{
-		Stderr: "the PS command is not supported by this agent type",
+		Stderr: "the Uptime command is not supported by this agent type",
 	}
 }

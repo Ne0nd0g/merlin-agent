@@ -32,8 +32,8 @@ import (
 )
 
 // Pipes enumerates and returns a list of named pipes for Windows hosts only
-func Pipes(cmd jobs.Command) jobs.Results {
-	cli.Message(cli.DEBUG, fmt.Sprintf("entering Pipes() with %+v", cmd))
+func Pipes() jobs.Results {
+	cli.Message(cli.DEBUG, fmt.Sprintf("entering Pipes()..."))
 	var results jobs.Results
 	var err string
 

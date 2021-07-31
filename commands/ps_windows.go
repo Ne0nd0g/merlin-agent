@@ -172,33 +172,22 @@ func processes() ([]Process1, error) {
 	return results, nil
 }
 
-func ps() (stdout string, stderr string) {
+// PS is only a valid function on Windows agents...for now
+func PS() jobs.Results {
+	cli.Message(cli.DEBUG, fmt.Sprintf("entering PS()..."))
+	var results jobs.Results
+
 	processList, err := processes()
 	if err != nil {
-		stderr += fmt.Sprintf("ps.Processes() failed\n")
-		return "", stderr
+		results.Stderr = fmt.Sprintf("\nthere was an error calling the ps command:\n%s")
+		return results
 	}
 
-	stdout += fmt.Sprintf("PID\tPPID\tEXE\tOWNER\n")
+	results.Stdout = fmt.Sprintf("\nPID\tPPID\tEXE\tOWNER\n")
 	for x := range processList {
 		var process Process1
 		process = processList[x]
-		stdout += fmt.Sprintf("%d\t%d\t%s\t%s\n", process.Pid(), process.PPid(), process.Executable(), process.Owner())
-	}
-	return stdout, ""
-}
-
-// PS is only a valid function on Windows agents...for now
-func PS(cmd jobs.Command) jobs.Results {
-	cli.Message(cli.DEBUG, fmt.Sprintf("entering PS() with %+v", cmd))
-	var results jobs.Results
-	var err string
-
-	out, err := ps()
-	if err != "" {
-		results.Stderr = fmt.Sprintf("%s\r\n", err)
-	} else {
-		results.Stdout = out
+		results.Stdout += fmt.Sprintf("%d\t%d\t%s\t%s\n", process.Pid(), process.PPid(), process.Executable(), process.Owner())
 	}
 	return results
 }

@@ -1,4 +1,4 @@
-// +build !windows
+// +build windows
 
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
@@ -22,17 +22,30 @@ package commands
 import (
 	// Standard
 	"fmt"
+	"time"
+
+	// Sub Repositories
+	"golang.org/x/sys/windows"
 
 	// Merlin
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin/pkg/jobs"
 )
 
-// PS lists running processes
-// Only available on Windows
-func PS() jobs.Results {
-	cli.Message(cli.DEBUG, fmt.Sprintf("entering PS()..."))
-	return jobs.Results{
-		Stderr: "the PS command is not supported by this agent type",
+// Uptime uses the Windows API to get the host's uptime
+func Uptime() jobs.Results {
+	cli.Message(cli.DEBUG, fmt.Sprintf("entering Uptime()"))
+	var results jobs.Results
+
+	kernel32 := windows.NewLazySystemDLL("kernel32")
+	GetTicketCount64 := kernel32.NewProc("GetTickCount64")
+
+	r1, _, err := GetTicketCount64.Call(0, 0, 0, 0)
+
+	if err.Error() != "The operation completed successfully." {
+		results.Stderr = fmt.Sprintf("\nA call to kernel32.GetTickCount64 in the uptime command returned an error:\n%s", err)
+	} else {
+		results.Stdout = fmt.Sprintf("\nSystem uptime: %s\n", (time.Duration(r1) * time.Millisecond))
 	}
+	return results
 }

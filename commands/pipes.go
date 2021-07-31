@@ -29,8 +29,8 @@ import (
 )
 
 // Pipes is only a valid function on Windows agents...for now
-func Pipes(cmd jobs.Command) jobs.Results {
-	cli.Message(cli.DEBUG, fmt.Sprintf("entering Pipes() with %+v", cmd))
+func Pipes() jobs.Results {
+	cli.Message(cli.DEBUG, fmt.Sprintf("entering Pipes()..."))
 	return jobs.Results{
 		Stderr: "the pipes command is not supported by this agent type",
 	}
