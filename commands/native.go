@@ -57,6 +57,8 @@ func Native(cmd jobs.Command) jobs.Results {
 				results.Stdout = fmt.Sprintf("Changed working directory to %s", path)
 			}
 		}
+	case "env":
+		results.Stdout, results.Stderr = env(cmd.Args)
 	case "ls":
 		listing, err := list(cmd.Args[0])
 		if err != nil {
