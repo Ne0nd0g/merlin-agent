@@ -22,7 +22,6 @@ package commands
 import (
 	// standard
 	"fmt"
-	"runtime"
 	"syscall"
 	"unsafe"
 
@@ -91,11 +90,14 @@ func newWindowsProcess(e *syscall.ProcessEntry32) *WindowsProcess {
 
 	pHandle, _ := syscall.OpenProcess(syscall.PROCESS_QUERY_INFORMATION, false, e.ProcessID)
 	defer syscall.CloseHandle(pHandle)
-	isWow64Process, _ := IsWow64Process(pHandle)
+	isWow64Process, err := IsWow64Process(pHandle)
 
 	arch := "x86"
-	if (runtime.GOARCH == "386" && isWow64Process) || (runtime.GOARCH == "amd64" && !isWow64Process) {
+	if !isWow64Process {
 		arch = "x64"
+	}
+	if err != nil {
+		arch = "err"
 	}
 
 	return &WindowsProcess{
