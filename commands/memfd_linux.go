@@ -41,7 +41,7 @@ import (
 // https://man7.org/linux/man-pages/man2/memfd_create.2.html
 // http://manpages.ubuntu.com/manpages/bionic/man2/memfd_create.2.html
 func Memfd(cmd jobs.Command) (result jobs.Results) {
-	if len(cmd.Args) < 0 {
+	if len(cmd.Args) <= 0 {
 		result.Stderr = fmt.Sprintf("Expected 1 or more arguments for the Memfd command, recieved: %d", len(cmd.Args))
 		return
 	}
@@ -80,7 +80,7 @@ func Memfd(cmd jobs.Command) (result jobs.Results) {
 	command := exec.Command(fp, args...) // #nosec G204
 	stdout, stderr := command.CombinedOutput()
 	if len(stdout) > 0 {
-		result.Stdout = fmt.Sprintf("%s", stdout)
+		result.Stdout = string(stdout)
 		cli.Message(cli.SUCCESS, fmt.Sprintf("Command output:\r\n\r\n%s", result.Stdout))
 
 	}

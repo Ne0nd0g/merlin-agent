@@ -21,6 +21,7 @@ import (
 	// Standard
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net"
 	"os"
 	"path/filepath"
@@ -56,6 +57,8 @@ func Native(cmd jobs.Command) jobs.Results {
 				results.Stdout = fmt.Sprintf("Changed working directory to %s", path)
 			}
 		}
+	case "env":
+		results.Stdout, results.Stderr = env(cmd.Args)
 	case "ls":
 		listing, err := list(cmd.Args[0])
 		if err != nil {
@@ -63,6 +66,14 @@ func Native(cmd jobs.Command) jobs.Results {
 			break
 		}
 		results.Stdout = listing
+	case "ifconfig":
+		ifaces, err := ifconfig()
+		if err != nil {
+			results.Stderr = fmt.Sprintf("there was an error executing the 'ifconfig' command:\n%s", err)
+		}
+		results.Stdout = ifaces
+	case "killprocess":
+		results.Stdout, results.Stderr = killProcess(cmd.Args[0])
 	case "nslookup":
 		results.Stdout, results.Stderr = nslookup(cmd.Args)
 	case "pwd":
@@ -72,6 +83,10 @@ func Native(cmd jobs.Command) jobs.Results {
 		} else {
 			results.Stdout = fmt.Sprintf("Current working directory: %s", dir)
 		}
+	case "sdelete":
+		results.Stdout, results.Stderr = sdelete(cmd.Args[1])
+	case "touch":
+		results.Stdout, results.Stderr = touch(cmd.Args[1], cmd.Args[2])
 	default:
 		results.Stderr = fmt.Sprintf("%s is not a valid NativeCMD type", cmd.Command)
 	}
@@ -134,5 +149,135 @@ func nslookup(query []string) (string, string) {
 			resp += fmt.Sprintf("Query: %s, Result: %s\r\n", q, strings.Join(r, " "))
 		}
 	}
+	return resp, stderr
+}
+
+// killProcess is used to kill a running process by its number identifier
+func killProcess(pid string) (stdout string, stderr string) {
+
+	targetpid, err := strconv.Atoi(pid)
+	if err != nil || targetpid < 0 {
+		stderr = fmt.Sprintf("There was an error converting the pid %s to an integer:\n%s", pid, err)
+		return
+	}
+
+	if targetpid < 0 {
+		stderr = fmt.Sprintf("The provided pid %d is less than zero and invalid", targetpid)
+		return
+	}
+	proc, err := os.FindProcess(targetpid)
+	if err != nil { // On linux, always returns a process. Don't worry, the Kill() will fail
+		stderr = fmt.Sprintf("Could not find a process with pid %d:\r\n%s", targetpid, err)
+		return
+	}
+
+	err = proc.Kill()
+	if err != nil {
+		stderr = fmt.Sprintf("Error killing pid %d:\r\n%s", targetpid, err)
+		return
+	}
+
+	stdout = fmt.Sprintf("Successfully killed pid %d", targetpid)
+	return
+}
+
+// sdelete securely deletes a file
+func sdelete(targetfile string) (resp string, stderr string) {
+	targetfile = filepath.Clean(targetfile)
+
+	// make sure we open the file with correct permission
+	// otherwise we will get the bad file descriptor error
+	// #nosec G304 operators should be able to specify arbitrary file path
+	// #nosec G302 want to use these permissions to ensure access
+	file, err := os.OpenFile(targetfile, os.O_RDWR, 0666)
+
+	if err != nil {
+		stderr = fmt.Sprintf("Error opening file: %s\r\n%s", targetfile, err.Error())
+		return resp, stderr
+	}
+
+	// find out how large is the target file
+	fileInfo, err := file.Stat()
+
+	if err != nil {
+		stderr = fmt.Sprintf("Error determining file size: %s\r\n%s", targetfile, err.Error())
+		return resp, stderr
+	}
+
+	// calculate the new slice size
+	// based on how large our target file is
+	var fileSize int64 = fileInfo.Size()
+	const fileChunk = 1 * (1 << 20) //1MB Chunks
+
+	// calculate total number of parts the file will be chunked into
+	totalPartsNum := uint64(math.Ceil(float64(fileSize) / float64(fileChunk)))
+
+	lastPosition := 0
+
+	for i := uint64(0); i < totalPartsNum; i++ {
+		partSize := int(math.Min(fileChunk, float64(fileSize-int64(i*fileChunk))))
+		partZeroBytes := make([]byte, partSize)
+
+		// fill out the part with zero value
+		copy(partZeroBytes[:], "0")
+
+		// overwrite every byte in the chunk with 0
+		n, err := file.WriteAt([]byte(partZeroBytes), int64(lastPosition))
+
+		if err != nil {
+			stderr = fmt.Sprintf("Error over writing file: %s\r\n%s", targetfile, err.Error())
+			return resp, stderr
+		}
+
+		resp += fmt.Sprintf("Wiped %v bytes.\n", n)
+
+		// update last written position
+		lastPosition = lastPosition + partSize
+	}
+
+	err = file.Close()
+	if err != nil {
+		stderr = fmt.Sprintf("There was an error closing the %s file:\n%s", targetfile, err)
+		return
+	}
+
+	// finally, remove/delete our file
+	err = os.Remove(targetfile)
+	if err != nil {
+		stderr = fmt.Sprintf("Error deleting file: %s\r\n%s", targetfile, err.Error())
+		return resp, stderr
+	}
+	resp += fmt.Sprintf("Securely deleted file: %s\n", targetfile)
+
+	return resp, stderr
+
+}
+
+// touch matches the destination file's timestamps with source file
+func touch(inputsourcefile string, inputdestinationfile string) (string, string) {
+	var resp string
+	var stderr string
+
+	sourcefilename := inputsourcefile
+	destinationfilename := inputdestinationfile
+
+	// get last modified time of source file
+	sourcefile, err1 := os.Stat(sourcefilename)
+
+	if err1 != nil {
+		stderr = fmt.Sprintf("Error retrieving last modified time of: %s\n%s\n", sourcefilename, err1.Error())
+		return resp, stderr
+	}
+
+	modifiedtime := sourcefile.ModTime()
+
+	// change both atime and mtime to last modified time of source file
+	err2 := os.Chtimes(destinationfilename, modifiedtime, modifiedtime)
+
+	if err2 != nil {
+		stderr = fmt.Sprintf("Error changing last modified and accessed time of: %s\n%s\n", destinationfilename, err2.Error())
+		return resp, stderr
+	}
+	resp = fmt.Sprintf("File: %s\nLast modified and accessed time set to: %s\n", destinationfilename, modifiedtime)
 	return resp, stderr
 }

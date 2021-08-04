@@ -39,7 +39,7 @@ var agentConfig = Config{
 
 var clientConfig = merlinHTTP.Config{
 	Protocol:    "h2",
-	URL:         "https://127.0.0.1:8080",
+	URL:         []string{"https://127.0.0.1:8080"},
 	PSK:         "test",
 	Padding:     "0",
 	AuthPackage: "opaque",
@@ -222,7 +222,7 @@ func TestOPAQUE(t *testing.T) {
 	// Get the client
 	config := clientConfig
 	config.AgentID = a.ID
-	config.URL = "https://127.0.0.1:8082"
+	config.URL = []string{"https://127.0.0.1:8082"}
 	if a.Client, err = merlinHTTP.New(clientConfig); err != nil {
 		t.Error(err)
 	}
@@ -254,7 +254,7 @@ func TestAgentInitialCheckIn(t *testing.T) {
 	// Get the client
 	config := clientConfig
 	config.AgentID = a.ID
-	config.URL = "https://127.0.0.1:8083/merlin"
+	config.URL = []string{"https://127.0.0.1:8083/merlin"}
 	a.Client, err = merlinHTTP.New(config)
 	if err != nil {
 		t.Error(err)
@@ -288,7 +288,7 @@ func TestBadAuthentication(t *testing.T) {
 	// Get the client
 	config := clientConfig
 	config.AgentID = a.ID
-	config.URL = "https://127.0.0.1:8085"
+	config.URL = []string{"https://127.0.0.1:8085"}
 	config.PSK = "neverGonnaGiveYouUp"
 	a.Client, err = merlinHTTP.New(config)
 	if err != nil {

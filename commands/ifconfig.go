@@ -1,3 +1,5 @@
+// +build !windows
+
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
 // Copyright (C) 2021  Russel Van Tuyl
@@ -15,20 +17,30 @@
 // You should have received a copy of the GNU General Public License
 // along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package commands
 
-import "sync"
+import (
+	"fmt"
+	"net"
+)
 
-// Global Variables
+// ifconfig enumerates the network interfaces and their configuration
+func ifconfig() (stdout string, err error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
 
-// Verbose indicates if the agent should write messages to STDOUT
-var Verbose = false
-
-// Debug is used to troubleshoot problems and results in very detailed information being displayed on STDOUT
-var Debug = false
-
-// Version is the Merlin Agent's version number
-var Version = "1.1.0"
-
-// Mutex is used to ensure exclusive access to STDOUT & STDERR
-var Mutex = &sync.Mutex{}
+	for _, i := range ifaces {
+		stdout += fmt.Sprintf("%s\n", i.Name)
+		stdout += fmt.Sprintf("  MAC Address\t%s\n", i.HardwareAddr.String())
+		addrs, err := i.Addrs()
+		if err != nil {
+			return "", err
+		}
+		for _, a := range addrs {
+			stdout += fmt.Sprintf("  IP Address\t%s\n", a.String())
+		}
+	}
+	return stdout, nil
+}
