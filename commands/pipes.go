@@ -20,8 +20,6 @@
 package commands
 
 import (
-	// Standard
-	"fmt"
 
 	// Merlin
 	"github.com/Ne0nd0g/merlin-agent/cli"
@@ -30,7 +28,7 @@ import (
 
 // Pipes is only a valid function on Windows agents...for now
 func Pipes() jobs.Results {
-	cli.Message(cli.DEBUG, fmt.Sprintf("entering Pipes()..."))
+	cli.Message(cli.DEBUG, "entering Pipes()...")
 	return jobs.Results{
 		Stderr: "the pipes command is not supported by this agent type",
 	}

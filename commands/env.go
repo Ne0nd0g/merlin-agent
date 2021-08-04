@@ -63,14 +63,13 @@ func env(Args []string) (resp string, stderr string) {
 			if err != nil {
 				stderr = fmt.Sprintf("there was an error unsetting the %s environment variable:\n%s", Args[1], err)
 				return
-			} else {
-				resp = fmt.Sprintf("\nUnset environment variable: %s", Args[1])
 			}
+			resp = fmt.Sprintf("\nUnset environment variable: %s", Args[1])
 		default:
 			stderr = fmt.Sprintf("Invlalid env command: %s", Args[0])
 		}
 		return
 	}
-	stderr = fmt.Sprintf("an argument was not provided to the env command")
+	stderr = "an argument was not provided to the env command"
 	return
 }

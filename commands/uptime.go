@@ -20,8 +20,6 @@
 package commands
 
 import (
-	// Standard
-	"fmt"
 
 	// Merlin
 	"github.com/Ne0nd0g/merlin-agent/cli"
@@ -31,7 +29,7 @@ import (
 // Uptime retrieves the system's uptime
 // Windows only
 func Uptime() jobs.Results {
-	cli.Message(cli.DEBUG, fmt.Sprintf("entering Uptime()"))
+	cli.Message(cli.DEBUG, "entering Uptime()")
 	return jobs.Results{
 		Stderr: "the Uptime command is not supported by this agent type",
 	}

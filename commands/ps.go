@@ -20,8 +20,6 @@
 package commands
 
 import (
-	// Standard
-	"fmt"
 
 	// Merlin
 	"github.com/Ne0nd0g/merlin-agent/cli"
@@ -31,7 +29,7 @@ import (
 // PS lists running processes
 // Only available on Windows
 func PS() jobs.Results {
-	cli.Message(cli.DEBUG, fmt.Sprintf("entering PS()..."))
+	cli.Message(cli.DEBUG, "entering PS()...")
 	return jobs.Results{
 		Stderr: "the PS command is not supported by this agent type",
 	}

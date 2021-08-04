@@ -28,7 +28,7 @@ var Verbose = false
 var Debug = false
 
 // Version is the Merlin Agent's version number
-var Version = "1.0.2"
+var Version = "1.1.0"
 
 // Mutex is used to ensure exclusive access to STDOUT & STDERR
 var Mutex = &sync.Mutex{}
