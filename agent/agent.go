@@ -54,6 +54,7 @@ type Agent struct {
 	HostName      string                  // HostName is the computer's host name
 	Ips           []string                // Ips is a slice of all the IP addresses assigned to the host's interfaces
 	Pid           int                     // Pid is the Process ID that the agent is running under
+	Process       string                  // Process is this agent's process name in memory
 	iCheckIn      time.Time               // iCheckIn is a timestamp of the agent's initial check in time
 	sCheckIn      time.Time               // sCheckIn is a timestamp of the agent's last status check in time
 	Version       string                  // Version is the version number of the Merlin Agent program
@@ -103,6 +104,12 @@ func New(config Config) (*Agent, error) {
 	}
 
 	agent.HostName = h
+
+	proc, errP := os.Executable()
+	if errP != nil {
+		return &agent, fmt.Errorf("there was an error getting the process name:\r\n%s", errH)
+	}
+	agent.Process = proc
 
 	interfaces, errI := net.Interfaces()
 	if errI != nil {
@@ -166,6 +173,7 @@ func New(config Config) (*Agent, error) {
 	cli.Message(cli.INFO, fmt.Sprintf("\tUser Name: %s", agent.UserName)) //TODO A username like _svctestaccont causes error
 	cli.Message(cli.INFO, fmt.Sprintf("\tUser GUID: %s", agent.UserGUID))
 	cli.Message(cli.INFO, fmt.Sprintf("\tHostname: %s", agent.HostName))
+	cli.Message(cli.INFO, fmt.Sprintf("\tProcess: %s", agent.Process))
 	cli.Message(cli.INFO, fmt.Sprintf("\tPID: %d", agent.Pid))
 	cli.Message(cli.INFO, fmt.Sprintf("\tIPs: %v", agent.Ips))
 	cli.Message(cli.DEBUG, "Leaving agent.New function")
