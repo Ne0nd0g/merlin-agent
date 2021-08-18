@@ -16,23 +16,25 @@ BUILD=$(shell git rev-parse HEAD)
 DIR=bin/v${VERSION}/${BUILD}
 
 # Merlin Agent Variables
-XBUILD=-X main.build=${BUILD} -X github.com/Ne0nd0g/merlin-agent/agent.build=${BUILD}
+XBUILD=-X "main.build=${BUILD}" -X "github.com/Ne0nd0g/merlin-agent/agent.build=${BUILD}"
 URL ?= https://127.0.0.1:443
-XURL=-X main.url=${URL}
+XURL=-X "main.url=${URL}"
 PSK ?= merlin
-XPSK=-X main.psk=${PSK}
+XPSK=-X "main.psk=${PSK}"
 PROXY ?=
-XPROXY =-X main.proxy=$(PROXY)
+XPROXY =-X "main.proxy=$(PROXY)"
 HOST ?=
-XHOST =-X main.host=$(HOST)
+XHOST =-X "main.host=$(HOST)"
 PROTO ?= h2
-XPROTO =-X main.protocol=$(PROTO)
+XPROTO =-X "main.protocol=$(PROTO)"
 JA3 ?=
-XJA3 =-X main.ja3=$(JA3)
+XJA3 =-X "main.ja3=$(JA3)"
+USERAGENT = Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.85 Safari/537.36
+XUSERAGENT =-X "main.useragent=$(USERAGENT)"
 
 # Compile Flags
-LDFLAGS=-ldflags "-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XPROXY} -buildid="
-WINAGENTLDFLAGS=-ldflags "-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XPROXY} -H=windowsgui -buildid="
+LDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XPROXY} $(XUSERAGENT) -buildid='
+WINAGENTLDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XPROXY} $(XUSERAGENT) -H=windowsgui -buildid='
 GCFLAGS=-gcflags=all=-trimpath=$(GOPATH)
 ASMFLAGS=-asmflags=all=-trimpath=$(GOPATH)# -asmflags=-trimpath=$(GOPATH)
 
