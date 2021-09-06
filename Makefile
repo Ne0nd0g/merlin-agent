@@ -31,10 +31,12 @@ JA3 ?=
 XJA3 =-X "main.ja3=$(JA3)"
 USERAGENT = Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.85 Safari/537.36
 XUSERAGENT =-X "main.useragent=$(USERAGENT)"
+HEADERS = ""
+XHEADERS =-X "main.headers=$(HEADERS)"
 
 # Compile Flags
-LDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XPROXY} $(XUSERAGENT) -buildid='
-WINAGENTLDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XPROXY} $(XUSERAGENT) -H=windowsgui -buildid='
+LDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XPROXY} $(XUSERAGENT) $(XHEADERS) -buildid='
+WINAGENTLDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XPROXY} $(XUSERAGENT) $(XHEADERS) -H=windowsgui -buildid='
 GCFLAGS=-gcflags=all=-trimpath=$(GOPATH)
 ASMFLAGS=-asmflags=all=-trimpath=$(GOPATH)# -asmflags=-trimpath=$(GOPATH)
 

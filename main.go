@@ -40,6 +40,7 @@ var build = "nonRelease"
 var psk = "merlin"
 var proxy = ""
 var host = ""
+var headers = ""
 var ja3 = ""
 var useragent = "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.85 Safari/537.36"
 var sleep = "30s"
@@ -65,6 +66,7 @@ func main() {
 	flag.StringVar(&maxretry, "maxretry", maxretry, "The maximum amount of failed checkins before the agent will quit running")
 	flag.StringVar(&padding, "padding", padding, "The maximum amount of data that will be randomly selected and appended to every message")
 	flag.StringVar(&useragent, "useragent", useragent, "The HTTP User-Agent header string that the Agent will use while sending traffic")
+	flag.StringVar(&headers, "headers", headers, "A new line separated (e.g., \\n) list of additional HTTP headers to use")
 
 	flag.Usage = usage
 	flag.Parse()
@@ -99,6 +101,7 @@ func main() {
 		AgentID:     a.ID,
 		Protocol:    protocol,
 		Host:        host,
+		Headers:     headers,
 		Proxy:       proxy,
 		UserAgent:   useragent,
 		PSK:         psk,
