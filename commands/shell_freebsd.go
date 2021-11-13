@@ -1,7 +1,4 @@
-// +build !linux
-// +build !windows
-// +build !darwin
-// +build !freebsd
+// +build freebsd
 
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
@@ -23,11 +20,21 @@
 package commands
 
 import (
-	"fmt"
-	"runtime"
+	"os/exec"
+	"strings"
 )
 
 // shell is used to execute a command on a host using the operating system's default shell
-func shell(name string, args []string) (stdout string, stderr string) {
-	return "", fmt.Sprintf("the default shell for the %s operating system is unknown, use the \"run\" command instead", runtime.GOOS)
+func shell(args []string) (stdout string, stderr string) {
+	cmd := exec.Command("/bin/sh", append([]string{"-c"}, strings.Join(args, " "))...) // #nosec G204
+
+	out, err := cmd.CombinedOutput()
+	stdout = string(out)
+	stderr = ""
+
+	if err != nil {
+		stderr = err.Error()
+	}
+
+	return stdout, stderr
 }
