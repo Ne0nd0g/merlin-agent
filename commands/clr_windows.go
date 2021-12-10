@@ -156,6 +156,13 @@ func invokeAssembly(args []string) (results jobs.Results) {
 			}
 		}
 		if isLoaded {
+			// Setup OS environment, if any
+			err := Setup()
+			if err != nil {
+				results.Stderr = err.Error()
+				return
+			}
+			defer TearDown()
 			core.Mutex.Lock()
 			results.Stdout, results.Stderr = clr.InvokeAssembly(a.methodInfo, args[1:])
 			core.Mutex.Unlock()
@@ -166,7 +173,7 @@ func invokeAssembly(args []string) (results jobs.Results) {
 		cli.Message(cli.WARN, results.Stderr)
 		return
 	}
-	results.Stderr = fmt.Sprint("expected at least 1 arguments for the invokeAssembly function, received %d", len(args))
+	results.Stderr = fmt.Sprintf("expected at least 1 arguments for the invokeAssembly function, received %d", len(args))
 	cli.Message(cli.WARN, results.Stderr)
 	return
 }

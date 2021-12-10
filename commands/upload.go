@@ -19,13 +19,11 @@ package commands
 
 import (
 	// Standard
-	"crypto/sha1" // #nosec G505 Only used to get hash of a file
+	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
-	"path/filepath"
 
 	// Merlin Main
 	"github.com/Ne0nd0g/merlin/pkg/jobs"
@@ -34,42 +32,18 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/cli"
 )
 
-// Download receives a job from the server to download a file to host where the Agent is running
-func Download(transfer jobs.FileTransfer) jobs.Results {
-	cli.Message(cli.DEBUG, "Entering into commands.Download() function")
-	var result jobs.Results
-
-	// Agent will be downloading a file from the server
-	cli.Message(cli.NOTE, "FileTransfer type: Download")
-
-	_, directoryPathErr := os.Stat(filepath.Dir(transfer.FileLocation))
-	if directoryPathErr != nil {
-		result.Stderr = fmt.Sprintf("There was an error getting the FileInfo structure for the remote "+
-			"directory %s:\r\n", transfer.FileLocation)
-		result.Stderr += directoryPathErr.Error()
-	}
-	if result.Stderr == "" {
-		cli.Message(cli.NOTE, fmt.Sprintf("Writing file to %s", transfer.FileLocation))
-		downloadFile, downloadFileErr := base64.StdEncoding.DecodeString(transfer.FileBlob)
-		if downloadFileErr != nil {
-			result.Stderr = downloadFileErr.Error()
-		} else {
-			errF := ioutil.WriteFile(transfer.FileLocation, downloadFile, 0600)
-			if errF != nil {
-				result.Stderr = errF.Error()
-			} else {
-				result.Stdout = fmt.Sprintf("Successfully uploaded file to %s", transfer.FileLocation)
-			}
-		}
-	}
-	return result
-}
-
 // Upload receives a job from the server to upload a file from the host to the Merlin server
 func Upload(transfer jobs.FileTransfer) (jobs.FileTransfer, error) {
 	cli.Message(cli.DEBUG, "Entering into commands.Upload() function")
-	// Agent will uploading a file to the server
+	// Agent will be uploading a file to the server
 	cli.Message(cli.NOTE, "FileTransfer type: Upload")
+
+	// Setup OS environment, if any
+	err := Setup()
+	if err != nil {
+		return jobs.FileTransfer{}, err
+	}
+	defer TearDown()
 
 	fileData, fileDataErr := ioutil.ReadFile(transfer.FileLocation)
 	if fileDataErr != nil {
