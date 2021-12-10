@@ -4,12 +4,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## 1.1.1 - 
+## 1.1.1 - 2021-12-XX
 
 ### Added
 
+- `rm` command to remove, or delete, files using native Go functions
+- `runas` Windows command to create a process as another user with their password
+- `token` Windows command to interact with Windows Access Tokens
+  - `make` Create a new token with a username and password; Unlisted `make_token` alias
+  - `privs` List the current or remote process token privileges
+  - `rev2self` Drop any created or stolen access token and revert to original configuration; Unlisted `rev2self` alias
+  - `steal` Steal a token from another process; Unlisted `steal_token` alias
+  - `whoami` Enumerate process and thread token username, logon ID, privilege count, token type, impersonation level, and integrity level
+- New `os/windows/api` directory for operating system specific API and system calls
+- New `os/windows/pkg` directory for functions that wrap operating system specific calls
+- Added `commands/os` with `Setup()` and `TearDown()` functions to prep and release process space before executing any commands
+  - Due to how the Go runtime works, stolen/created Windows access token must be applied/released for each run of a command
 - Add both a `-headers` command line argument and `HEADERS=` Make parameter to add arbitrary HTTP headers
   - The flag takes in a new-line seperated (e.g., `\n`) list of headers
+
+### Changed
+
+- Broke the `commands/transfer.go` file into `commands/download.go` and `commands/upload.go`
+- The `ls` command can now handle Windows UNC paths
+- The `run`, `shell`, `execute-assembly`, `execute-pe`, & `execute-shellcode` commands will use the Windows CreateProcessWithTokenW function call if a token was stolen/created
 
 ## 1.1.0 - August 4, 2021
 

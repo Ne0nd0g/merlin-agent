@@ -37,7 +37,7 @@ func Pipes() jobs.Results {
 	var results jobs.Results
 	var err string
 
-	out, err := pipes()
+	out, err := getPipes()
 	if err != "" {
 		results.Stderr = fmt.Sprintf("%s\r\n", err)
 	} else {
@@ -48,7 +48,7 @@ func Pipes() jobs.Results {
 
 // Print out the comments of \\.\pipe\*
 // Ripped straight out of the Wireguard implementation: conn_windows.go
-func pipes() (stdout string, stderr string) {
+func getPipes() (stdout string, stderr string) {
 	// pipePrefix is the path for windows named pipes
 	var pipePrefix = `\\.\pipe\`
 	var (

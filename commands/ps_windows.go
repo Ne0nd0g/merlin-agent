@@ -217,6 +217,14 @@ func PS() jobs.Results {
 	cli.Message(cli.DEBUG, fmt.Sprintf("entering PS()..."))
 	var results jobs.Results
 
+	// Setup OS environment, if any
+	err := Setup()
+	if err != nil {
+		results.Stderr = err.Error()
+		return results
+	}
+	defer TearDown()
+
 	processList, err := processes()
 	if err != nil {
 		results.Stderr = fmt.Sprintf("\nthere was an error calling the ps command:\n%s")
