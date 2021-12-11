@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	// Merlin
+	"github.com/Ne0nd0g/merlin/pkg/core"
 	"github.com/Ne0nd0g/merlin/pkg/messages"
 	"github.com/Ne0nd0g/merlin/pkg/opaque"
 
@@ -73,8 +74,9 @@ func (client *Client) opaqueRegister() error {
 	cli.Message(cli.NOTE, "Starting OPAQUE Registration")
 
 	msg := messages.Base{
-		ID:   client.AgentID,
-		Type: messages.OPAQUE,
+		ID:      client.AgentID,
+		Type:    messages.OPAQUE,
+		Padding: core.RandStringBytesMaskImprSrc(client.PaddingMax),
 	}
 
 	// Set the Agent's JWT to be self-generated
@@ -118,6 +120,7 @@ func (client *Client) opaqueRegister() error {
 	}
 	// Send OPAQUE RegComplete to the server
 	cli.Message(cli.DEBUG, "Sending OPAQUE RegComplete message")
+	msg.Padding = core.RandStringBytesMaskImprSrc(client.PaddingMax)
 	msg, err = client.SendMerlinMessage(msg)
 	if err != nil {
 		return fmt.Errorf("there was an error sending the OPAQUE User Registration Complete message to the server:\r\n%s", err)
@@ -144,8 +147,9 @@ func (client *Client) opaqueAuthenticate() (messages.Base, error) {
 	cli.Message(cli.NOTE, "Starting OPAQUE Authentication")
 
 	msg := messages.Base{
-		ID:   client.AgentID,
-		Type: messages.OPAQUE,
+		ID:      client.AgentID,
+		Type:    messages.OPAQUE,
+		Padding: core.RandStringBytesMaskImprSrc(client.PaddingMax),
 	}
 	// Set the Agent's JWT to be self-generated
 	var err error
@@ -185,6 +189,7 @@ func (client *Client) opaqueAuthenticate() (messages.Base, error) {
 		return msg, fmt.Errorf("there was an error creating the OPAQUE User Authentication Complete message:\r\n%s", err)
 	}
 	msg.Payload = payload
+	msg.Padding = core.RandStringBytesMaskImprSrc(client.PaddingMax)
 	// Save the OPAQUE derived Diffie-Hellman secret
 	client.secret = []byte(client.opaque.Kex.SharedSecret.String())
 	// Send OPAQUE AuthComplete to the server

@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - The `ls` command can now handle Windows UNC paths
 - The `run`, `shell`, `execute-assembly`, `execute-pe`, & `execute-shellcode` commands will use the Windows CreateProcessWithTokenW function call if a token was stolen/created
 
+### Fixed
+
+- [Issue 117](https://github.com/Ne0nd0g/merlin/issues/117) - Added random padding to OPAQUE messages
+
 ## 1.1.0 - August 4, 2021
 
 ### Added
