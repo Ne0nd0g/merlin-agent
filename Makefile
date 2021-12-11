@@ -3,6 +3,7 @@
 # Agent file names
 W=Windows-x64
 L=Linux-x64
+B=FreeBSD-x64
 A=Linux-arm
 M=Linux-mips
 D=Darwin-x64
@@ -51,7 +52,7 @@ $(shell mkdir -p ${DIR})
 default:
 	go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT} ./main.go
 
-all: windows linux darwin
+all: windows linux darwin freebsd
 
 # Compile Agent - Windows x64
 windows:
@@ -73,6 +74,10 @@ arm:
 linux:
 	export GOOS=linux;export GOARCH=amd64;go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${L} ./main.go
 
+# Compile Agent - FreeBSD x64
+freebsd:
+	export GOOS=freebsd;export GOARCH=amd64;go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${B} ./main.go
+
 # Compile Agent - Darwin x64
 darwin:
 	export GOOS=darwin;export GOARCH=amd64;go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${D} ./main.go
@@ -89,10 +94,14 @@ package-darwin:
 	${PACKAGE} ${DIR}/${MAGENT}-${D}.7z ${F}
 	cd ${DIR};${PACKAGE} ${MAGENT}-${D}.7z ${MAGENT}-${D}
 
+package-freebsd:
+	${PACKAGE} ${DIR}/${MAGENT}-${B}.7z ${F}
+	cd ${DIR};${PACKAGE} ${MAGENT}-${B}.7z ${MAGENT}-${D}
+
 clean:
 	rm -rf ${DIR}*
 
-package-all: package-windows package-linux package-darwin
+package-all: package-windows package-linux package-darwin package-freebsd
 
 #Build all files for release distribution
 distro: clean all package-all

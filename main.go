@@ -19,13 +19,16 @@ package main
 
 import (
 	// Standard
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	// 3rd Party
 	"github.com/fatih/color"
+	"github.com/google/shlex"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/agent"
@@ -69,6 +72,27 @@ func main() {
 	flag.StringVar(&headers, "headers", headers, "A new line separated (e.g., \\n) list of additional HTTP headers to use")
 
 	flag.Usage = usage
+
+	if len(os.Args) <= 1 {
+		input := make(chan string, 1)
+		arg_str := ""
+		go getArgsFromStdIn(input)
+
+		select {
+			case i := <- input:
+				arg_str = i
+			case <-time.After(500 * time.Millisecond):
+				close(input)
+				os.Stdin.Close()
+			  break
+		}
+
+		args, err := shlex.Split(arg_str)
+		if err == nil && len(args) > 0 {
+			os.Args = args
+		}
+	}
+
 	flag.Parse()
 
 	if *version {
@@ -132,4 +156,12 @@ func usage() {
 	fmt.Printf("Merlin Agent\r\n")
 	flag.PrintDefaults()
 	os.Exit(0)
+}
+
+func getArgsFromStdIn(input chan string) {
+	for {
+		in := bufio.NewReader(os.Stdin)
+		result, _ := in.ReadString('\n')
+		input <- result
+	}
 }
