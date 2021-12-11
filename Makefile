@@ -52,7 +52,7 @@ $(shell mkdir -p ${DIR})
 default:
 	go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT} ./main.go
 
-all: windows linux darwin freebsd
+all: windows linux darwin
 
 # Compile Agent - Windows x64
 windows:
@@ -101,7 +101,7 @@ package-freebsd:
 clean:
 	rm -rf ${DIR}*
 
-package-all: package-windows package-linux package-darwin package-freebsd
+package-all: package-windows package-linux package-darwin
 
 #Build all files for release distribution
 distro: clean all package-all

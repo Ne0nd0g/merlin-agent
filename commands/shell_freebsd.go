@@ -30,7 +30,6 @@ func shell(args []string) (stdout string, stderr string) {
 
 	out, err := cmd.CombinedOutput()
 	stdout = string(out)
-	stderr = ""
 
 	if err != nil {
 		stderr = err.Error()

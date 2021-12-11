@@ -22,6 +22,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -75,21 +76,24 @@ func main() {
 
 	if len(os.Args) <= 1 {
 		input := make(chan string, 1)
-		arg_str := ""
+		var stdin string
 		go getArgsFromStdIn(input)
 
 		select {
-			case i := <- input:
-				arg_str = i
-			case <-time.After(500 * time.Millisecond):
-				close(input)
-				os.Stdin.Close()
-			  break
+		case i := <-input:
+			stdin = i
+		case <-time.After(500 * time.Millisecond):
+			close(input)
+			err := os.Stdin.Close()
+			if err != nil && *verbose {
+				color.Red(fmt.Sprintf("there was an error closing STDIN: %s", err))
+			}
+			break
 		}
 
-		args, err := shlex.Split(arg_str)
+		args, err := shlex.Split(stdin)
 		if err == nil && len(args) > 0 {
-			os.Args = args
+			os.Args = append(os.Args, args...)
 		}
 	}
 
@@ -158,10 +162,13 @@ func usage() {
 	os.Exit(0)
 }
 
+// getArgsFromStdIn reads from STDIN an
 func getArgsFromStdIn(input chan string) {
 	for {
-		in := bufio.NewReader(os.Stdin)
-		result, _ := in.ReadString('\n')
+		result, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil && err != io.EOF {
+			color.Red(fmt.Sprintf("there was an error reading from STDIN: %s", err))
+		}
 		input <- result
 	}
 }

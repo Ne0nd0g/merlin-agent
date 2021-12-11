@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   - Due to how the Go runtime works, stolen/created Windows access token must be applied/released for each run of a command
 - Add both a `-headers` command line argument and `HEADERS=` Make parameter to add arbitrary HTTP headers
   - The flag takes in a new-line seperated (e.g., `\n`) list of headers
+- FreeBSD Makefile build support from [paullj1](https://github.com/paullj1) in [Pull 3](https://github.com/Ne0nd0g/merlin-agent/pull/3)
+- Read STDIN for 500 milliseconds for agent argument from [paullj1](https://github.com/paullj1) in [Pull 3](https://github.com/Ne0nd0g/merlin-agent/pull/3)
 
 ### Changed
 
