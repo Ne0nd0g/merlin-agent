@@ -9,6 +9,7 @@ require (
 	github.com/Ne0nd0g/oddments v1.0.0 // indirect
 	github.com/cretz/gopaque v0.1.0 // indirect
 	github.com/fatih/color v1.10.0
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/lucas-clemente/quic-go v0.20.1
 	github.com/satori/go.uuid v1.2.0
 	golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
