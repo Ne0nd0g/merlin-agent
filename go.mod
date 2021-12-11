@@ -11,6 +11,7 @@ require (
 	github.com/fatih/color v1.10.0
 	github.com/lucas-clemente/quic-go v0.20.1
 	github.com/satori/go.uuid v1.2.0
+	golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
 	golang.org/x/net v0.0.0-20211209124913-491a49abca63
 	golang.org/x/sys v0.0.0-20211015200801-69063c4bb744
 	gopkg.in/square/go-jose.v2 v2.3.1
