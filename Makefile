@@ -32,7 +32,7 @@ JA3 ?=
 XJA3 =-X "main.ja3=$(JA3)"
 USERAGENT = Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.85 Safari/537.36
 XUSERAGENT =-X "main.useragent=$(USERAGENT)"
-HEADERS = ""
+HEADERS =
 XHEADERS =-X "main.headers=$(HEADERS)"
 
 # Compile Flags
