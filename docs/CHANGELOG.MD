@@ -30,7 +30,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Broke the `commands/transfer.go` file into `commands/download.go` and `commands/upload.go`
 - The `ls` command can now handle Windows UNC paths
 - The `run`, `shell`, `execute-assembly`, `execute-pe`, & `execute-shellcode` commands will use the Windows CreateProcessWithTokenW function call if a token was stolen/created
-
+- Updated [go-quic](https://github.com/lucas-clemente/quic-go/) library to v0.24.0
+- 
 ### Fixed
 
 - [Issue 117](https://github.com/Ne0nd0g/merlin/issues/117) - Added random padding to OPAQUE messages
