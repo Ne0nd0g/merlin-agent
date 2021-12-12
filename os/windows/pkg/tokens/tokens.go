@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"os/exec"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -75,6 +76,13 @@ func CreateProcessWithToken(hToken windows.Token, application string, args []str
 	// TODO verify the provided token is a PRIMARY token
 	// TODO verify the provided token has the TOKEN_QUERY, TOKEN_DUPLICATE, and TOKEN_ASSIGN_PRIMARY access rights
 
+	// Search PATH environment variable to retrieve the application's absolute path
+	application, err = exec.LookPath(application)
+	if err != nil {
+		stderr = fmt.Sprintf("there was an error resolving the absolute path for %s: %s", application, err)
+		return
+	}
+
 	// Convert the program to a LPCWSTR
 	lpApplicationName, err := syscall.UTF16PtrFromString(application)
 	if err != nil {
@@ -83,8 +91,7 @@ func CreateProcessWithToken(hToken windows.Token, application string, args []str
 	}
 
 	// Convert the program to a LPCWSTR
-	arguments := strings.Join(args, " ")
-	lpCommandLine, err := syscall.UTF16PtrFromString(arguments)
+	lpCommandLine, err := syscall.UTF16PtrFromString(strings.Join(args, " "))
 	if err != nil {
 		stderr = fmt.Sprintf("there was an error converting the application arguments \"%s\" to LPCWSTR: %s", args, err)
 		return

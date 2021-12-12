@@ -59,6 +59,7 @@ func CreateProcessWithTokenW(hToken, dwLogonFlags, lpApplicationName, lpCommandL
 	)
 	if err != syscall.Errno(0) || ret == 0 {
 		err = fmt.Errorf("there was an error calling advapi32!CreateProcessWithTokenW with return code %d: %s", ret, err)
+		return
 	}
 	return nil
 }
