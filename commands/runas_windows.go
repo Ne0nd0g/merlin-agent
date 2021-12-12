@@ -24,15 +24,12 @@ import (
 	"fmt"
 	"strings"
 
-	// 3rd Party
-	"github.com/Ne0nd0g/oddments/pkg/process"
-	"github.com/Ne0nd0g/oddments/windows/advapi32"
-
 	// Merlin
 	"github.com/Ne0nd0g/merlin/pkg/jobs"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
+	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/processes"
 )
 
 // RunAs creates a new process as the provided user
@@ -53,12 +50,7 @@ func RunAs(cmd jobs.Command) (results jobs.Results) {
 		arguments = strings.Join(cmd.Args[3:], " ")
 	}
 
-	cli.Message(cli.DEBUG, fmt.Sprintf("Calling process.CreateProcessWithLogonG(%s, \"\", %s, %s, %s, advapi32.LOGON_WITH_PROFILE, true)", username, password, application, arguments))
-	lpProcessInformation, err := process.CreateProcessWithLogonG(username, "", password, application, arguments, advapi32.LOGON_WITH_PROFILE, true)
-	if err != nil {
-		results.Stderr = err.Error()
-		return
-	}
-	results.Stdout = fmt.Sprintf("Created %s process with PID %d", application, lpProcessInformation.ProcessId)
+	results.Stdout, results.Stderr = processes.CreateProcessWithLogon(username, "", password, application, arguments, processes.LOGON_WITH_PROFILE, true)
+
 	return
 }

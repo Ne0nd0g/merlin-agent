@@ -20,15 +20,19 @@
 package commands
 
 import (
+	// X-Packages
+	"golang.org/x/sys/windows"
+
+	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/oddments/windows/advapi32"
+	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/tokens"
 )
 
 // Setup is used to prepare the environment or context for subsequent commands and is specific to each operating system
 func Setup() error {
 	cli.Message(cli.DEBUG, "entering Setup() function from the commands.os package")
 	// Apply Windows access token, if any
-	return ApplyToken()
+	return tokens.ApplyToken()
 }
 
 // TearDown is the opposite of Setup and removes and environment or context applications
@@ -36,5 +40,6 @@ func TearDown() error {
 	cli.Message(cli.DEBUG, "entering TearDown() function from the commands.os package")
 
 	// Remove applied Windows access token
-	return advapi32.RevertToSelfN()
+	tokens.Token = 0
+	return windows.RevertToSelf()
 }

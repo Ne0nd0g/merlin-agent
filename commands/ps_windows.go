@@ -110,7 +110,7 @@ func newWindowsProcess(e *syscall.ProcessEntry32) *WindowsProcess {
 }
 
 func findProcess(pid int) (Process1, error) {
-	ps, err := processes()
+	ps, err := getProcesses()
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +186,7 @@ func IsWow64Process(processHandle syscall.Handle) (bool, error) {
 	return wow64Process, nil
 }
 
-func processes() ([]Process1, error) {
+func getProcesses() ([]Process1, error) {
 	handle, err := syscall.CreateToolhelp32Snapshot(syscall.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
 		return nil, err
@@ -225,7 +225,7 @@ func PS() jobs.Results {
 	}
 	defer TearDown()
 
-	processList, err := processes()
+	processList, err := getProcesses()
 	if err != nil {
 		results.Stderr = fmt.Sprintf("\nthere was an error calling the ps command:\n%s")
 		return results

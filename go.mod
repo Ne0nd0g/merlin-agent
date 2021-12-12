@@ -7,7 +7,6 @@ require (
 	github.com/Ne0nd0g/go-clr v1.0.1
 	github.com/Ne0nd0g/ja3transport v0.0.0-20200203013218-e81e31892d84
 	github.com/Ne0nd0g/merlin v1.1.0
-	github.com/Ne0nd0g/oddments v1.0.0
 	github.com/cretz/gopaque v0.1.0
 	github.com/fatih/color v1.10.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510

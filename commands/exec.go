@@ -31,8 +31,8 @@ func executeCommand(name string, args []string) (stdout string, stderr string) {
 	cmd := exec.Command(name, args...) // #nosec G204
 
 	out, err := cmd.CombinedOutput()
-	stdout = string(out)
-	stderr = ""
+	stdout = fmt.Sprintf("Created %s process with an ID of %d\n", name, cmd.Process.Pid)
+	stdout += string(out)
 
 	if err != nil {
 		stderr = err.Error()
