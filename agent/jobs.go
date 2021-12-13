@@ -93,6 +93,8 @@ func executeJob() {
 					result = commands.Pipes()
 				case "ps":
 					result = commands.PS()
+				case "ssh":
+					result = commands.SSH(job.Payload.(jobs.Command))
 				case "uptime":
 					result = commands.Uptime()
 				case "token":
