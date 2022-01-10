@@ -24,6 +24,7 @@ import (
 	"crypto/tls"
 	"encoding/gob"
 	"fmt"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -313,7 +314,9 @@ func (client *Client) SendMerlinMessage(m messages.Base) (messages.Base, error) 
 	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", messages.String(m.Type), client.URL[client.currentURL]))
 
 	// Set the message padding
-	m.Padding = core.RandStringBytesMaskImprSrc(client.PaddingMax)
+	if client.PaddingMax > 0 {
+		m.Padding = core.RandStringBytesMaskImprSrc(rand.Intn(client.PaddingMax))
+	}
 
 	var returnMessage messages.Base
 

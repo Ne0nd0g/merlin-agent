@@ -21,6 +21,7 @@ import (
 	// Standard
 	"crypto/sha256"
 	"fmt"
+	"math/rand"
 
 	// Merlin
 	"github.com/Ne0nd0g/merlin/pkg/core"
@@ -74,11 +75,13 @@ func (client *Client) opaqueRegister() error {
 	cli.Message(cli.NOTE, "Starting OPAQUE Registration")
 
 	msg := messages.Base{
-		ID:      client.AgentID,
-		Type:    messages.OPAQUE,
-		Padding: core.RandStringBytesMaskImprSrc(client.PaddingMax),
+		ID:   client.AgentID,
+		Type: messages.OPAQUE,
 	}
 
+	if client.PaddingMax > 0 {
+		msg.Padding = core.RandStringBytesMaskImprSrc(rand.Intn(client.PaddingMax))
+	}
 	// Set the Agent's JWT to be self-generated
 	var err error
 	client.JWT, err = client.getJWT()
@@ -120,7 +123,10 @@ func (client *Client) opaqueRegister() error {
 	}
 	// Send OPAQUE RegComplete to the server
 	cli.Message(cli.DEBUG, "Sending OPAQUE RegComplete message")
-	msg.Padding = core.RandStringBytesMaskImprSrc(client.PaddingMax)
+	if client.PaddingMax > 0 {
+		msg.Padding = core.RandStringBytesMaskImprSrc(rand.Intn(client.PaddingMax))
+	}
+
 	msg, err = client.SendMerlinMessage(msg)
 	if err != nil {
 		return fmt.Errorf("there was an error sending the OPAQUE User Registration Complete message to the server:\r\n%s", err)
@@ -147,9 +153,11 @@ func (client *Client) opaqueAuthenticate() (messages.Base, error) {
 	cli.Message(cli.NOTE, "Starting OPAQUE Authentication")
 
 	msg := messages.Base{
-		ID:      client.AgentID,
-		Type:    messages.OPAQUE,
-		Padding: core.RandStringBytesMaskImprSrc(client.PaddingMax),
+		ID:   client.AgentID,
+		Type: messages.OPAQUE,
+	}
+	if client.PaddingMax > 0 {
+		msg.Padding = core.RandStringBytesMaskImprSrc(rand.Intn(client.PaddingMax))
 	}
 	// Set the Agent's JWT to be self-generated
 	var err error
@@ -189,7 +197,10 @@ func (client *Client) opaqueAuthenticate() (messages.Base, error) {
 		return msg, fmt.Errorf("there was an error creating the OPAQUE User Authentication Complete message:\r\n%s", err)
 	}
 	msg.Payload = payload
-	msg.Padding = core.RandStringBytesMaskImprSrc(client.PaddingMax)
+	if client.PaddingMax > 0 {
+		msg.Padding = core.RandStringBytesMaskImprSrc(rand.Intn(client.PaddingMax))
+	}
+
 	// Save the OPAQUE derived Diffie-Hellman secret
 	client.secret = []byte(client.opaque.Kex.SharedSecret.String())
 	// Send OPAQUE AuthComplete to the server
