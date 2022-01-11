@@ -40,6 +40,5 @@ func TearDown() error {
 	cli.Message(cli.DEBUG, "entering TearDown() function from the commands.os package")
 
 	// Remove applied Windows access token
-	tokens.Token = 0
 	return windows.RevertToSelf()
 }
