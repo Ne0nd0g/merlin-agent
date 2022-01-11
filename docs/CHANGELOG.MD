@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 
 - [Issue 6](https://github.com/Ne0nd0g/merlin-agent/issues/6) - Message padding is now a random length instead of a fixed length
+- [Issue 7](https://github.com/Ne0nd0g/merlin-agent/issues/6) - Windows Access Token now persists between commands
 
 ## 1.2.0 - 2021-12-12
 
