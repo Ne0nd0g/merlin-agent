@@ -242,7 +242,7 @@ func (client *Client) Initial(agent messages.AgentInfo) (messages.Base, error) {
 		PayloadID:     client.MythicID.String(), // Need to set now because it will be changed to tempUUID from RSA key exchange
 		Arch:          agent.SysInfo.Architecture,
 		Domain:        agent.SysInfo.Domain,
-		Integrity:     0,
+		Integrity:     agent.SysInfo.Integrity,
 		ExternalIP:    "",
 		EncryptionKey: "",
 		DecryptionKey: "",

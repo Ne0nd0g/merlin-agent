@@ -140,6 +140,7 @@ func (a *Agent) getAgentInfoMessage() messages.AgentInfo {
 		Architecture: a.Architecture,
 		UserName:     a.UserName,
 		UserGUID:     a.UserGUID,
+		Integrity:    a.Integrity,
 		HostName:     a.HostName,
 		Process:      a.Process,
 		Pid:          a.Pid,

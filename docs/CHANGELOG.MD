@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 1.3 - 2022-02-11
+
+### Changed
+
+- Added the `Integrity` field to the Agent structure
+
+### Added
+
+- Added `os.GetIntegrityLevel()` to enumerate the agent's integrity level or elevated status
+  - Windows: `2`-Medium, `3`-High, `4`-System
+  - All other OS: `3` - member of sudo group, `4` - running as root
+
 ## 1.2.1 - 2022-01-10
 
 ### Fixed
