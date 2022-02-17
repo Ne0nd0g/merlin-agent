@@ -58,6 +58,7 @@ type CheckIn struct {
 	ExternalIP    string `json:"external_ip,omitempty"`     // "external_ip": "8.8.8.8", // external ip if known - optional
 	EncryptionKey string `json:"encryption_key,omitempty"`  // "encryption_key": "base64 of key", // encryption key - optional
 	DecryptionKey string `json:"decryption_key,omitempty"`  //  "decryption_key": "base64 of key", // decryption key - optional
+	Padding       string `json:"padding,omitempty"`
 }
 
 // Response is the message structure returned from the Mythic server
@@ -75,8 +76,9 @@ type Error struct {
 
 // Tasking is used by the agent to request a specified number of tasks from the server
 type Tasking struct {
-	Action string `json:"action"`
-	Size   int    `json:"tasking_size"`
+	Action  string `json:"action"`
+	Size    int    `json:"tasking_size"`
+	Padding string `json:"padding,omitempty"`
 }
 
 // Tasks holds a list of tasks for the agent to process
@@ -99,10 +101,11 @@ type Job struct {
 	Payload string `json:"payload"`
 }
 
-// PostResponse is the structure used to sent a list of messages from the agent to the server
+// PostResponse is the structure used to send a list of messages from the agent to the server
 type PostResponse struct {
 	Action    string               `json:"action"`
 	Responses []ClientTaskResponse `json:"responses"` // TODO This needs to be an interface so it can handle both ClientTaskResponse and FileDownloadInitialMessage
+	Padding   string               `json:"padding,omitempty"`
 }
 
 // ClientTaskResponse is the structure used to return the results of a task to the Mythic server
@@ -135,6 +138,7 @@ type RSARequest struct {
 	Action    string `json:"action"`     // staging_rsa
 	PubKey    string `json:"pub_key"`    // base64 of public RSA key
 	SessionID string `json:"session_id"` // 20 character string; unique session ID for this callback
+	Padding   string `json:"padding,omitempty"`
 }
 
 // RSAResponse contains the derived session key that is encrypted with the agent's RSA key
@@ -150,6 +154,7 @@ type RSAResponse struct {
 type PostResponseFile struct {
 	Action    string                       `json:"action"`
 	Responses []FileDownloadInitialMessage `json:"responses"`
+	Padding   string                       `json:"padding,omitempty"`
 }
 
 // FileDownloadInitialMessage contains the information for the initial step of the file download process
@@ -164,6 +169,7 @@ type FileDownloadInitialMessage struct {
 type PostResponseDownload struct {
 	Action    string         `json:"action"`
 	Responses []FileDownload `json:"responses"`
+	Padding   string         `json:"padding,omitempty"`
 }
 
 // FileDownload sends a chunk of Base64 encoded data from the agent to the server

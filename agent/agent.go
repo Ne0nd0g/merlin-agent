@@ -38,6 +38,7 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/clients"
 	"github.com/Ne0nd0g/merlin-agent/core"
+	merlinOS "github.com/Ne0nd0g/merlin-agent/os"
 )
 
 // GLOBAL VARIABLES
@@ -65,6 +66,7 @@ type Agent struct {
 	FailedCheckin int                     // FailedCheckin is a count of the total number of failed check ins
 	Initial       bool                    // Initial identifies if the agent has successfully completed the first initial check in
 	KillDate      int64                   // killDate is a unix timestamp that denotes a time the executable will not run after (if it is 0 it will not be used)
+	Integrity     int                     // Integrity is the agent's integrity level such as High for Windows or root for Linux
 }
 
 // Config is a structure that is used to pass in all necessary information to instantiate a new Agent
@@ -166,12 +168,19 @@ func New(config Config) (*Agent, error) {
 		agent.Skew = 3000
 	}
 
+	// Integrity Level
+	agent.Integrity, err = merlinOS.GetIntegrityLevel()
+	if err != nil {
+		cli.Message(cli.DEBUG, fmt.Sprintf("there was an error determining the agent's integrity level: %s", err))
+	}
+
 	cli.Message(cli.INFO, "Host Information:")
 	cli.Message(cli.INFO, fmt.Sprintf("\tAgent UUID: %s", agent.ID))
 	cli.Message(cli.INFO, fmt.Sprintf("\tPlatform: %s", agent.Platform))
 	cli.Message(cli.INFO, fmt.Sprintf("\tArchitecture: %s", agent.Architecture))
 	cli.Message(cli.INFO, fmt.Sprintf("\tUser Name: %s", agent.UserName)) //TODO A username like _svctestaccont causes error
 	cli.Message(cli.INFO, fmt.Sprintf("\tUser GUID: %s", agent.UserGUID))
+	cli.Message(cli.INFO, fmt.Sprintf("\tIntegrity Level: %d", agent.Integrity))
 	cli.Message(cli.INFO, fmt.Sprintf("\tHostname: %s", agent.HostName))
 	cli.Message(cli.INFO, fmt.Sprintf("\tProcess: %s", agent.Process))
 	cli.Message(cli.INFO, fmt.Sprintf("\tPID: %d", agent.Pid))

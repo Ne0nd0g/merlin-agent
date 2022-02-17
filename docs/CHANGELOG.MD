@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 1.3 - 2022-02-11
+
+### Changed
+
+- Added the `Integrity` field to the Agent structure
+- Added message padding to the following Mythic messages types for the Mythic client:
+  - CheckIn
+  - Tasking
+  - PostResponse
+  - RSARequest
+  - PostResponseFile
+  - PostResponseDownload
+
+### Added
+
+- Added `os.GetIntegrityLevel()` to enumerate the agent's integrity level or elevated status
+  - Windows: `2`-Medium, `3`-High, `4`-System
+  - All other OS: `3` - member of sudo group, `4` - running as root
+- Added a random amount of message padding, up to the padding max value, to HTTP post requests for the Mythic client
+
 ## 1.2.1 - 2022-01-10
 
 ### Fixed
