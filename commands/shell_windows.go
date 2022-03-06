@@ -21,9 +21,7 @@ package commands
 
 import (
 	"os"
-	"os/exec"
 	"strings"
-	"syscall"
 )
 
 // shell is used to execute a command on a host using the operating system's default shell
@@ -41,17 +39,5 @@ func shell(args []string) (stdout string, stderr string) {
 		shell = "cmd.exe"
 		arguments = []string{"/c"}
 	}
-	cmd := exec.Command(shell, append(arguments, args...)...) // #nosec G204
-
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-
-	out, err := cmd.CombinedOutput()
-	stdout = string(out)
-	stderr = ""
-
-	if err != nil {
-		stderr = err.Error()
-	}
-
-	return stdout, stderr
+	return executeCommand(shell, append(arguments, args...))
 }
