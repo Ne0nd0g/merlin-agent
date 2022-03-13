@@ -306,10 +306,10 @@ func (client *Client) getJWT() (string, error) {
 	return agentJWT, nil
 }
 
-// SendMerlinMessage takes in a Merlin message structure, performs any encoding or encryption, and sends it to the server
+// Send takes in a Merlin message structure, performs any encoding or encryption, and sends it to the server
 // The function also decodes and decrypts response messages and return a Merlin message structure.
 // This is where the client's logic is for communicating with the server.
-func (client *Client) SendMerlinMessage(m messages.Base) (messages.Base, error) {
+func (client *Client) Send(m messages.Base) (messages.Base, error) {
 	cli.Message(cli.DEBUG, "Entering into agent.sendMessage()")
 	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", messages.String(m.Type), client.URL[client.currentURL]))
 

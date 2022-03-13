@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 1.3.1 - 2022-XX-XX
+
+### Added
+
+- Added [Garble](https://github.com/burrowers/garble) builds to the Make file
+  - `windows-garble`, `linux-garble`, & `darwin-garble`
+  - **THE SERVER MUST BE GARBLED WITH THE EXACT SAME SEED**
+  - Specify the seed at build with `make windows-debug SEED=<your seed valuee>`
+
+### Changed
+
+- Renamed the `SendMerlinMessage` function of the `ClientInterface` to just `Send()`
+
 ## 1.3 - 2022-02-17
 
 ### Changed
