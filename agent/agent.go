@@ -243,7 +243,7 @@ func (a *Agent) statusCheckIn() {
 	msg := getJobs()
 	msg.ID = a.ID
 
-	j, reqErr := a.Client.SendMerlinMessage(msg)
+	j, reqErr := a.Client.Send(msg)
 
 	if reqErr != nil {
 		a.FailedCheckin++

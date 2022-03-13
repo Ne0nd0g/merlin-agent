@@ -158,11 +158,11 @@ func (client *Client) Auth(authType string, register bool) (messages.Base, error
 	return messages.Base{}, nil
 }
 
-// SendMerlinMessage takes in a Merlin message structure, performs any encoding or encryption, and sends it to the server
+// Send takes in a Merlin message structure, performs any encoding or encryption, and sends it to the server
 // The function also decodes and decrypts response messages and return a Merlin message structure.
 // This is where the client's logic is for communicating with the server.
-func (client *Client) SendMerlinMessage(m messages.Base) (messages.Base, error) {
-	cli.Message(cli.DEBUG, "Entering into clients.mythic.SendMerlinMessage()...")
+func (client *Client) Send(m messages.Base) (messages.Base, error) {
+	cli.Message(cli.DEBUG, "Entering into clients.mythic.Send()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("input message base:\r\n%+v", m))
 
 	// Set the message padding
@@ -274,7 +274,7 @@ func (client *Client) Initial(agent messages.AgentInfo) (messages.Base, error) {
 		Payload: rsaRequest,
 	}
 
-	_, err := client.SendMerlinMessage(base)
+	_, err := client.Send(base)
 	if err != nil {
 		return messages.Base{}, fmt.Errorf("there was an error performing RSA Key exchange:\r\n%s", err)
 	}
@@ -283,7 +283,7 @@ func (client *Client) Initial(agent messages.AgentInfo) (messages.Base, error) {
 	base.Type = messages.CHECKIN
 	base.Payload = checkIn
 
-	_, err = client.SendMerlinMessage(base)
+	_, err = client.Send(base)
 
 	if err != nil {
 		return messages.Base{}, err
@@ -519,8 +519,8 @@ func (client *Client) convertToMerlinMessage(data []byte) (messages.Base, error)
 						returnMessage.ID = client.AgentID
 						returnMessage.Type = DownloadSend
 						returnMessage.Payload = f
-						// This isn't great because now we're in recursive SendMerlinMessage, but YOLO
-						m, err := client.SendMerlinMessage(returnMessage)
+						// This isn't great because now we're in recursive Send, but YOLO
+						m, err := client.Send(returnMessage)
 						if err != nil {
 							return messages.Base{}, fmt.Errorf("there was an error sending the mythic FileDownload message to the server:\r\n%s", err)
 						}
@@ -625,8 +625,8 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 					}
 
 					// Get FileID from Mythic
-					// This isn't great because now we're in recursive SendMerlinMessage, but YOLO
-					_, err := client.SendMerlinMessage(returnMessage)
+					// This isn't great because now we're in recursive Send, but YOLO
+					_, err := client.Send(returnMessage)
 					if err != nil {
 						return "", fmt.Errorf("there was an error sending the mythic FileDownload message to the server:\r\n%s", err)
 					}
