@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 // Merlin is a post-exploitation command and control framework.
@@ -22,10 +23,12 @@ package processes
 import (
 	// Standard
 	"fmt"
-	"golang.org/x/sys/windows"
 	"os/exec"
 	"strings"
 	"syscall"
+
+	// X Packages
+	"golang.org/x/sys/windows"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/os/windows/api/advapi32"
@@ -152,6 +155,11 @@ func CreateProcessWithLogon(username string, domain string, password string, app
 		&lpStartupInfo,
 		&lpProcessInformation,
 	)
+
+	if err != nil {
+		stderr += err.Error()
+		return
+	}
 
 	stdout += fmt.Sprintf("Created %s proccess with an ID of %d\n", application, lpProcessInformation.ProcessId)
 

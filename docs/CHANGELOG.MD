@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - Renamed the `SendMerlinMessage` function of the `ClientInterface` to just `Send()`
 
+### Fixed
+
+- [Issue 12](https://github.com/Ne0nd0g/merlin-agent/issues/12) - If running as `NT AUTHORITY\SYSTEM` with an 
+impersonation token, Call [LogonUserW](https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-logonuserw)
+ and then [CreateProcessWithTokenW](https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithtokenw) 
+ instead of [CreateProcessWithLogon](https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithlogonw)
+ with Merlin's `runas` command
+
 ## 1.3 - 2022-02-17
 
 ### Changed

