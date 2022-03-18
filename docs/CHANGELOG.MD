@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 
 - [Issue 10](https://github.com/Ne0nd0g/merlin-agent/issues/10) - The `shell` command now uses associated impersonation token
+- [Issue 11](https://github.com/Ne0nd0g/merlin-agent/issues/11) - The token is now passed along with execution
+
+### Changed
+
+- Modified `CreateProcessWithToken` function in the `windows/os/pkg/tokens` package to adjust the caller's station and 
+desktop DACLs if the token user belongs to a different session
+
+### Added
+
+- Added `GetProcessWindowStation` and `GetThreadDesktop` functions in the `user32` package
 
 ## 1.3.0 - 2022-02-17
 
