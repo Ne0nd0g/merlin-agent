@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 // Merlin is a post-exploitation command and control framework.
@@ -208,7 +209,7 @@ func stealToken(pid uint32) (results jobs.Results) {
 
 	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_INFORMATION, true, pid)
 	if err != nil {
-		results.Stderr = err.Error()
+		results.Stderr = fmt.Sprintf("there was an error calling kernel32!OpenProcess: %s", err)
 		return
 	}
 
@@ -228,7 +229,7 @@ func stealToken(pid uint32) (results jobs.Results) {
 	var token windows.Token
 	err = windows.OpenProcessToken(handle, uint32(DesiredAccess), &token)
 	if err != nil {
-		results.Stderr = err.Error()
+		results.Stderr = fmt.Sprintf("there was an error calling advapi32!OpenProcessToken: %s", err)
 		return
 	}
 

