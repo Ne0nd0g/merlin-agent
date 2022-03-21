@@ -12,13 +12,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   - `windows-garble`, `linux-garble`, & `darwin-garble`
   - **THE SERVER MUST BE GARBLED WITH THE EXACT SAME SEED**
   - Specify the seed at build with `make windows-debug SEED=<your seed valuee>`
+- Added `GetProcessWindowStation` and `GetThreadDesktop` functions in the `user32` package
 
 ### Changed
 
 - Renamed the `SendMerlinMessage` function of the `ClientInterface` to just `Send()`
+- Modified `CreateProcessWithToken` function in the `windows/os/pkg/tokens` package to adjust the caller's station and
+  desktop DACLs if the token user belongs to a different session
 
 ### Fixed
 
+- [Issue 10](https://github.com/Ne0nd0g/merlin-agent/issues/10) - The `shell` command now uses associated impersonation token
+- [Issue 11](https://github.com/Ne0nd0g/merlin-agent/issues/11) - The token is now passed along with execution
 - [Issue 12](https://github.com/Ne0nd0g/merlin-agent/issues/12) - If running as `NT AUTHORITY\SYSTEM` with an 
 impersonation token, Call [LogonUserW](https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-logonuserw)
  and then [CreateProcessWithTokenW](https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithtokenw) 
