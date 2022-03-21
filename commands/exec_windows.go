@@ -77,15 +77,27 @@ const (
 
 // executeCommand is function used to instruct an agent to execute a command on the host operating system
 func executeCommand(name string, args []string) (stdout string, stderr string) {
-	cmd := exec.Command(name, args...)
-
-	cmd.SysProcAttr = &syscall.SysProcAttr{
+	attr := &syscall.SysProcAttr{
 		HideWindow: true,
 		Token:      syscall.Token(tokens.Token),
 	}
+	return executeCommandWithAttributes(name, args, attr)
+}
+
+// executeCommandWithAttributes starts the process with the provided system process attributes and returns the output
+// https://pkg.go.dev/syscall?GOOS=windows#SysProcAttr
+func executeCommandWithAttributes(name string, args []string, attr *syscall.SysProcAttr) (stdout string, stderr string) {
+	application, err := exec.LookPath(name)
+	if err != nil {
+		stderr = fmt.Sprintf("there was an error resolving the absolute path for %s: %s", application, err)
+		return
+	}
+
+	cmd := exec.Command(application, args...)
+	cmd.SysProcAttr = attr
 
 	out, err := cmd.CombinedOutput()
-	stdout = fmt.Sprintf("Created %s process with an ID of %d\n", name, cmd.Process.Pid)
+	stdout = fmt.Sprintf("Created %s process with an ID of %d\n", application, cmd.Process.Pid)
 	stdout += string(out)
 
 	if err != nil {

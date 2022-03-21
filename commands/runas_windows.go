@@ -24,6 +24,7 @@ import (
 	// Standard
 	"fmt"
 	"strings"
+	"syscall"
 
 	// X Packages
 	"golang.org/x/sys/windows"
@@ -69,7 +70,17 @@ func RunAs(cmd jobs.Command) (results jobs.Results) {
 			results.Stderr = err2.Error()
 			return
 		}
-		results.Stdout, results.Stderr = tokens.CreateProcessWithToken(hToken, application, strings.Split(arguments, " "))
+		//results.Stdout, results.Stderr = tokens.CreateProcessWithToken(hToken, application, strings.Split(arguments, " "))
+		var args []string
+		if len(cmd.Args) > 3 {
+			args = cmd.Args[3:]
+		}
+
+		attr := &syscall.SysProcAttr{
+			HideWindow: true,
+			Token:      syscall.Token(hToken),
+		}
+		results.Stdout, results.Stderr = executeCommandWithAttributes(application, args, attr)
 		return
 	}
 
