@@ -203,7 +203,7 @@ func TestPSK(t *testing.T) {
 		Type:    messages.CHECKIN,
 	}
 
-	_, errSend := a.Client.SendMerlinMessage(m)
+	_, errSend := a.Client.Send(m)
 	if errSend == nil {
 		t.Error("Agent successfully sent an encrypted message using the wrong key")
 		return
