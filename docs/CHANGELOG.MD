@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 # 1.4.1 - 2022-04-12
 
+### Fixed
+
+- [Issue 13](https://github.com/Ne0nd0g/merlin-agent/issues/13) - Added byte slice variable as a workaround
+
 ### Changed
 
 - Upgraded [quic-go](https://github.com/lucas-clemente/quic-go/) to v0.27.0 for Go 1.18 support

