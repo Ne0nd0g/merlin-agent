@@ -1,3 +1,6 @@
+//go:build mythic
+// +build mythic
+
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
 // Copyright (C) 2022  Russel Van Tuyl

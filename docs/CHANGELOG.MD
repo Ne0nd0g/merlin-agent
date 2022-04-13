@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 # 1.4.1 - 2022-04-12
 
+### Added
+
+- Go build tags to separate out Mythic client from standalone HTTP1/2/3 client
+- Added `SLEEP` to Make file (e.g., `make windows SLEEP=2m`)
+
 ### Fixed
 
 - [Issue 13](https://github.com/Ne0nd0g/merlin-agent/issues/13) - Added byte slice variable as a workaround

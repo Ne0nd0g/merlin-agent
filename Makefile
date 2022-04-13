@@ -24,6 +24,8 @@ PSK ?= merlin
 XPSK=-X "main.psk=${PSK}"
 PROXY ?=
 XPROXY =-X "main.proxy=$(PROXY)"
+SLEEP ?= 30s
+XSLEEP =-X "main.sleep=$(SLEEP)"
 HOST ?=
 XHOST =-X "main.host=$(HOST)"
 PROTO ?= h2
@@ -36,8 +38,8 @@ HEADERS =
 XHEADERS =-X "main.headers=$(HEADERS)"
 
 # Compile Flags
-LDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XPROXY} $(XUSERAGENT) $(XHEADERS) -buildid='
-WINAGENTLDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XPROXY} $(XUSERAGENT) $(XHEADERS) -H=windowsgui -buildid='
+LDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) -buildid='
+WINAGENTLDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) -H=windowsgui -buildid='
 GCFLAGS=-gcflags=all=-trimpath=$(GOPATH)
 ASMFLAGS=-asmflags=all=-trimpath=$(GOPATH)# -asmflags=-trimpath=$(GOPATH)
 
