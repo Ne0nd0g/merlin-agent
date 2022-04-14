@@ -77,26 +77,20 @@ func main() {
 	if len(os.Args) <= 1 {
 		input := make(chan string, 1)
 		var stdin string
-		go getArgsFromStdIn(input)
+		go getArgsFromStdIn(input, *verbose)
 
 		select {
 		case i := <-input:
 			stdin = i
 		case <-time.After(500 * time.Millisecond):
-			close(input)
-			err := os.Stdin.Close()
-			if err != nil && *verbose {
-				color.Red(fmt.Sprintf("there was an error closing STDIN: %s", err))
-			}
-			break
 		}
-
-		args, err := shlex.Split(stdin)
-		if err == nil && len(args) > 0 {
-			os.Args = append(os.Args, args...)
+		if stdin != "" {
+			args, err := shlex.Split(stdin)
+			if err == nil && len(args) > 0 {
+				os.Args = append(os.Args, args...)
+			}
 		}
 	}
-
 	flag.Parse()
 
 	if *version {
@@ -162,12 +156,16 @@ func usage() {
 	os.Exit(0)
 }
 
-// getArgsFromStdIn reads from STDIN an
-func getArgsFromStdIn(input chan string) {
+// getArgsFromStdIn reads merlin agent command line arguments from STDIN so that they can be piped in
+func getArgsFromStdIn(input chan string, verbose bool) {
+	defer close(input)
 	for {
 		result, err := bufio.NewReader(os.Stdin).ReadString('\n')
 		if err != nil && err != io.EOF {
-			color.Red(fmt.Sprintf("there was an error reading from STDIN: %s", err))
+			if verbose {
+				color.Red(fmt.Sprintf("there was an error reading from STDIN: %s", err))
+			}
+			return
 		}
 		input <- result
 	}
