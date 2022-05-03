@@ -172,6 +172,9 @@ func (a *Agent) jobHandler(Jobs []jobs.Job) {
 				jobsIn <- job
 			case jobs.NATIVE:
 				jobsIn <- job
+			// When AgentInfo or Result messages fail to send, they will circle back through the handler
+			case jobs.AGENTINFO:
+				jobsOut <- job
 			case jobs.RESULT:
 				jobsOut <- job
 			default:
