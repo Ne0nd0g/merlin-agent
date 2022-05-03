@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 
 - [Issue 14](https://github.com/Ne0nd0g/merlin-agent/issues/14) - Let writer close channel and don't try to close STDIN
+- [Issue 16](https://github.com/Ne0nd0g/merlin-agent/issues/14) - Handle `jobs.Results` in `jobsHandler()`
 
 ## 1.4.1 - 2022-04-12
 
