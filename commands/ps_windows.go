@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 // Merlin is a post-exploitation command and control framework.
@@ -142,9 +143,9 @@ func getInfo(t syscall.Token, class uint32, initSize int) (unsafe.Pointer, error
 	}
 }
 
-// getTokenOwner retrieves access token t owner account information.
-func getTokenOwner(t syscall.Token) (*syscall.Tokenuser, error) {
-	i, e := getInfo(t, syscall.TokenOwner, 50)
+// getTokenUser retrieves access token t owner account information.
+func getTokenUser(t syscall.Token) (*syscall.Tokenuser, error) {
+	i, e := getInfo(t, syscall.TokenUser, 50)
 	if e != nil {
 		return nil, e
 	}
@@ -161,7 +162,7 @@ func getProcessOwner(pid uint32) (owner string, err error) {
 	if err = syscall.OpenProcessToken(handle, syscall.TOKEN_QUERY, &token); err != nil {
 		return
 	}
-	tokenUser, err := getTokenOwner(token)
+	tokenUser, err := getTokenUser(token)
 	if err != nil {
 		return
 	}
