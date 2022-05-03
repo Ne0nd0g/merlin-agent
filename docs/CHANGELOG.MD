@@ -4,12 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## 1.4.2 - 2022-04-13
+## 1.4.2 - 2022-05-03
 
 ### Fixed
 
+- [Issue 9](https://github.com/Ne0nd0g/merlin-agent/issues/9) - Replaced `TokenGroup` with `TokenUser`
 - [Issue 14](https://github.com/Ne0nd0g/merlin-agent/issues/14) - Let writer close channel and don't try to close STDIN
-- [Issue 16](https://github.com/Ne0nd0g/merlin-agent/issues/14) - Handle `jobs.Results` & `jobs.AgentInfo` in `jobsHandler()`
+- [Issue 16](https://github.com/Ne0nd0g/merlin-agent/issues/16) - Handle `jobs.Results` & `jobs.AgentInfo` in `jobsHandler()`
 
 ## 1.4.1 - 2022-04-12
 
