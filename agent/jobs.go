@@ -124,6 +124,7 @@ func executeJob() {
 
 // getJobs extracts any jobs from the channel that are ready to returned to server and packages them up into a Merlin message
 func getJobs() messages.Base {
+	cli.Message(cli.DEBUG, "Entering into agent.getJobs() function")
 	msg := messages.Base{
 		Version: 1.0,
 	}
@@ -146,6 +147,7 @@ func getJobs() messages.Base {
 		// There are 0 jobs results to return, just checkin
 		msg.Type = messages.CHECKIN
 	}
+	cli.Message(cli.DEBUG, "Leaving the agent.getJobs() function")
 	return msg
 }
 
@@ -170,6 +172,11 @@ func (a *Agent) jobHandler(Jobs []jobs.Job) {
 				jobsIn <- job
 			case jobs.NATIVE:
 				jobsIn <- job
+			// When AgentInfo or Result messages fail to send, they will circle back through the handler
+			case jobs.AGENTINFO:
+				jobsOut <- job
+			case jobs.RESULT:
+				jobsOut <- job
 			default:
 				var result jobs.Results
 				result.Stderr = fmt.Sprintf("%s is not a valid job type", messages.String(job.Type))
@@ -183,4 +190,5 @@ func (a *Agent) jobHandler(Jobs []jobs.Job) {
 			}
 		}
 	}
+	cli.Message(cli.DEBUG, "Leaving agent.jobHandler() function")
 }
