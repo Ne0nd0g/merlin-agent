@@ -86,8 +86,9 @@ type Tasking struct {
 
 // Tasks holds a list of tasks for the agent to process
 type Tasks struct {
-	Action string `json:"action"`
-	Tasks  []Task `json:"tasks"`
+	Action string  `json:"action"`
+	Tasks  []Task  `json:"tasks"`
+	SOCKS  []Socks `json:"socks"`
 }
 
 // Task contains the task identifier, command, and parameters for the agent to execute
@@ -109,6 +110,7 @@ type PostResponse struct {
 	Action    string               `json:"action"`
 	Responses []ClientTaskResponse `json:"responses"` // TODO This needs to be an interface so it can handle both ClientTaskResponse and FileDownloadInitialMessage
 	Padding   string               `json:"padding,omitempty"`
+	SOCKS     []Socks              `json:"socks"`
 }
 
 // ClientTaskResponse is the structure used to return the results of a task to the Mythic server
@@ -153,7 +155,7 @@ type RSAResponse struct {
 	SessionID  string `json:"session_id"`  // same 20 char string back
 }
 
-// PostResponseFile is the structure used to sent a list of messages from the agent to the server
+// PostResponseFile is the structure used to send a list of messages from the agent to the server
 type PostResponseFile struct {
 	Action    string                       `json:"action"`
 	Responses []FileDownloadInitialMessage `json:"responses"`
@@ -205,4 +207,18 @@ type UploadRequest struct {
 type UploadResponse struct {
 	Path   string `json:"remote_path"`
 	FileID string `json:"file_id"`
+}
+
+// Socks is used to send SOCKS data between the SOCKS client and the agent and is an array on the
+// https://docs.mythic-c2.net/customizing/c2-related-development/c2-profile-code/agent-side-coding/socks#what-do-socks-messages-look-like
+type Socks struct {
+	ServerId int32  `json:"server_id"`
+	Data     string `json:"data"`
+	Exit     bool   `json:"exit"`
+}
+
+// SocksParams is used as an embedded structure for the Task structure when the Command field is "socks"
+type SocksParams struct {
+	Action string `json:"action"`
+	Port   int    `json:"port"`
 }

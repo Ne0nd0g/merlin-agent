@@ -6,7 +6,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## 1.5.0 - 2022-07-XX
 
+### Added
+
 - Added new SOCKS5 functionality
+
+### Changes
+
+- The `Send()` of the `ClientInterface` interface returns a list of messages.Base instead of a single message
 
 ## 1.4.2 - 2022-05-03
 
