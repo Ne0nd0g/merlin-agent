@@ -311,7 +311,7 @@ func (client *Client) getJWT() (string, error) {
 // Send takes in a Merlin message structure, performs any encoding or encryption, and sends it to the server
 // The function also decodes and decrypts response messages and return a Merlin message structure.
 // This is where the client's logic is for communicating with the server.
-func (client *Client) Send(m messages.Base) (messages.Base, error) {
+func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err error) {
 	cli.Message(cli.DEBUG, "Entering into agent.sendMessage()")
 	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", messages.String(m.Type), client.URL[client.currentURL]))
 
@@ -326,25 +326,29 @@ func (client *Client) Send(m messages.Base) (messages.Base, error) {
 	messageBytes := new(bytes.Buffer)
 	errGobEncode := gob.NewEncoder(messageBytes).Encode(m)
 	if errGobEncode != nil {
-		return returnMessage, fmt.Errorf("there was an error encoding the %s message to a gob:\r\n%s", messages.String(m.Type), errGobEncode.Error())
+		err = fmt.Errorf("there was an error encoding the %s message to a gob:\r\n%s", messages.String(m.Type), errGobEncode.Error())
+		return
 	}
 
 	// Get JWE
 	jweString, errJWE := core.GetJWESymetric(messageBytes.Bytes(), client.secret)
 	if errJWE != nil {
-		return returnMessage, errJWE
+		err = fmt.Errorf("there was an error getting a symetric JWE while trying to send a message: %s", errJWE)
+		return
 	}
 
 	// Encode JWE into gob
 	jweBytes := new(bytes.Buffer)
 	errJWEBuffer := gob.NewEncoder(jweBytes).Encode(jweString)
 	if errJWEBuffer != nil {
-		return returnMessage, fmt.Errorf("there was an error encoding the %s JWE string to a gob:\r\n%s", messages.String(m.Type), errJWEBuffer.Error())
+		err = fmt.Errorf("there was an error encoding the %s JWE string to a gob:\r\n%s", messages.String(m.Type), errJWEBuffer.Error())
+		return
 	}
 
 	req, reqErr := http.NewRequest("POST", client.URL[client.currentURL], jweBytes)
 	if reqErr != nil {
-		return returnMessage, fmt.Errorf("there was an error building the HTTP request:\r\n%s", reqErr.Error())
+		err = fmt.Errorf("there was an error building the HTTP request:\r\n%s", reqErr.Error())
+		return
 	}
 
 	if req != nil {
@@ -408,7 +412,8 @@ func (client *Client) Send(m messages.Base) (messages.Base, error) {
 				}
 			}
 		}
-		return returnMessage, fmt.Errorf("there was an error with the http client while performing a POST:\r\n%s", err.Error())
+		err = fmt.Errorf("there was an error with the http client while performing a POST:\r\n%s", err.Error())
+		return
 	}
 	cli.Message(cli.DEBUG, fmt.Sprintf("HTTP Response:\r\n%+v", resp))
 
@@ -417,14 +422,18 @@ func (client *Client) Send(m messages.Base) (messages.Base, error) {
 		break
 	case 401:
 		cli.Message(cli.NOTE, "Server returned a 401, re-registering and re-authenticating this orphaned agent")
-		return client.Auth("opaque", true)
+		returnMessage, err = client.Auth("opaque", true)
+		returnMessages = append(returnMessages, returnMessage)
+		return
 	default:
-		return returnMessage, fmt.Errorf("there was an error communicating with the server:\r\n%d", resp.StatusCode)
+		err = fmt.Errorf("there was an error communicating with the server:\r\n%d", resp.StatusCode)
+		return
 	}
 
 	contentType := resp.Header.Get("Content-Type")
 	if contentType == "" {
-		return returnMessage, fmt.Errorf("the response did not contain a Content-Type header")
+		err = fmt.Errorf("the response did not contain a Content-Type header")
+		return
 	}
 
 	// Check to make sure the response contains the application/octet-stream Content-Type header
@@ -436,24 +445,28 @@ func (client *Client) Send(m messages.Base) (messages.Base, error) {
 	}
 
 	if !isOctet {
-		return returnMessage, fmt.Errorf("the response message did not contain the application/octet-stream Content-Type header")
+		err = fmt.Errorf("the response message did not contain the application/octet-stream Content-Type header")
+		return
 	}
 
 	// Check to make sure message response contained data
 	if resp.ContentLength == 0 {
-		return returnMessage, fmt.Errorf("the response message did not contain any data")
+		err = fmt.Errorf("the response message did not contain any data")
+		return
 	}
 
 	// Decode GOB from server response into JWE
 	errD := gob.NewDecoder(resp.Body).Decode(&jweString)
 	if errD != nil {
-		return returnMessage, fmt.Errorf("there was an error decoding the gob message:\r\n%s", errD.Error())
+		err = fmt.Errorf("there was an error decoding the gob message:\r\n%s", errD.Error())
+		return
 	}
 
 	// Decrypt JWE to messages.Base
 	respMessage, errDecrypt := core.DecryptJWE(jweString, client.secret)
 	if errDecrypt != nil {
-		return returnMessage, errDecrypt
+		err = fmt.Errorf("there was an error decrypting the returned JWE after sending a message: %s", errDecrypt)
+		return
 	}
 
 	// Update the JWT, if any
@@ -461,7 +474,8 @@ func (client *Client) Send(m messages.Base) (messages.Base, error) {
 		client.JWT = respMessage.Token
 	}
 
-	return respMessage, nil
+	returnMessages = append(returnMessages, respMessage)
+	return
 }
 
 // Set is a generic function that is used to modify a Client's field values

@@ -100,10 +100,15 @@ func (client *Client) opaqueRegister() error {
 		}
 		// Send OPAQUE RegInit message to the server
 		cli.Message(cli.DEBUG, "Sending OPAQUE RegInit message")
-		msg, err = client.Send(msg)
+		msgs, err := client.Send(msg)
 		if err != nil {
 			client.opaque = nil
 			return fmt.Errorf("there was an error sending the OPAQUE User Registration Initialization message to the server:\r\n%s", err)
+		}
+		if len(msgs) > 0 {
+			msg = msgs[0]
+		} else {
+			return fmt.Errorf("the OPAQUE RegInit request returned %d messages", len(msgs))
 		}
 		// Verify the message is for this agent
 		if msg.ID != client.AgentID {
@@ -130,9 +135,14 @@ func (client *Client) opaqueRegister() error {
 		msg.Padding = core.RandStringBytesMaskImprSrc(rand.Intn(client.PaddingMax))
 	}
 
-	msg, err = client.Send(msg)
+	msgs, err := client.Send(msg)
 	if err != nil {
 		return fmt.Errorf("there was an error sending the OPAQUE User Registration Complete message to the server:\r\n%s", err)
+	}
+	if len(msgs) > 0 {
+		msg = msgs[0]
+	} else {
+		return fmt.Errorf("the OPAQUE RegInit request returned %d messages", len(msgs))
 	}
 	// Verify the message is for this agent
 	if msg.ID != client.AgentID {
@@ -177,9 +187,14 @@ func (client *Client) opaqueAuthenticate() (messages.Base, error) {
 	msg.Payload = payload
 	// Send OPAQUE AuthInit message to the server
 	cli.Message(cli.DEBUG, "Sending OPAQUE AuthInit message")
-	msg, err = client.Send(msg)
+	msgs, err := client.Send(msg)
 	if err != nil {
 		return msg, fmt.Errorf("there was an error sending the OPAQUE User Authentication Initialization message to the server:\r\n%s", err)
+	}
+	if len(msgs) > 0 {
+		msg = msgs[0]
+	} else {
+		return msg, fmt.Errorf("the OPAQUE RegInit request returned %d messages", len(msgs))
 	}
 	// Verify the message is for this agent
 	if msg.ID != client.AgentID {
@@ -208,11 +223,15 @@ func (client *Client) opaqueAuthenticate() (messages.Base, error) {
 	client.secret = []byte(client.opaque.Kex.SharedSecret.String())
 	// Send OPAQUE AuthComplete to the server
 	cli.Message(cli.DEBUG, "Sending OPAQUE AuthComplete message")
-	msg, err = client.Send(msg)
+	msgs, err = client.Send(msg)
 	if err != nil {
 		return msg, fmt.Errorf("there was an error sending the OPAQUE User Authentication Complete message to the server:\r\n%s", err)
 	}
-
+	if len(msgs) > 0 {
+		msg = msgs[0]
+	} else {
+		return msg, fmt.Errorf("the OPAQUE RegInit request returned %d messages", len(msgs))
+	}
 	cli.Message(cli.SUCCESS, "Agent authentication successful")
 	cli.Message(cli.DEBUG, "Leaving agent.opaqueAuthenticate without error")
 	return msg, nil
