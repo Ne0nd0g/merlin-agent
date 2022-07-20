@@ -4,13 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## 1.5.0 - 2022-07-09
+## 1.5.0 - 2022-07-XX
+
+### Added
+
+- Added new SOCKS5 functionality
 
 ### Changed
 
 - Go v1.18 is now the minimum supported version
 - Upgraded [quic-go](https://github.com/lucas-clemente/quic-go/) to v0.28.0
 - Upgraded [Go JOSE](https://github.com/square/go-jose) to v2.6.0
+- The `Send()` of the `ClientInterface` interface returns a list of messages.Base instead of a single message
 
 ## 1.4.2 - 2022-05-03
 

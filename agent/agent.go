@@ -243,11 +243,11 @@ func (a *Agent) statusCheckIn() {
 	msg := getJobs()
 	msg.ID = a.ID
 
-	j, reqErr := a.Client.Send(msg)
+	bases, err := a.Client.Send(msg)
 
-	if reqErr != nil {
+	if err != nil {
 		a.FailedCheckin++
-		cli.Message(cli.WARN, reqErr.Error())
+		cli.Message(cli.WARN, err.Error())
 		cli.Message(cli.NOTE, fmt.Sprintf("%d out of %d total failed checkins", a.FailedCheckin, a.MaxRetry))
 
 		// Put the jobs back into the queue if there was an error
@@ -260,13 +260,13 @@ func (a *Agent) statusCheckIn() {
 	a.FailedCheckin = 0
 	a.sCheckIn = time.Now().UTC()
 
-	cli.Message(cli.DEBUG, fmt.Sprintf("Agent ID: %s", j.ID))
-	cli.Message(cli.DEBUG, fmt.Sprintf("Message Type: %s", messages.String(j.Type)))
-	cli.Message(cli.DEBUG, fmt.Sprintf("Message Payload: %+v", j.Payload))
+	for _, base := range bases {
+		cli.Message(cli.DEBUG, fmt.Sprintf("Agent ID: %s", base.ID))
+		cli.Message(cli.DEBUG, fmt.Sprintf("Message Type: %s", messages.String(base.Type)))
+		cli.Message(cli.DEBUG, fmt.Sprintf("Message Payload: %+v", base.Payload))
 
-	// Handle message
-	a.messageHandler(j)
+		// Handle message
+		a.messageHandler(base)
+	}
 
 }
-
-// TODO Update Makefile to remove debug stacktrace for agents only. GOTRACEBACK=0 #https://dave.cheney.net/tag/gotraceback https://golang.org/pkg/runtime/debug/#SetTraceback
