@@ -217,6 +217,8 @@ func (a *Agent) Run() {
 				a.messageHandler(msg)
 				a.Initial = true
 				a.iCheckIn = time.Now().UTC()
+				// Used to immediately respond to AgentInfo request job from server
+				a.statusCheckIn()
 			}
 		}
 		// Determine if the max number of failed checkins has been reached

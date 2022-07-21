@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Upgraded [quic-go](https://github.com/lucas-clemente/quic-go/) to v0.28.0
 - Upgraded [Go JOSE](https://github.com/square/go-jose) to v2.6.0
 - The `Send()` of the `ClientInterface` interface returns a list of messages.Base instead of a single message
+- Initial checkin immediately responds to first AgentInfo request after authenticating instead of after sleep time
 
 ### Fixed
 
