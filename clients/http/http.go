@@ -317,6 +317,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 
 	// Set the message padding
 	if client.PaddingMax > 0 {
+		// #nosec G404 -- Random number does not impact security
 		m.Padding = core.RandStringBytesMaskImprSrc(rand.Intn(client.PaddingMax))
 	}
 

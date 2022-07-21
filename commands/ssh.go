@@ -37,7 +37,7 @@ import (
 func SSH(command jobs.Command) (results jobs.Results) {
 	// 1. User, 2. Pass, 3. Host:Port, 4. Command
 	if len(command.Args) < 4 {
-		results.Stderr = fmt.Sprintf("expected 4 or more arguments, recieved %d", len(command.Args))
+		results.Stderr = fmt.Sprintf("expected 4 or more arguments, received %d", len(command.Args))
 		return
 	}
 
@@ -91,7 +91,8 @@ func SSH(command jobs.Command) (results jobs.Results) {
 
 	err = sshSession.Run(cmd)
 	if err != nil {
-		err = fmt.Errorf("there was an error calling SSH Session Run(): %s", err)
+		results.Stderr = fmt.Sprintf("there was an error calling SSH Session Run(): %s", err)
+		return
 	}
 
 	results.Stdout += stdoutBuffer.String()

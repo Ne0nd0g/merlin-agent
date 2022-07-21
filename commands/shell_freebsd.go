@@ -1,3 +1,4 @@
+//go:build freebsd
 // +build freebsd
 
 // Merlin is a post-exploitation command and control framework.

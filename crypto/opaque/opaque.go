@@ -153,7 +153,7 @@ func UserAuthenticateComplete(authInitResp opaque.Opaque, user *User) (opaque.Op
 	cli.Message(cli.DEBUG, "Entering into opaque.UserAuthenticateComplete...")
 
 	if authInitResp.Type != opaque.AuthInit {
-		return opaque.Opaque{}, fmt.Errorf("expected OPAQUE message type: %d, recieved: %d", opaque.AuthInit, authInitResp.Type)
+		return opaque.Opaque{}, fmt.Errorf("expected OPAQUE message type: %d, received: %d", opaque.AuthInit, authInitResp.Type)
 	}
 
 	// 3 - Receive the server's ServerAuthComplete

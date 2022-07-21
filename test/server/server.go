@@ -240,7 +240,9 @@ func (TestServer) Start(port string, finishedTest, setup chan struct{}, t *testi
 		tes: t,
 	}
 	s.HandleFunc("/", ts.handler)
-	srv := http.Server{}
+	srv := http.Server{
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 
 	srv.TLSConfig = generateTLSConfig()
 	srv.Handler = s

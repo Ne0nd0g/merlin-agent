@@ -352,7 +352,7 @@ func CreateProcessWithToken(hToken windows.Token, application string, args []str
 		return
 	}
 
-	stdout += fmt.Sprintf("Created %s proccess with an ID of %d\n", application, lpProcessInformation.ProcessId)
+	stdout += fmt.Sprintf("Created %s process with an ID of %d\n", application, lpProcessInformation.ProcessId)
 
 	// Close the "write" pipe handles
 	err = pipes.ClosePipes(0, 0, 0, stdOutWrite, 0, stdErrWrite)

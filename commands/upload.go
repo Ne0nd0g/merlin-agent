@@ -19,6 +19,7 @@ package commands
 
 import (
 	// Standard
+	// #nosec G505 -- Random number does not impact security
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"

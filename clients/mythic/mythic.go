@@ -905,7 +905,7 @@ func (client *Client) convertTasksToJobs(tasks []Task) (messages.Base, error) {
 			// case 0 means that a job type was not added to the task from the Mythic server
 			// Commonly seen with SOCKS messages
 			if strings.ToLower(task.Command) == "socks" {
-				cli.Message(cli.NOTE, fmt.Sprintf("Recived Mythic SOCKS task: %+v", task))
+				cli.Message(cli.NOTE, fmt.Sprintf("Received Mythic SOCKS task: %+v", task))
 				var params SocksParams
 				err = json.Unmarshal([]byte(task.Params), &params)
 				if err != nil {

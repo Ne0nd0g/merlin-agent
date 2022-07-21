@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 // Merlin is a post-exploitation command and control framework.

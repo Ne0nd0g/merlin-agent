@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 // Merlin is a post-exploitation command and control framework.

@@ -1,7 +1,5 @@
-// +build !linux
-// +build !windows
-// +build !darwin
-// +build !freebsd
+//go:build !linux && !windows && !darwin && !freebsd
+// +build !linux,!windows,!darwin,!freebsd
 
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.

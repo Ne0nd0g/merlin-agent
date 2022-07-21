@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 // Merlin is a post-exploitation command and control framework.

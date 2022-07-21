@@ -44,7 +44,7 @@ func RunAs(cmd jobs.Command) (results jobs.Results) {
 
 	// Username, Password, Application, Arguments
 	if len(cmd.Args) < 3 {
-		results.Stderr = fmt.Sprintf("expected 3+ arguments, recieved %d for RunAs command", len(cmd.Args))
+		results.Stderr = fmt.Sprintf("expected 3+ arguments, received %d for RunAs command", len(cmd.Args))
 		return
 	}
 

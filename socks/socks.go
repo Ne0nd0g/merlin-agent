@@ -53,7 +53,7 @@ func Handler(msg jobs.Job, jobsOut *chan jobs.Job) {
 	}
 
 	// See if this connection is new
-	conn, ok := connections.Load(job.ID)
+	_, ok := connections.Load(job.ID)
 	if !ok {
 		client, target := net.Pipe()
 		connection := Connection{
@@ -70,7 +70,7 @@ func Handler(msg jobs.Job, jobsOut *chan jobs.Job) {
 		go receiveFromSOCKSServer(job.ID)
 	}
 
-	conn, ok = connections.Load(job.ID)
+	conn, ok := connections.Load(job.ID)
 	if !ok {
 		cli.Message(cli.WARN, fmt.Sprintf("connection ID %s was not found", job.ID))
 		return
@@ -114,6 +114,10 @@ func Handler(msg jobs.Job, jobsOut *chan jobs.Job) {
 	// Write the received data to the agent side pipe
 	var buff bytes.Buffer
 	_, err := buff.Write(job.Data)
+	if err != nil {
+		cli.Message(cli.WARN, fmt.Sprintf("there was an error writing SOCKS data to the buffer: %s", err))
+		return
+	}
 
 	//fmt.Printf("Writing bytes to SOCKS target %X\n", job.Data)
 	n, err := conn.(*Connection).Out.Write(buff.Bytes())
@@ -208,6 +212,7 @@ func receiveFromSOCKSServer(id uuid.UUID) {
 	}
 }
 
+// Connection is a structure used to track new SOCKS client connections
 type Connection struct {
 	Job     jobs.Job
 	In      net.Conn
