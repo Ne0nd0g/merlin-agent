@@ -97,7 +97,10 @@ func executeCommandWithAttributes(name string, args []string, attr *syscall.SysP
 	cmd.SysProcAttr = attr
 
 	out, err := cmd.CombinedOutput()
-	stdout = fmt.Sprintf("Created %s process with an ID of %d\n", application, cmd.Process.Pid)
+	if cmd.Process != nil {
+		stdout = fmt.Sprintf("Created %s process with an ID of %d\n", application, cmd.Process.Pid)
+	}
+
 	stdout += string(out)
 
 	if err != nil {
