@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Upgraded [Go JOSE](https://github.com/square/go-jose) to v2.6.0
 - The `Send()` of the `ClientInterface` interface returns a list of messages.Base instead of a single message
 
+### Fixed
+
+- [Issue 17](https://github.com/Ne0nd0g/merlin-agent/issues/17) - Ensure process structure pointer is not nil
+
 ## 1.4.2 - 2022-05-03
 
 ### Fixed
