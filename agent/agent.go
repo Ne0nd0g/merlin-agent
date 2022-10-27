@@ -23,7 +23,6 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"os/user"
 	"runtime"
 	"strconv"
 	"time"
@@ -78,10 +77,10 @@ type Config struct {
 }
 
 // New creates a new agent struct with specific values and returns the object
-func New(config Config) (*Agent, error) {
+func New(config Config) (agent *Agent) {
 	cli.Message(cli.DEBUG, "Entering agent.New() function")
 
-	agent := Agent{
+	agent = &Agent{
 		ID:           uuid.NewV4(),
 		Platform:     runtime.GOOS,
 		Architecture: runtime.GOARCH,
@@ -92,77 +91,77 @@ func New(config Config) (*Agent, error) {
 
 	rand.Seed(time.Now().UnixNano())
 
-	u, errU := user.Current()
-	if errU != nil {
-		return &agent, fmt.Errorf("there was an error getting the current user:\r\n%s", errU)
+	var err error
+	agent.UserName, agent.UserGUID, err = merlinOS.GetUser()
+	if err != nil {
+		// DO NOT exit if we were unable to get the username or the user's primary group
+		cli.Message(cli.WARN, fmt.Sprintf("there was an error getting the current user: %s", err))
 	}
 
-	agent.UserName = u.Username
-	agent.UserGUID = u.Gid
-
-	h, errH := os.Hostname()
-	if errH != nil {
-		return &agent, fmt.Errorf("there was an error getting the hostname:\r\n%s", errH)
+	agent.HostName, err = os.Hostname()
+	if err != nil {
+		cli.Message(cli.WARN, fmt.Sprintf("there was an error getting the hostname: %s", err))
 	}
 
-	agent.HostName = h
-
-	proc, errP := os.Executable()
-	if errP != nil {
-		return &agent, fmt.Errorf("there was an error getting the process name:\r\n%s", errH)
+	agent.Process, err = os.Executable()
+	if err != nil {
+		cli.Message(cli.WARN, fmt.Sprintf("there was an error getting the process name: %s", err))
 	}
-	agent.Process = proc
 
 	interfaces, errI := net.Interfaces()
 	if errI != nil {
-		return &agent, fmt.Errorf("there was an error getting the IP addresses:\r\n%s", errI)
-	}
-
-	for _, iface := range interfaces {
-		addrs, err := iface.Addrs()
-		if err == nil {
-			for _, addr := range addrs {
-				agent.Ips = append(agent.Ips, addr.String())
+		cli.Message(cli.WARN, fmt.Sprintf("there was an error getting the network interfaces: %s", errI))
+	} else {
+		for _, iface := range interfaces {
+			addrs, err := iface.Addrs()
+			if err == nil {
+				for _, addr := range addrs {
+					agent.Ips = append(agent.Ips, addr.String())
+				}
+			} else {
+				cli.Message(cli.WARN, fmt.Sprintf("there was an error getting interface information for %v: %s", addrs, err))
 			}
-		} else {
-			return &agent, fmt.Errorf("there was an error getting interface information:\r\n%s", err)
 		}
 	}
 
 	// Parse config
-	var err error
+
 	// Parse KillDate
 	if config.KillDate != "" {
 		agent.KillDate, err = strconv.ParseInt(config.KillDate, 10, 64)
 		if err != nil {
-			return &agent, fmt.Errorf("there was an error converting the killdate to an integer:\r\n%s", err)
+			cli.Message(cli.WARN, fmt.Sprintf("there was an error converting the killdate to an integer: %s", err))
 		}
-	} else {
-		agent.KillDate = 0
 	}
+
 	// Parse MaxRetry
 	if config.MaxRetry != "" {
 		agent.MaxRetry, err = strconv.Atoi(config.MaxRetry)
 		if err != nil {
-			return &agent, fmt.Errorf("there was an error converting the max retry to an integer:\r\n%s", err)
+			cli.Message(cli.WARN, fmt.Sprintf("there was an error converting the max retry to an integer: %s", err))
+			agent.MaxRetry = 7
 		}
 	} else {
 		agent.MaxRetry = 7
 	}
+
 	// Parse Sleep
 	if config.Sleep != "" {
 		agent.WaitTime, err = time.ParseDuration(config.Sleep)
 		if err != nil {
-			return &agent, fmt.Errorf("there was an error converting the sleep time to an integer:\r\n%s", err)
+			cli.Message(cli.WARN, fmt.Sprintf("there was an error convertiing the sleep time to an integer: %s", err))
+			agent.WaitTime = 30000 * time.Millisecond
 		}
 	} else {
 		agent.WaitTime = 30000 * time.Millisecond
 	}
+
 	// Parse Skew
 	if config.Skew != "" {
 		agent.Skew, err = strconv.ParseInt(config.Skew, 10, 64)
 		if err != nil {
-			return &agent, fmt.Errorf("there was an error converting the skew to an integer:\r\n%s", err)
+			cli.Message(cli.WARN, fmt.Sprintf("there was an error converting the skew to an integer: %s", err))
+			agent.Skew = 3000
 		}
 	} else {
 		agent.Skew = 3000
@@ -187,7 +186,7 @@ func New(config Config) (*Agent, error) {
 	cli.Message(cli.INFO, fmt.Sprintf("\tIPs: %v", agent.Ips))
 	cli.Message(cli.DEBUG, "Leaving agent.New function")
 
-	return &agent, nil
+	return
 }
 
 // Run instructs an agent to establish communications with the passed in server using the passed in protocol

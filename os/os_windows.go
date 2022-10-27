@@ -58,3 +58,9 @@ func GetIntegrityLevel() (integrity int, err error) {
 	}
 	return
 }
+
+// GetUser enumerates the username and their primary group for the account running the agent process
+// It is OK if this function returns empty strings because we want the agent to run regardless
+func GetUser() (username, group string, err error) {
+	return tokens.GetCurrentUserAndGroup()
+}

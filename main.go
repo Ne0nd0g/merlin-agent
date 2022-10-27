@@ -109,13 +109,7 @@ func main() {
 		KillDate: killdate,
 		MaxRetry: maxretry,
 	}
-	a, err := agent.New(agentConfig)
-	if err != nil {
-		if *verbose {
-			color.Red(err.Error())
-		}
-		os.Exit(1)
-	}
+	a := agent.New(agentConfig)
 
 	// Get the client
 	var errClient error

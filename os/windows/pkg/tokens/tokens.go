@@ -379,6 +379,23 @@ func CreateProcessWithToken(hToken windows.Token, application string, args []str
 	return
 }
 
+// GetCurrentUserAndGroup retrieves the username and the user's primary group for the calling process primary token
+func GetCurrentUserAndGroup() (username, group string, err error) {
+	token := windows.GetCurrentProcessToken()
+	username, err = GetTokenUsername(token)
+	if err != nil {
+		return
+	}
+
+	grp, err := token.GetTokenPrimaryGroup()
+	if err != nil {
+		return
+	}
+
+	group = grp.PrimaryGroup.String()
+	return
+}
+
 // GetTokenIntegrityLevel enumerates the integrity level for the provided token and returns it as a string
 func GetTokenIntegrityLevel(token windows.Token) (string, error) {
 	cli.Message(cli.DEBUG, "entering tokens.GetTokenIntegrityLevel()")
