@@ -575,8 +575,9 @@ func (client *Client) convertToMerlinMessage(data []byte) (returnMessages []mess
 								return
 							}
 						}
+					} else {
+						err = fmt.Errorf("the Mythic global Files map did not contain data for task %s", response.ID)
 					}
-					err = fmt.Errorf("the Mythic global Files map did not contain data for task %s", response.ID)
 					return
 				}
 			}

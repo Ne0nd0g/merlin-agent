@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 
 - [Issue 20](https://github.com/Ne0nd0g/merlin-agent/issues/20) - Manually get username & group for Windows
+- [Issue 21](https://github.com/Ne0nd0g/merlin-agent/issues/21) - Resolved file download re-write error
 
 ## 1.5.0 - 2022-07-22
 

@@ -65,6 +65,8 @@ func executeJob() {
 						Type:    jobs.FILETRANSFER,
 						Payload: ft,
 					}
+					// Need to return here because there is no result, just a return job
+					return
 				}
 			case jobs.MODULE:
 				switch strings.ToLower(job.Payload.(jobs.Command).Command) {
