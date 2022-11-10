@@ -53,6 +53,7 @@ var killdate = "0"
 var maxretry = "7"
 var padding = "4096"
 var opaque []byte
+var parrot = ""
 
 func main() {
 	verbose := flag.Bool("v", false, "Enable verbose output")
@@ -63,7 +64,8 @@ func main() {
 	flag.StringVar(&protocol, "proto", protocol, "Protocol for the agent to connect with [https (HTTP/1.1), http (HTTP/1.1 Clear-Text), h2 (HTTP/2), h2c (HTTP/2 Clear-Text), http3 (QUIC or HTTP/3.0)]")
 	flag.StringVar(&proxy, "proxy", proxy, "Hardcoded proxy to use for http/1.1 traffic only that will override host configuration")
 	flag.StringVar(&host, "host", host, "HTTP Host header")
-	flag.StringVar(&ja3, "ja3", ja3, "JA3 signature string (not the MD5 hash). Overrides -proto flag")
+	flag.StringVar(&ja3, "ja3", ja3, "JA3 signature string (not the MD5 hash). Overrides -proto & -parrot flags")
+	flag.StringVar(&parrot, "parrot", ja3, "parrot or mimic a specific browser from github.com/refraction-networking/utls (e.g., HelloChrome_Auto")
 	flag.StringVar(&sleep, "sleep", sleep, "Time for agent to sleep")
 	flag.StringVar(&skew, "skew", skew, "Amount of skew, or variance, between agent checkins")
 	flag.StringVar(&killdate, "killdate", killdate, "The date, as a Unix EPOCH timestamp, that the agent will quit running")
@@ -125,6 +127,7 @@ func main() {
 		Padding:     padding,
 		AuthPackage: "opaque",
 		Opaque:      opaque,
+		Parrot:      parrot,
 	}
 
 	if url != "" {

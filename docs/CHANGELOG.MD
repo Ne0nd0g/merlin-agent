@@ -6,14 +6,29 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## 1.5.1 - 2022-XX-XX
 
+### Added
+
+- Parrot specific web browsers through [utls](https://github.com/refraction-networking/utls#parroting) library
+  - Use the agent's `-parrot` command line argument
+  - Use the Makefile's `PARROT=` command line argument
+  - Can be changed while the agent is already running
+  - Examples include `HelloChrome_102` or `HelloRandomized`
+  - [List of available strings](https://github.com/refraction-networking/utls/blob/8e1e65eb22d21c635523a31ec2bcb8730991aaad/u_common.go#L150)
+  - If a JA3 string is provided, the parrot string will be ignored
+
 ### Changed
 
 - The agent package `New()` function will only print errors to STDOUT instead of returning an error to ensure execution
+- JA3 transports are now generated from clients/utls
 
 ### Fixed
 
 - [Issue 20](https://github.com/Ne0nd0g/merlin-agent/issues/20) - Manually get username & group for Windows
 - [Issue 21](https://github.com/Ne0nd0g/merlin-agent/issues/21) - Resolved file download re-write error
+
+### Removed
+
+- Removed [ja3transport](https://github.com/Ne0nd0g/ja3transport) module and moved code into clients/utls
 
 ## 1.5.0 - 2022-07-22
 

@@ -46,10 +46,11 @@ import (
 	"sync"
 	"time"
 
-	// 3rd Party
-	"github.com/Ne0nd0g/ja3transport"
-	uuid "github.com/satori/go.uuid"
+	// X-Packages
 	"golang.org/x/net/http2"
+
+	// 3rd Party
+	uuid "github.com/satori/go.uuid"
 
 	// Merlin Main
 	"github.com/Ne0nd0g/merlin/pkg/core"
@@ -59,6 +60,7 @@ import (
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/clients"
+	"github.com/Ne0nd0g/merlin-agent/clients/utls"
 )
 
 // Files is global map used to track Mythic's multistep file transfers. It holds data between requests
@@ -84,6 +86,7 @@ type Client struct {
 	UserAgent  string            // HTTP User-Agent value
 	PaddingMax int               // PaddingMax is the maximum size allowed for a randomly selected message padding length
 	JA3        string            // JA3 is a string that represent how the TLS client should be configured, if applicable
+	Parrot     string            // Parrot is a feature of the github.com/refraction-networking/utls to mimic a specific browser
 	psk        []byte            // PSK is the Pre-Shared Key secret the agent will use to start encrypted key exchange
 	secret     []byte            // Secret is the current key that is being used to encrypt & decrypt data
 	privKey    *rsa.PrivateKey   // Agent's RSA Private key to decrypt traffic
@@ -100,6 +103,7 @@ type Config struct {
 	UserAgent string    // UserAgent is the HTTP User-Agent header string that Agent will use while sending traffic
 	PSK       string    // PSK is the Pre-Shared Key secret the agent will use to start authentication
 	JA3       string    // JA3 is a string that represent how the TLS client should be configured, if applicable
+	Parrot    string    // Parrot is a feature of the github.com/refraction-networking/utls to mimic a specific browser
 	Padding   string    // Padding is the max amount of data that will be randomly selected and appended to every message
 }
 
@@ -115,6 +119,7 @@ func New(config Config) (*Client, error) {
 		Protocol:  config.Protocol,
 		Proxy:     config.Proxy,
 		JA3:       config.JA3,
+		Parrot:    config.Parrot,
 	}
 
 	// Mythic: Add payload ID
@@ -125,7 +130,7 @@ func New(config Config) (*Client, error) {
 	}
 
 	// Get the HTTP client
-	client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3)
+	client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, client.Parrot)
 	if err != nil {
 		return &client, err
 	}
@@ -157,6 +162,7 @@ func New(config Config) (*Client, error) {
 	cli.Message(cli.INFO, fmt.Sprintf("\tProxy: %s", client.Proxy))
 	cli.Message(cli.INFO, fmt.Sprintf("\tPayload Padding Max: %d", client.PaddingMax))
 	cli.Message(cli.INFO, fmt.Sprintf("\tJA3 String: %s", client.JA3))
+	cli.Message(cli.INFO, fmt.Sprintf("\tParrot String: %s", client.Parrot))
 
 	return &client, nil
 }
@@ -211,7 +217,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		err = fmt.Errorf("there was an error sending a message to the server:\r\n%s", err)
 		return
 	}
-
+	cli.Message(cli.DEBUG, fmt.Sprintf("HTTP Response:\r\n%+v", resp))
 	// Process the response
 
 	// Check the status code
@@ -321,13 +327,22 @@ func (client *Client) Set(key string, value string) error {
 	switch strings.ToLower(key) {
 	case "ja3":
 		ja3String := strings.Trim(value, "\"'")
-		client.Client, err = getClient(client.Protocol, client.Proxy, ja3String)
+		client.Client, err = getClient(client.Protocol, client.Proxy, ja3String, client.Parrot)
 		if ja3String != "" {
 			cli.Message(cli.NOTE, fmt.Sprintf("Set agent JA3 signature to:%s", ja3String))
 		} else if ja3String == "" {
 			cli.Message(cli.NOTE, fmt.Sprintf("Setting agent client back to default using %s protocol", client.Protocol))
 		}
 		client.JA3 = ja3String
+	case "parrot":
+		parrot := strings.Trim(value, "\"'")
+		client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, parrot)
+		if parrot != "" {
+			cli.Message(cli.NOTE, fmt.Sprintf("Set agent HTTP transport parrot to:%s", parrot))
+		} else if parrot == "" {
+			cli.Message(cli.NOTE, fmt.Sprintf("Setting agent client back to default using %s protocol", client.Protocol))
+		}
+		client.Parrot = parrot
 	default:
 		err = fmt.Errorf("unknown mythic client setting: %s", key)
 	}
@@ -341,6 +356,10 @@ func (client *Client) Get(key string) string {
 	switch strings.ToLower(key) {
 	case "ja3":
 		return client.JA3
+	case "paddingmax":
+		return strconv.Itoa(client.PaddingMax)
+	case "parrot":
+		return client.Parrot
 	case "protocol":
 		return client.Protocol
 	default:
@@ -348,10 +367,10 @@ func (client *Client) Get(key string) string {
 	}
 }
 
-// getClient returns a HTTP client for the passed protocol, proxy, and ja3 string
-func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, error) {
+// getClient returns an HTTP client for the passed protocol, proxy, and ja3 string
+func getClient(protocol, proxyURL, ja3, parrot string) (*http.Client, error) {
 	cli.Message(cli.DEBUG, "Entering into clients.mythic.getClient()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Protocol: %s, Proxy: %s, JA3 String: %s", protocol, proxyURL, ja3))
+	cli.Message(cli.DEBUG, fmt.Sprintf("Protocol: %s, Proxy: %s, JA3 String: %s, Parrot: %s", protocol, proxyURL, ja3, parrot))
 	/* #nosec G402 */
 	// G402: TLS InsecureSkipVerify set true. (Confidence: HIGH, Severity: HIGH) Allowed for testing
 	// Setup TLS configuration
@@ -379,23 +398,33 @@ func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, erro
 
 	// JA3
 	if ja3 != "" {
-		JA3, errJA3 := ja3transport.NewWithStringInsecure(ja3)
-		if errJA3 != nil {
-			return nil, fmt.Errorf("there was an error getting a new JA3 client:\r\n%s", errJA3.Error())
-		}
-		tr, err := ja3transport.NewTransportInsecure(ja3)
+		transport, err := utls.NewTransportFromJA3Insecure(ja3)
 		if err != nil {
 			return nil, err
 		}
 
 		// Set proxy
 		if proxyURL != "" {
-			tr.Proxy = proxy
+			transport.Proxy(proxy)
 		}
 
-		JA3.Transport = tr
+		return &http.Client{Transport: transport}, nil
+	}
 
-		return JA3.Client, nil
+	// Parrot - If a JA3 string was set, it will be used and the parroting will be ignored
+	if parrot != "" {
+		// Build the transport
+		transport, err := utls.NewTransportFromParrotInsecure(parrot)
+		if err != nil {
+			return nil, err
+		}
+
+		// Set proxy
+		if proxyURL != "" {
+			transport.Proxy(proxy)
+		}
+
+		return &http.Client{Transport: transport}, nil
 	}
 
 	var transport http.RoundTripper

