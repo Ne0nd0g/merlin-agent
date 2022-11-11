@@ -22,6 +22,9 @@ import (
 	"testing"
 	"time"
 
+	// 3rd Party
+	uuid "github.com/satori/go.uuid"
+
 	// Merlin Main
 	"github.com/Ne0nd0g/merlin/pkg/messages"
 
@@ -45,19 +48,9 @@ var clientConfig = merlinHTTP.Config{
 	AuthPackage: "opaque",
 }
 
-// TestNewAgent ensure the agent.New function handles input for every agent.Config setting without error
-func TestNewAgent(t *testing.T) {
-	if _, err := New(agentConfig); err != nil {
-		t.Error(err)
-	}
-}
-
 // TestNewAgentClient ensures that the agent.clients.http.New() function handles input for every configuration setting without error
 func TestNewAgentClient(t *testing.T) {
-	a, err := New(agentConfig)
-	if err != nil {
-		t.Error(err)
-	}
+	a := New(agentConfig)
 
 	// Setup Client Config
 	config := clientConfig
@@ -67,18 +60,14 @@ func TestNewAgentClient(t *testing.T) {
 	config.Host = "fake.cloudfront.net"
 	config.Proxy = "http://127.0.0.1:8081"
 
-	if _, err = merlinHTTP.New(config); err != nil {
+	if _, err := merlinHTTP.New(config); err != nil {
 		t.Error(err)
 	}
 }
 
 // TestNewHTTPClient ensure the client.New function returns a http client without error
 func TestNewHTTPClient(t *testing.T) {
-	a, err := New(agentConfig)
-
-	if err != nil {
-		t.Error(err)
-	}
+	a := New(agentConfig)
 
 	// Client config
 	config := clientConfig
@@ -86,18 +75,14 @@ func TestNewHTTPClient(t *testing.T) {
 	config.Protocol = "http"
 
 	// Get the client
-	if _, err = merlinHTTP.New(config); err != nil {
+	if _, err := merlinHTTP.New(config); err != nil {
 		t.Error(err)
 	}
 }
 
 // TestNewHTTPClient ensure the client.New function returns a https client without error
 func TestNewHTTPSClient(t *testing.T) {
-	a, err := New(agentConfig)
-
-	if err != nil {
-		t.Error(err)
-	}
+	a := New(agentConfig)
 
 	// Client config
 	config := clientConfig
@@ -105,18 +90,14 @@ func TestNewHTTPSClient(t *testing.T) {
 	config.Protocol = "https"
 
 	// Get the client
-	if _, err = merlinHTTP.New(config); err != nil {
+	if _, err := merlinHTTP.New(config); err != nil {
 		t.Error(err)
 	}
 }
 
 // TestNewH2CClient ensure the client.New function returns a http/2 clear-text, h2c, client without error
 func TestNewH2CClient(t *testing.T) {
-	a, err := New(agentConfig)
-
-	if err != nil {
-		t.Error(err)
-	}
+	a := New(agentConfig)
 
 	// Client config
 	config := clientConfig
@@ -124,18 +105,14 @@ func TestNewH2CClient(t *testing.T) {
 	config.Protocol = "h2c"
 
 	// Get the client
-	if _, err = merlinHTTP.New(config); err != nil {
+	if _, err := merlinHTTP.New(config); err != nil {
 		t.Error(err)
 	}
 }
 
 // TestNewH2Client ensure the client.New function returns a http/2 client without error
 func TestNewH2Client(t *testing.T) {
-	a, err := New(agentConfig)
-
-	if err != nil {
-		t.Error(err)
-	}
+	a := New(agentConfig)
 
 	// Client config
 	config := clientConfig
@@ -143,18 +120,14 @@ func TestNewH2Client(t *testing.T) {
 	config.Protocol = "h2"
 
 	// Get the client
-	if _, err = merlinHTTP.New(config); err != nil {
+	if _, err := merlinHTTP.New(config); err != nil {
 		t.Error(err)
 	}
 }
 
 // TestNewHTTP3Client ensure the client.New function returns a http/3 client without error
 func TestNewHTTP3Client(t *testing.T) {
-	a, err := New(agentConfig)
-
-	if err != nil {
-		t.Error(err)
-	}
+	a := New(agentConfig)
 
 	// Client config
 	config := clientConfig
@@ -162,22 +135,20 @@ func TestNewHTTP3Client(t *testing.T) {
 	config.Protocol = "http3"
 
 	// Get the client
-	if _, err = merlinHTTP.New(config); err != nil {
+	if _, err := merlinHTTP.New(config); err != nil {
 		t.Error(err)
 	}
 }
 
 // TestPSK ensure that the agent can't successfully communicate with the server using the wrong PSK
 func TestPSK(t *testing.T) {
-	a, err := New(agentConfig)
+	a := New(agentConfig)
 
-	if err != nil {
-		t.Error(err)
-	}
 	// Get the client
 	config := clientConfig
 	config.AgentID = a.ID
 
+	var err error
 	a.Client, err = merlinHTTP.New(config)
 	if err != nil {
 		t.Error(err)
@@ -214,15 +185,13 @@ func TestPSK(t *testing.T) {
 
 // TestOPAQUE verifies that agent is able to successfully complete the OPAQUE protocol Registration and Authentication steps
 func TestOPAQUE(t *testing.T) {
-	a, err := New(agentConfig)
-	if err != nil {
-		t.Error(err)
-	}
+	a := New(agentConfig)
 
 	// Get the client
 	config := clientConfig
 	config.AgentID = a.ID
 	config.URL = []string{"https://127.0.0.1:8082"}
+	var err error
 	if a.Client, err = merlinHTTP.New(clientConfig); err != nil {
 		t.Error(err)
 	}
@@ -244,17 +213,15 @@ func TestOPAQUE(t *testing.T) {
 
 // TestAgentInitialCheckin verifies the Agent's initialCheckin() function returns without error
 func TestAgentInitialCheckIn(t *testing.T) {
-	a, err := New(agentConfig)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	a := New(agentConfig)
+
 	a.WaitTime = 5000 * time.Millisecond
 
 	// Get the client
 	config := clientConfig
 	config.AgentID = a.ID
 	config.URL = []string{"https://127.0.0.1:8083/merlin"}
+	var err error
 	a.Client, err = merlinHTTP.New(config)
 	if err != nil {
 		t.Error(err)
@@ -277,12 +244,8 @@ func TestAgentInitialCheckIn(t *testing.T) {
 
 // TestBadAuthentication verifies unsuccessful authentication using the wrong PSK
 func TestBadAuthentication(t *testing.T) {
-	a, err := New(agentConfig)
+	a := New(agentConfig)
 
-	if err != nil {
-		t.Error(err)
-		return
-	}
 	a.WaitTime = 5000 * time.Millisecond
 
 	// Get the client
@@ -290,6 +253,7 @@ func TestBadAuthentication(t *testing.T) {
 	config.AgentID = a.ID
 	config.URL = []string{"https://127.0.0.1:8085"}
 	config.PSK = "neverGonnaGiveYouUp"
+	var err error
 	a.Client, err = merlinHTTP.New(config)
 	if err != nil {
 		t.Error(err)
@@ -311,5 +275,13 @@ func TestBadAuthentication(t *testing.T) {
 	close(ended)
 }
 
-// Bad content-type header
-// TODO test every function of the message handler
+// TestParrot ensures that a client from a parrot string is returned without error
+func TestClientParrot(t *testing.T) {
+	// https://github.com/refraction-networking/utls/blob/8e1e65eb22d21c635523a31ec2bcb8730991aaad/u_common.go#L150
+	clientConfig.Parrot = "HelloChrome_Auto"
+	clientConfig.AgentID = uuid.NewV4()
+
+	if _, err := merlinHTTP.New(clientConfig); err != nil {
+		t.Error(err)
+	}
+}

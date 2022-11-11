@@ -228,7 +228,7 @@ func PS() jobs.Results {
 
 	processList, err := getProcesses()
 	if err != nil {
-		results.Stderr = fmt.Sprintf("\nthere was an error calling the ps command:\n%s")
+		results.Stderr = fmt.Sprintf("\nthere was an error calling the ps command: %s", err)
 		return results
 	}
 

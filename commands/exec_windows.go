@@ -93,6 +93,7 @@ func executeCommandWithAttributes(name string, args []string, attr *syscall.SysP
 		return
 	}
 
+	// #nosec G204 -- Subprocess must be launched with a variable
 	cmd := exec.Command(application, args...)
 	cmd.SysProcAttr = attr
 
@@ -782,13 +783,7 @@ func getProcess(name string, pid uint32) (string, uint32, error) {
 	}
 
 	for {
-		processName := ""
-		// Iterate over characters to build a full string
-		for _, chr := range process.ExeFile {
-			if chr != 0 {
-				processName = processName + string(int(chr))
-			}
-		}
+		processName := syscall.UTF16ToString(process.ExeFile[:])
 		if pid > 0 {
 			if process.ProcessID == pid {
 				return processName, pid, nil

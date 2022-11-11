@@ -442,5 +442,6 @@ func CustomPaddingStyle(unpaddedLen int) (int, bool) {
 	if pad > 0 {
 		return pad, true
 	}
+	// #nosec G404 -- Random number does not impact security
 	return rand.Intn(65535), true
 }
