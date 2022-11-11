@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - The agent package `New()` function will only print errors to STDOUT instead of returning an error to ensure execution
 - JA3 transports are now generated from clients/utls
+- Upgraded go-clr to v1.0.3
 
 ### Fixed
 

@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/C-Sto/BananaPhone v0.0.0-20220220002628-6585e5913761
-	github.com/Ne0nd0g/go-clr v1.0.2
+	github.com/Ne0nd0g/go-clr v1.0.3
 	github.com/Ne0nd0g/merlin v1.5.0
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 	github.com/cretz/gopaque v0.1.0
