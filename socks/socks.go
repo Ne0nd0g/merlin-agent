@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
 
+// Package socks handles SOCKS5 messages from the server
 package socks
 
 import (

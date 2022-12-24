@@ -44,6 +44,47 @@ func (a *Agent) control(job jobs.Job) {
 		// No action required; End of function gets and returns an Agent information structure
 	case "exit":
 		os.Exit(0)
+	case "initialize":
+		cli.Message(cli.NOTE, "Received agent re-initialize message")
+		a.Authenticated = false
+	case "ja3":
+		err := a.Client.Set("ja3", cmd.Args[0])
+		if err != nil {
+			results.Stderr = fmt.Sprintf("there was an error setting the client's JA3 string:\r\n%s", err.Error())
+		}
+	case "killdate":
+		d, err := strconv.Atoi(cmd.Args[0])
+		if err != nil {
+			results.Stderr = fmt.Sprintf("there was an error converting the kill date to an integer:\r\n%s", err.Error())
+			break
+		}
+		a.KillDate = int64(d)
+
+		cli.Message(cli.INFO, fmt.Sprintf("Set Kill Date to: %s", time.Unix(a.KillDate, 0).UTC().Format(time.RFC3339)))
+	case "maxretry":
+		t, err := strconv.Atoi(cmd.Args[0])
+		if err != nil {
+			results.Stderr = fmt.Sprintf("There was an error changing the agent max retries:\r\n%s", err.Error())
+			break
+		}
+		cli.Message(cli.NOTE, fmt.Sprintf("Setting agent max retries to %d", t))
+		a.MaxRetry = t
+	case "padding":
+		err := a.Client.Set("paddingmax", cmd.Args[0])
+		if err != nil {
+			results.Stderr = fmt.Sprintf("there was an error changing the agent message padding size:\r\n%s", err.Error())
+			break
+		}
+		cli.Message(cli.NOTE, fmt.Sprintf("Setting agent message maximum padding size to %s", cmd.Args[0]))
+	case "skew":
+		t, err := strconv.ParseInt(cmd.Args[0], 10, 64)
+		if err != nil {
+			results.Stderr = fmt.Sprintf("there was an error changing the agent skew interval:\r\n%s", err.Error())
+			break
+		}
+		cli.Message(cli.NOTE, fmt.Sprintf("Setting agent skew interval to %d", t))
+
+		a.Skew = t
 	case "sleep":
 		cli.Message(cli.NOTE, fmt.Sprintf("Setting agent sleep time to %s", cmd.Args))
 
@@ -57,47 +98,6 @@ func (a *Agent) control(job jobs.Job) {
 		} else {
 			results.Stderr = fmt.Sprintf("the agent was provided with a time that was not greater than or equal to zero:\r\n%s", t.String())
 			break
-		}
-	case "skew":
-		t, err := strconv.ParseInt(cmd.Args[0], 10, 64)
-		if err != nil {
-			results.Stderr = fmt.Sprintf("there was an error changing the agent skew interval:\r\n%s", err.Error())
-			break
-		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Setting agent skew interval to %d", t))
-
-		a.Skew = t
-	case "padding":
-		err := a.Client.Set("paddingmax", cmd.Args[0])
-		if err != nil {
-			results.Stderr = fmt.Sprintf("there was an error changing the agent message padding size:\r\n%s", err.Error())
-			break
-		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Setting agent message maximum padding size to %s", cmd.Args[0]))
-	case "initialize":
-		cli.Message(cli.NOTE, "Received agent re-initialize message")
-		a.Initial = false
-	case "maxretry":
-		t, err := strconv.Atoi(cmd.Args[0])
-		if err != nil {
-			results.Stderr = fmt.Sprintf("There was an error changing the agent max retries:\r\n%s", err.Error())
-			break
-		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Setting agent max retries to %d", t))
-		a.MaxRetry = t
-	case "killdate":
-		d, err := strconv.Atoi(cmd.Args[0])
-		if err != nil {
-			results.Stderr = fmt.Sprintf("there was an error converting the kill date to an integer:\r\n%s", err.Error())
-			break
-		}
-		a.KillDate = int64(d)
-
-		cli.Message(cli.INFO, fmt.Sprintf("Set Kill Date to: %s", time.Unix(a.KillDate, 0).UTC().Format(time.RFC3339)))
-	case "ja3":
-		err := a.Client.Set("ja3", cmd.Args[0])
-		if err != nil {
-			results.Stderr = fmt.Sprintf("there was an error setting the client's JA3 string:\r\n%s", err.Error())
 		}
 	default:
 		results.Stderr = fmt.Sprintf("%s is not a valid AgentControl message type.", cmd.Command)

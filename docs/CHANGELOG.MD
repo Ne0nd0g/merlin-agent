@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 1.6.0 - 
+
+### Added
+
+- Peer-to-Peer Agent communication methods: tcp-bind, tcp-reverse
+  - An associated Listener UUID must be provided with `-listener` command line argument or `LISTENER` Make file variable
+  - An associated network interface and port must be provided with the `-addr` command line argument or `ADDR` Make file variable
+  - `Delegate` message type and associated handling
+- Configurable Agent authentication methods: OPAQUE & none
+  - Added `auth` variable to main.go 
+  - Added `AUTH` variable to Make file (e.g., `make windows AUTH=OPAQUE`)
+  - Added `-auth` command line argument
+- Configurable Agent transforms: gob-base, base64, hex, aes, jwe, rc4, and xor
+  - Added `transforms` variable to main.go
+  - Added `TRANSFORMS` variable to Make file (e.g., `make windows TRANSFORMS=aes,gob-base)
+  - Added `-transforms` command line argument
+- `link` command for the Agent to initiate a peer-to-peer connection with a listening bind agent
+  - Example: `link tcp 192.168.1.72:4444`
+- `listener` command for the Agent to start a listener to receive a connection from a reverse peer-to-peer connection
+  - `list` to return a list of instantiated on the Agent (e.g., `listener list`)
+  - `start` to start a listener based on the passed in type and interface
+    - Example: `listener start tcp 0.0.0.0:4444`
+  - `stop` to stop an already created listener
+    - Example: `listener stop tcp [::]:4444`
+
+### Changed
+
+- Moved from `Initial` to `Authenticated` for Agent struct
+- Removed tests
+
 ## 1.5.0 - 2022-07-22
 
 ### Added

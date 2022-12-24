@@ -1,6 +1,3 @@
-//go:build !mythic
-// +build !mythic
-
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
 // Copyright (C) 2022  Russel Van Tuyl
@@ -18,9 +15,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
 
+// Package opaque is an authenticator for Agent communications with the server using the OPAQUE protocol
 package opaque
 
 import (
+
 	// Standard
 	"crypto/sha256"
 	"fmt"
@@ -30,13 +29,131 @@ import (
 	uuid "github.com/satori/go.uuid"
 	"golang.org/x/crypto/pbkdf2"
 
-	// Merlin Main
+	// Merlin
+	"github.com/Ne0nd0g/merlin/pkg/messages"
 	"github.com/Ne0nd0g/merlin/pkg/opaque"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin/pkg/core"
+	"github.com/Ne0nd0g/merlin-agent/core"
 )
+
+// Authenticator is a structure used for OPAQUE authentication
+type Authenticator struct {
+	agent         uuid.UUID // The Agent's ID
+	registered    bool      // If OPAQUE registration has been completed
+	authenticated bool      // If OPAQUE authentication has been completed
+	opaque        *User     // The OPAQUE user data structure
+}
+
+// New returns an OPAQUE Authenticator structure used for Agent authentication
+func New(id uuid.UUID) *Authenticator {
+	return &Authenticator{agent: id}
+}
+
+// Authenticate goes through the entire OPAQUE process to authenticate to the server and establish a shared secret
+func (a *Authenticator) Authenticate(in messages.Base) (out messages.Base, authenticated bool, err error) {
+	out.ID = a.agent
+	out.Type = messages.OPAQUE
+
+	// Check for ReRegister and ReAuthenticate messages
+	if in.Type == messages.OPAQUE {
+		if in.Payload != nil {
+			switch in.Payload.(opaque.Opaque).Type {
+			case opaque.ReRegister:
+				cli.Message(cli.NOTE, "Received OPAQUE re-register request")
+				a.registered = false
+				a.opaque = nil
+			case opaque.ReAuthenticate:
+				cli.Message(cli.NOTE, "Received OPAQUE re-authenticate request")
+				a.authenticated = false
+				payload := opaque.Opaque{
+					Type:    opaque.RegComplete,
+					Payload: nil,
+				}
+				in.Payload = payload
+			}
+		}
+	}
+
+	if !a.registered {
+		if a.opaque == nil {
+			// Register Init
+			out.Payload, a.opaque, err = UserRegisterInit(a.agent)
+			if err != nil {
+				err = fmt.Errorf("authenticators/opaque.Authenticate(): there was an error creating the OPAQUE User Registration Initialization message: %s", err)
+			}
+			// Return opaque.RegInit message
+			cli.Message(cli.NOTE, "Starting OPAQUE Registration")
+			return
+		}
+	}
+
+	// Validate the incoming message is for this agent
+	if in.ID != a.agent {
+		return messages.Base{}, false, fmt.Errorf("authenticators/opaque.Authenticate(): Incoming message ID %s does not match Agent ID %s", in.ID, a.agent)
+	}
+
+	// Validate the Base message is an OPAQUE type
+	if in.Type != messages.OPAQUE {
+		return out, authenticated, fmt.Errorf("authenticators/opaque.Authenticate(): Incoming message type %d was not an OPAQUE type %d", in.Type, messages.OPAQUE)
+	}
+
+	// AuthComplete messages have no payload
+	opaqueMessage := in.Payload.(opaque.Opaque)
+
+	switch opaqueMessage.Type {
+	case opaque.RegInit:
+		// Server returned a RegInit message, start OPAQUE registration completion
+		out.Payload, err = UserRegisterComplete(opaqueMessage, a.opaque)
+		if err != nil {
+			err = fmt.Errorf("authenticators/opaque.Authenticate(): there was an error creating the OPAQUE User Registration Complete message: %s", err)
+		} else {
+			a.registered = true
+		}
+		// Returning an opaque.RegComplete message to the server
+	case opaque.RegComplete:
+		cli.Message(cli.NOTE, "Received OPAQUE server registration complete message")
+		cli.Message(cli.NOTE, "Starting OPAQUE Authentication")
+		// OPAQUE Registration has completed, start OPAQUE Authentication
+		// Build AuthInit message
+		out.Payload, err = UserAuthenticateInit(a.agent, a.opaque)
+		// Returning an opaque.AuthInit message to the server
+	case opaque.AuthInit:
+		cli.Message(cli.NOTE, "Received OPAQUE server authentication initialization message")
+		// Server returned an AuthInit message, start authentication completion
+		out.Payload, err = UserAuthenticateComplete(opaqueMessage, a.opaque)
+		if err == nil {
+			a.authenticated = true
+			authenticated = true
+		}
+		// Returning an opaque.AuthComplete message to the server
+	case opaque.ReRegister:
+		cli.Message(cli.NOTE, "Received OPAQUE server re-registration message")
+		a.registered = false
+		a.opaque = nil
+		out.Payload, a.opaque, err = UserRegisterInit(a.agent)
+	case opaque.ReAuthenticate:
+		cli.Message(cli.NOTE, "Received OPAQUE server re-authentication message")
+		a.authenticated = false
+		out.Payload, err = UserAuthenticateInit(a.agent, a.opaque)
+		// Returning an opaque.AuthInit message to the server
+	}
+	return
+}
+
+// Secret returns the established shared secret as bytes
+func (a *Authenticator) Secret() (key []byte, err error) {
+	if !a.authenticated {
+		return nil, fmt.Errorf("authenticators/opaque.Secret(): the Agent has not completed OPAQUE authentication")
+	}
+	return []byte(a.opaque.Kex.SharedSecret.String()), nil
+}
+
+// String returns the name of the Authenticator type
+func (a *Authenticator) String() string {
+	return "OPAQUE"
+}
 
 // User is the structure that holds information for the various steps of the OPAQUE protocol as the user
 type User struct {

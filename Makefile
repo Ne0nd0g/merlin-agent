@@ -44,10 +44,18 @@ KILLDATE ?= 0
 XKILLDATE=-X "main.killdate=${KILLDATE}"
 RETRY ?= 7
 XRETRY=-X "main.maxretry=${RETRY}"
+AUTH ?= opaque
+XAUTH=-X "main.auth=${AUTH}"
+ADDR ?= 127.0.0.1:4444
+XADDR=-X "main.addr=${ADDR}"
+TRANSFORMS ?= gob-string,jwe,gob-base
+XTRANSFORMS=-X "main.transforms=${TRANSFORMS}"
+LISTENER ?=
+XLISTENER=-X "main.listener=${LISTENER}"
 
 # Compile Flags
-LDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} -buildid='
-WINAGENTLDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} -H=windowsgui -buildid='
+LDFLAGS=-ldflags '-s -w ${XADDR} ${XAUTH} ${XTRANSFORMS} ${XLISTENER} ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} -buildid='
+WINAGENTLDFLAGS=-ldflags '-s -w ${XAUTH} ${XADDR} ${XTRANSFORMS} ${XLISTENER} ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} -H=windowsgui -buildid='
 GCFLAGS=-gcflags=all=-trimpath=$(GOPATH)
 ASMFLAGS=-asmflags=all=-trimpath=$(GOPATH)# -asmflags=-trimpath=$(GOPATH)
 

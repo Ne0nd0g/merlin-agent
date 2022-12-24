@@ -52,13 +52,13 @@ import (
 	"golang.org/x/net/http2"
 
 	// Merlin Main
-	"github.com/Ne0nd0g/merlin/pkg/core"
 	"github.com/Ne0nd0g/merlin/pkg/jobs"
 	"github.com/Ne0nd0g/merlin/pkg/messages"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/clients"
+	"github.com/Ne0nd0g/merlin-agent/core"
 )
 
 // Files is global map used to track Mythic's multistep file transfers. It holds data between requests

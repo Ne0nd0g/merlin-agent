@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
 
+// Package clients holds the interface for network communications
 package clients
 
 import (
@@ -22,16 +23,20 @@ import (
 	"github.com/Ne0nd0g/merlin/pkg/messages"
 )
 
-// ClientInterface is a structure definition of required functions a client must implement to be used with a Merlin Agent
-type ClientInterface interface {
-	Initial(info messages.AgentInfo) (messages.Base, error)
-	Send(base messages.Base) ([]messages.Base, error)
-	Set(key string, value string) error
+// Client is an interface definition a client must implement to interact with a remote server
+type Client interface {
+	// Authenticate executes the configured authentication method sending the necessary messages to the server to
+	// complete authentication. Function takes in a Base message for when the server returns information to continue the
+	// process or needs to re-authenticate.
+	Authenticate(msg messages.Base) error
+	// Get retrieve's a client's configured option
 	Get(key string) string
-	Auth(authType string, register bool) (messages.Base, error)
-}
-
-// MerlinClient is base structure for any clients that can be used to send or receive Merlin messages
-type MerlinClient struct {
-	ClientInterface
+	// Initial contains all the steps the agent and/or the communication profile need to take to set up and initiate
+	// communication with server
+	Initial() error
+	// Send takes in a Base message, transforms it according to the configured encoders/encrypters, and sends the message
+	// at the infrastructure layer according to the client's protocol
+	Send(base messages.Base) ([]messages.Base, error)
+	// Set updates a client's configured options
+	Set(key string, value string) error
 }
