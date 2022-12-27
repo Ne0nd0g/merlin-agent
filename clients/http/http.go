@@ -306,11 +306,13 @@ func (client *Client) getJWT() (string, error) {
 	// Agent generated JWT will always use the PSK
 	// Server later signs and returns JWTs
 
+	key := sha256.Sum256([]byte(client.psk))
+
 	// Create encrypter
 	encrypter, encErr := jose.NewEncrypter(jose.A256GCM,
 		jose.Recipient{
 			Algorithm: jose.DIRECT, // Doesn't create a per message key
-			Key:       client.secret},
+			Key:       key[:]},
 		(&jose.EncrypterOptions{}).WithType("JWT").WithContentType("JWT"))
 	if encErr != nil {
 		return "", fmt.Errorf("there was an error creating the JWT encryptor:\r\n%s", encErr.Error())
@@ -319,7 +321,7 @@ func (client *Client) getJWT() (string, error) {
 	// Create signer
 	signer, errSigner := jose.NewSigner(jose.SigningKey{
 		Algorithm: jose.HS256,
-		Key:       client.secret},
+		Key:       key[:]},
 		(&jose.SignerOptions{}).WithType("JWT"))
 	if errSigner != nil {
 		return "", fmt.Errorf("there was an error creating the JWT signer:\r\n%s", errSigner.Error())
@@ -452,6 +454,14 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 			Payload: opaque2.Opaque{Type: opaque2.ReRegister},
 		}
 		err = client.Authenticate(base)
+		return
+	case 403:
+		// Re-Authenticate to the HTTP listener, not the Merlin server
+		cli.Message(cli.NOTE, "Server returned a 403, likely from an expired JWT. Re-authenticating...")
+		client.JWT, err = client.getJWT()
+		if err != nil {
+			cli.Message(cli.WARN, fmt.Sprintf("clients/http.Send(): there was an error generating a self-signed JWT: %s", err))
+		}
 		return
 	default:
 		err = fmt.Errorf("there was an error communicating with the server:\r\n%d", resp.StatusCode)
