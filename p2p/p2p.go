@@ -25,14 +25,18 @@ import (
 	"sync"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin/pkg/messages"
+
+	// Internal
+	"github.com/Ne0nd0g/merlin-agent/cli"
 )
 
 // Types of Peer-to-peer Agents
 const (
 	TCPBIND    = 0
 	TCPREVERSE = 1
+	UDPBIND    = 2
+	UDPREVERSE = 3
 )
 
 // LinkedAgents is a map that holds information about peer-to-peer connected agents for receiving & routing messages
@@ -43,10 +47,11 @@ var out = make(chan messages.Delegate, 100)
 
 // Agent holds information about peer-to-peer linked agents
 type Agent struct {
-	In   chan messages.Base // In a channel of incoming Base messages coming in from the linked Agent
-	Out  chan messages.Base // Out a channel of outgoing Base messages to be sent to the linked Agent
-	Conn net.Conn           // Conn the network connection used to communicate with the linked Agent
-	Type int                // Type of the linked Agent (e.g., tcp-bind, SMB, etc.)
+	In     chan messages.Base // In a channel of incoming Base messages coming in from the linked Agent
+	Out    chan messages.Base // Out a channel of outgoing Base messages to be sent to the linked Agent
+	Conn   interface{}        // Conn the network connection used to communicate with the linked Agent
+	Type   int                // Type of the linked Agent (e.g., tcp-bind, SMB, etc.)
+	Remote net.Addr           // Remote is the name or address of the remote Agent data is being sent to
 }
 
 // GetDelegateMessages infinitely loops through the global Delegate message channel and return a list of them
@@ -76,18 +81,26 @@ func HandleDelegateMessages(delegates []messages.Delegate) {
 	for _, delegate := range delegates {
 		agent, ok := LinkedAgents.Load(delegate.Agent)
 		if !ok {
-			fmt.Printf("%s is not a known linked agent\n", delegate.Agent)
+			cli.Message(cli.WARN, fmt.Sprintf("%s is not a known linked agent\n", delegate.Agent))
 			break
 		}
+		var n int
+		var err error
 		switch agent.(Agent).Type {
-
+		case TCPBIND, TCPREVERSE, UDPBIND:
+			n, err = agent.(Agent).Conn.(net.Conn).Write(delegate.Payload)
+		case UDPREVERSE:
+			n, err = agent.(Agent).Conn.(net.PacketConn).WriteTo(delegate.Payload, agent.(Agent).Remote)
+		default:
+			cli.Message(cli.WARN, fmt.Sprintf("p2p.HandleDelegateMessages() unhandled Agent type: %d", agent.(Agent).Type))
+			break
 		}
-		n, err := agent.(Agent).Conn.Write(delegate.Payload)
+
 		if err != nil {
-			cli.Message(cli.WARN, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): there was an error writing a message to the linked agent %s: %s\n", agent.(Agent).Conn.RemoteAddr(), err))
+			cli.Message(cli.WARN, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): there was an error writing a message to the linked agent %s: %s\n", agent.(Agent).Conn.(net.Conn).RemoteAddr(), err))
 
 		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to the linked agent %s at %s\n", n, delegate.Agent, agent.(Agent).Conn.RemoteAddr()))
+		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to the linked agent %s at %s\n", n, delegate.Agent, agent.(Agent).Remote))
 	}
 }
 
@@ -98,6 +111,10 @@ func (a *Agent) String() string {
 		return "tcp-bind"
 	case TCPREVERSE:
 		return "tcp-reverse"
+	case UDPBIND:
+		return "udp-bind"
+	case UDPREVERSE:
+		return "udp-reverse"
 	default:
 		return fmt.Sprintf("unknown peer-to-peer agent type %d", a.Type)
 	}

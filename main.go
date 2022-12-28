@@ -36,6 +36,7 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/agent"
 	"github.com/Ne0nd0g/merlin-agent/clients/http"
 	"github.com/Ne0nd0g/merlin-agent/clients/tcp"
+	"github.com/Ne0nd0g/merlin-agent/clients/udp"
 	"github.com/Ne0nd0g/merlin-agent/core"
 )
 
@@ -109,7 +110,7 @@ func main() {
 	flag.StringVar(&transforms, "transforms", transforms, "Ordered CSV of transforms to construct a message")
 	flag.StringVar(&url, "url", url, "Full URL for agent to connect to")
 	flag.StringVar(&psk, "psk", psk, "Pre-Shared Key used to encrypt initial communications")
-	flag.StringVar(&protocol, "proto", protocol, "Protocol for the agent to connect with [https (HTTP/1.1), http (HTTP/1.1 Clear-Text), h2 (HTTP/2), h2c (HTTP/2 Clear-Text), http3 (QUIC or HTTP/3.0), tcp-bind, tcp-reverse]")
+	flag.StringVar(&protocol, "proto", protocol, "Protocol for the agent to connect with [https (HTTP/1.1), http (HTTP/1.1 Clear-Text), h2 (HTTP/2), h2c (HTTP/2 Clear-Text), http3 (QUIC or HTTP/3.0), tcp-bind, tcp-reverse, udp-bind, udp-reverse]")
 	flag.StringVar(&proxy, "proxy", proxy, "Hardcoded proxy to use for http/1.1 traffic only that will override host configuration")
 	flag.StringVar(&host, "host", host, "HTTP Host header")
 	flag.StringVar(&ja3, "ja3", ja3, "JA3 signature string (not the MD5 hash). Overrides -proto flag")
@@ -211,6 +212,7 @@ func main() {
 			AuthPackage:  auth,
 			Transformers: transforms,
 			Mode:         protocol,
+			Padding:      padding,
 		}
 
 		// Get the client
@@ -221,9 +223,35 @@ func main() {
 			}
 			os.Exit(1)
 		}
+	case "udp-bind", "udp-reverse":
+		listenerID, err := uuid.FromString(listener)
+		if err != nil {
+			if *verbose {
+				color.Red(err.Error())
+			}
+		}
+		config := udp.Config{
+			AgentID:      a.ID,
+			ListenerID:   listenerID,
+			PSK:          psk,
+			Address:      []string{addr},
+			AuthPackage:  auth,
+			Transformers: transforms,
+			Mode:         protocol,
+			Padding:      padding,
+		}
+
+		// Get the client
+		a.Client, err = udp.New(config)
+		if err != nil {
+			if *verbose {
+				color.Red(err.Error())
+			}
+			os.Exit(1)
+		}
 	default:
 		if *verbose {
-			color.Red(fmt.Sprintf("unhandled protocol %s\n", protocol))
+			color.Red(fmt.Sprintf("main: unhandled protocol %s\n", protocol))
 			os.Exit(1)
 		}
 	}

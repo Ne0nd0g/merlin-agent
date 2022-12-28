@@ -15,8 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
 
-// Package tcp contains a configurable client used for TCP-based peer-to-peer Agent communications
-package tcp
+// Package udp contains a configurable client used for UDP-based peer-to-peer Agent communications
+package udp
 
 import (
 	// Standard
@@ -57,8 +57,9 @@ type Client struct {
 	address       string                       // address is the network interface and port the agent will bind to
 	agentID       uuid.UUID                    // agentID the Agent's UUID
 	authenticator authenticators.Authenticator // authenticator the method the Agent will use to authenticate to the server
+	client        net.Addr                     // client is the address of the UDP client that initiated the connection, returned from PacketConn.ReadFrom
 	connection    net.Conn                     // connection the network socket connection used to handle traffic
-	listener      net.Listener                 // listener the network socket connection listening for traffic
+	listener      net.PacketConn               // listener the network socket connection listening for traffic
 	listenerID    uuid.UUID                    // listenerID the UUID of the listener that this Agent is configured to communicate with
 	paddingMax    int                          // paddingMax the maximum amount of random padding to apply to every Base message
 	psk           string                       // psk the pre-shared key used for encrypting messages until authentication is complete
@@ -81,21 +82,21 @@ type Config struct {
 
 // New instantiates and returns a Client that is constructed from the passed in Config
 func New(config Config) (*Client, error) {
-	cli.Message(cli.DEBUG, "Entering into clients.p2p.tcp.New()...")
+	cli.Message(cli.DEBUG, "Entering into clients/udp.New()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Config: %+v", config))
 	client := Client{}
 	if config.AgentID == uuid.Nil {
-		return nil, fmt.Errorf("clients/p2p/tcp.New(): a nil Agent UUID was provided")
+		return nil, fmt.Errorf("clients/udp.New(): a nil Agent UUID was provided")
 	}
 	client.agentID = config.AgentID
 	if config.ListenerID == uuid.Nil {
-		return nil, fmt.Errorf("clients/p2p/tcp.New(): a nil Listener UUID was provided")
+		return nil, fmt.Errorf("clients/udp.New(): a nil Listener UUID was provided")
 	}
 
 	switch strings.ToLower(config.Mode) {
-	case "tcp-bind":
+	case "udp-bind":
 		client.mode = BIND
-	case "tcp-reverse":
+	case "udp-reverse":
 		client.mode = REVERSE
 	default:
 		client.mode = BIND
@@ -108,7 +109,7 @@ func New(config Config) (*Client, error) {
 	if len(config.Address) <= 0 {
 		return nil, fmt.Errorf("a configuration address value was not provided")
 	}
-	_, err := net.ResolveTCPAddr("tcp", config.Address[0])
+	_, err := net.ResolveUDPAddr("udp", config.Address[0])
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +155,7 @@ func New(config Config) (*Client, error) {
 		case "jwe":
 			t = jwe.NewEncrypter()
 		default:
-			err := fmt.Errorf("clients/tcp.New(): unhandled transform type: %s", transform)
+			err := fmt.Errorf("clients/udp.New(): unhandled transform type: %s", transform)
 			if err != nil {
 				return nil, err
 			}
@@ -175,26 +176,28 @@ func New(config Config) (*Client, error) {
 
 // Initial executes the specific steps required to establish a connection with the C2 server and checkin or register an agent
 func (client *Client) Initial() error {
-	cli.Message(cli.DEBUG, "Entering clients.p2p.tcp.Initial function")
+	cli.Message(cli.DEBUG, "Entering clients/udp.Initial() function")
 	var err error
 	switch client.mode {
 	case BIND:
-		client.listener, err = net.Listen("tcp", client.address)
+		client.listener, err = net.ListenPacket("udp", client.address)
 		if err != nil {
-			return fmt.Errorf("clients/tcp.Initial(): there was an error listening on %s: %s", client.address, err)
+			return fmt.Errorf("clients/udp.Initial(): there was an error listening on %s: %s", client.address, err)
 		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Started %s on %s and waiting for a connection...", client, client.address))
-
-		// Listen for initial connection from upstream agent
-		client.connection, err = client.listener.Accept()
+		cli.Message(cli.NOTE, fmt.Sprintf("Started %s listener on %s and waiting for a connection...", client, client.address))
+		var n int
+		buffer := make([]byte, 500000)
+		n, client.client, err = client.listener.ReadFrom(buffer)
+		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from %s", n, client.client))
 		if err != nil {
-			return fmt.Errorf("clients/tcp.Initial(): there was an error accepting the connection: %s", err)
+			return fmt.Errorf("clients/udp.Initial(): there was an error reading data from %s : %s", client.client, err)
 		}
 	case REVERSE:
-		client.connection, err = net.Dial("tcp", client.address)
+		client.connection, err = net.Dial("udp", client.address)
 		if err != nil {
-			return fmt.Errorf("clients/tcp.Initial(): there was an error connecting to %s: %s", client.address, err)
+			return fmt.Errorf("clients/udp.Initial(): there was an error connecting to %s: %s", client.address, err)
 		}
+		client.client = client.connection.RemoteAddr()
 		cli.Message(cli.NOTE, fmt.Sprintf("successfully connected to %s", client.address))
 	}
 
@@ -206,7 +209,7 @@ func (client *Client) Initial() error {
 // Authenticate is the top-level function used to authenticate an agent to server using a specific authentication protocol
 // The function must take in a Base message for when the C2 server requests re-authentication through a message
 func (client *Client) Authenticate(msg messages.Base) (err error) {
-	cli.Message(cli.DEBUG, fmt.Sprintf("clients/p2p/tcp.Authenticate(): entering into function with message: %+v", msg))
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Authenticate(): entering into function with message: %+v", msg))
 	var authenticated bool
 	// Reset the Agent's PSK
 	k := sha256.Sum256([]byte(client.psk))
@@ -262,7 +265,7 @@ func (client *Client) Construct(msg messages.Base) (data []byte, err error) {
 			data, err = client.transformers[i-1].Construct(data, client.secret)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("clients/tcp.Construct(): there was an error calling the transformer construct function: %s", err)
+			return nil, fmt.Errorf("clients/udp.Construct(): there was an error calling the transformer construct function: %s", err)
 		}
 	}
 	return
@@ -271,7 +274,7 @@ func (client *Client) Construct(msg messages.Base) (data []byte, err error) {
 // Deconstruct takes in data returned from the server and runs all the Agent's transforms on it until
 // a messages.Base structure is returned. The key is used for decryption transforms
 func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
-	cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Deconstruct(): entering into function with message: %+v", data))
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Deconstruct(): entering into function with message: %+v", data))
 	//fmt.Printf("Deconstructing %d bytes with key: %x\n", len(data), client.secret)
 	for _, transform := range client.transformers {
 		//fmt.Printf("Transformer %T: %+v\n", transform, transform)
@@ -288,18 +291,18 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 			//fmt.Printf("pkg/listeners.Deconstruct(): returning Base message: %+v\n", ret.(messages.Base))
 			return ret.(messages.Base), nil
 		default:
-			return messages.Base{}, fmt.Errorf("clients/tcp.Deconstruct(): unhandled data type for Deconstruct(): %T", ret)
+			return messages.Base{}, fmt.Errorf("clients/udp.Deconstruct(): unhandled data type for Deconstruct(): %T", ret)
 		}
 	}
-	return messages.Base{}, fmt.Errorf("clients/tcp.Deconstruct(): unable to transform data into messages.Base structure")
+	return messages.Base{}, fmt.Errorf("clients/udp.Deconstruct(): unable to transform data into messages.Base structure")
 }
 
 // Send takes in a Merlin message structure, performs any encoding or encryption, converts it to a delegate and writes it to the output stream
 // The function also decodes and decrypts response messages and return a Merlin message structure.
 // This is where the client's logic is for communicating with the server.
 func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err error) {
-	cli.Message(cli.DEBUG, "Entering into clients.p2p.tcp.Send()")
-	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", messages.String(m.Type), client.connection.RemoteAddr()))
+	cli.Message(cli.DEBUG, "Entering into clients/udp.Send()")
+	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", messages.String(m.Type), client.client))
 
 	// Set the message padding
 	if client.paddingMax > 0 {
@@ -309,7 +312,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 
 	data, err := client.Construct(m)
 	if err != nil {
-		err = fmt.Errorf("clients/tcp.Send(): there was an error constructing the data: %s", err)
+		err = fmt.Errorf("clients/udp.Send(): there was an error constructing the data: %s", err)
 		return
 	}
 
@@ -329,30 +332,44 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	}
 
 	// Write the message
-	cli.Message(cli.DEBUG, fmt.Sprintf("Writing message size: %d to: %s", delegateBytes.Len(), client.connection.RemoteAddr()))
-	n, err := client.connection.Write(delegateBytes.Bytes())
+	cli.Message(cli.DEBUG, fmt.Sprintf("Writing message size: %d to: %s", delegateBytes.Len(), client.client))
+	var n int
+	switch client.mode {
+	case BIND:
+		n, err = client.listener.WriteTo(delegateBytes.Bytes(), client.client)
+	case REVERSE:
+		n, err = client.connection.Write(delegateBytes.Bytes())
+	}
+
 	if err != nil {
-		err = fmt.Errorf("there was an error writing the message to the connection with %s: %s", client.connection.RemoteAddr(), err)
+		err = fmt.Errorf("there was an error writing the message to the connection with %s: %s", client.client, err)
 		return
 	}
 
-	cli.Message(cli.DEBUG, fmt.Sprintf("Wrote %d bytes to connection %s", n, client.connection.RemoteAddr()))
+	cli.Message(cli.DEBUG, fmt.Sprintf("Wrote %d bytes to connection %s", n, client.client))
 
 	// Wait for the response
-	cli.Message(cli.NOTE, fmt.Sprintf("Waiting for response from %s...", client.connection.RemoteAddr()))
+	cli.Message(cli.NOTE, fmt.Sprintf("Waiting for response from %s...", client.client))
 
 	respData := make([]byte, 500000)
-	n, err = client.connection.Read(respData)
-	cli.Message(cli.DEBUG, fmt.Sprintf("Read %d bytes from connection %s", n, client.connection.RemoteAddr()))
+
+	switch client.mode {
+	case BIND:
+		n, client.client, err = client.listener.ReadFrom(respData)
+	case REVERSE:
+		n, err = client.connection.Read(respData)
+	}
+
+	cli.Message(cli.DEBUG, fmt.Sprintf("Read %d bytes from connection %s", n, client.client))
 	if err != nil {
-		err = fmt.Errorf("there was an error reading the message from the connection with %s: %s", client.connection.RemoteAddr(), err)
+		err = fmt.Errorf("there was an error reading the message from the connection with %s: %s", client.client, err)
 		return
 	}
 
 	var msg messages.Base
 	msg, err = client.Deconstruct(respData[:n])
 	if err != nil {
-		err = fmt.Errorf("clients/tcp.Send(): there was an error deconstructing the data: %s", err)
+		err = fmt.Errorf("clients/udp.Send(): there was an error deconstructing the data: %s", err)
 		return
 	}
 
@@ -363,7 +380,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 
 // Get is a generic function that is used to retrieve the value of a Client's field
 func (client *Client) Get(key string) string {
-	cli.Message(cli.DEBUG, "Entering into clients.p2p.tcp.Get()...")
+	cli.Message(cli.DEBUG, "Entering into clients/udp.Get()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s", key))
 	switch strings.ToLower(key) {
 	case "paddingmax":
@@ -377,7 +394,7 @@ func (client *Client) Get(key string) string {
 
 // Set is a generic function that is used to modify a Client's field values
 func (client *Client) Set(key string, value string) error {
-	cli.Message(cli.DEBUG, "Entering into clients.tcp.Set()...")
+	cli.Message(cli.DEBUG, "Entering into clients/udp.Set()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s, Value: %s", key, value))
 	var err error
 	switch strings.ToLower(key) {
@@ -387,19 +404,19 @@ func (client *Client) Set(key string, value string) error {
 	case "secret":
 		client.secret = []byte(value)
 	default:
-		err = fmt.Errorf("unknown tcp client setting: %s", key)
+		err = fmt.Errorf("unknown udp client setting: %s", key)
 	}
 	return err
 }
 
-// String returns the type of TCP client
+// String returns the type of UDP client
 func (client *Client) String() string {
 	switch client.mode {
 	case BIND:
-		return "tcp-bind"
+		return "udp-bind"
 	case REVERSE:
-		return "tcp-reverse"
+		return "udp-reverse"
 	default:
-		return "tcp-unhandled"
+		return "udp-unhandled"
 	}
 }

