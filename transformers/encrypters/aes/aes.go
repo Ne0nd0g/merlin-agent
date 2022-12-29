@@ -114,10 +114,13 @@ func decrypt(ciphertext []byte, key []byte) ([]byte, error) {
 	if len(ciphertext) < aes.BlockSize {
 		return nil, fmt.Errorf("ciphertext was not greater than the AES block size")
 	}
+	if len(ciphertext) < 32+aes.BlockSize {
+		return nil, fmt.Errorf("ciphertext not long enough to contain a hash")
+	}
 
 	// IV + Ciphertext + HMAC
-	iv := ciphertext[:aes.BlockSize]
-	hash := ciphertext[len(ciphertext)-32:]
+	iv := ciphertext[:aes.BlockSize]        // First 16 bytes
+	hash := ciphertext[len(ciphertext)-32:] // Last
 	ciphertext = ciphertext[aes.BlockSize : len(ciphertext)-32]
 
 	// Verify encrypted data is a multiple of the block size

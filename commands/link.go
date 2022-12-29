@@ -21,6 +21,7 @@ import (
 	// Standard
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/gob"
 	"fmt"
 	"math/rand"
@@ -88,14 +89,16 @@ func Connect(network string, args []string) (results jobs.Results) {
 	}
 
 	linkedAgent.Conn = conn
+	linkedAgent.Remote = conn.RemoteAddr()
 	var n int
 
 	// We must first write data to the UDP connection to let the UDP bind Agent know we're listening and ready
 	if linkedAgent.Type == p2p.UDPBIND {
 		junk := core.RandStringBytesMaskImprSrc(rand.Intn(100))
+		junk = base64.StdEncoding.EncodeToString([]byte(junk))
 		cli.Message(cli.NOTE, fmt.Sprintf("Initiating UDP connection to %s sending junk data: %s", linkedAgent.Conn.(net.Conn).RemoteAddr(), junk))
 		n, err = linkedAgent.Conn.(net.Conn).Write([]byte(junk))
-		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to UDP connection", n))
+		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to UDP connection from %s", n, linkedAgent.Conn.(net.Conn).RemoteAddr()))
 		if err != nil {
 			results.Stderr = fmt.Sprintf("there was an error writing data to the UDP connection: %s", err)
 			return
@@ -109,7 +112,7 @@ func Connect(network string, args []string) (results jobs.Results) {
 	if err != nil {
 		cli.Message(cli.WARN, fmt.Sprintf("there was an error reading datat from linked agent %s: %s", args[0], err))
 	}
-	cli.Message(cli.DEBUG, fmt.Sprintf("Read %d bytes from linked %s agent %s at %s", n, &linkedAgent, args[0], time.Now().UTC()))
+	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked %s agent %s at %s", n, &linkedAgent, args[0], time.Now().UTC()))
 
 	// Decode GOB from server response into Base
 	var msg messages.Delegate

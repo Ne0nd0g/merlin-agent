@@ -230,7 +230,7 @@ func listen(conn net.Conn) {
 			cli.Message(cli.WARN, fmt.Sprintf("commands/link.listen(): there was an error reading data from %s: %s", conn.RemoteAddr(), err))
 			break
 		}
-		cli.Message(cli.NOTE, fmt.Sprintf("TCP listener read %d bytes from %s at %s", n, conn.RemoteAddr(), time.Now().UTC()))
+		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked Agent %s at %s", n, conn.RemoteAddr(), time.Now().UTC()))
 
 		// Gob decode the message
 		var msg messages.Delegate

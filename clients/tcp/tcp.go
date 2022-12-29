@@ -24,11 +24,11 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"strconv"
 	"strings"
-
 	// 3rd Party
 	uuid "github.com/satori/go.uuid"
 
@@ -176,26 +176,10 @@ func New(config Config) (*Client, error) {
 // Initial executes the specific steps required to establish a connection with the C2 server and checkin or register an agent
 func (client *Client) Initial() error {
 	cli.Message(cli.DEBUG, "Entering clients.p2p.tcp.Initial function")
-	var err error
-	switch client.mode {
-	case BIND:
-		client.listener, err = net.Listen("tcp", client.address)
-		if err != nil {
-			return fmt.Errorf("clients/tcp.Initial(): there was an error listening on %s: %s", client.address, err)
-		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Started %s on %s and waiting for a connection...", client, client.address))
 
-		// Listen for initial connection from upstream agent
-		client.connection, err = client.listener.Accept()
-		if err != nil {
-			return fmt.Errorf("clients/tcp.Initial(): there was an error accepting the connection: %s", err)
-		}
-	case REVERSE:
-		client.connection, err = net.Dial("tcp", client.address)
-		if err != nil {
-			return fmt.Errorf("clients/tcp.Initial(): there was an error connecting to %s: %s", client.address, err)
-		}
-		cli.Message(cli.NOTE, fmt.Sprintf("successfully connected to %s", client.address))
+	err := client.Connect()
+	if err != nil {
+		return fmt.Errorf("clients/tcp.Initial(): %s", err)
 	}
 
 	// Authenticate
@@ -251,6 +235,38 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 	}
 }
 
+// Connect establish a connection with the remote host depending on the Client's type (e.g., BIND or REVERSE)
+func (client *Client) Connect() (err error) {
+	switch client.mode {
+	case BIND:
+		if client.listener == nil {
+			client.listener, err = net.Listen("tcp", client.address)
+			if err != nil {
+				return fmt.Errorf("clients/tcp.Connect(): there was an error listening on %s: %s", client.address, err)
+			}
+			cli.Message(cli.NOTE, fmt.Sprintf("Started %s on %s", client, client.address))
+		}
+
+		// Listen for initial connection from upstream agent
+		cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming connection..."))
+		client.connection, err = client.listener.Accept()
+		if err != nil {
+			return fmt.Errorf("clients/tcp.Connect(): there was an error accepting the connection: %s", err)
+		}
+		cli.Message(cli.NOTE, fmt.Sprintf("Received new connection from %s", client.connection.RemoteAddr()))
+		return nil
+	case REVERSE:
+		client.connection, err = net.Dial("tcp", client.address)
+		if err != nil {
+			return fmt.Errorf("clients/tcp.Connect(): there was an error connecting to %s: %s", client.address, err)
+		}
+		cli.Message(cli.NOTE, fmt.Sprintf("Successfully connected to %s", client.address))
+		return nil
+	default:
+		return fmt.Errorf("clients/tcp.Connect(): Unhandled Client mode %d", client.mode)
+	}
+}
+
 // Construct takes in a messages.Base structure that is ready to be sent to the server and runs all the configured transforms
 // on it to encode and encrypt it.
 func (client *Client) Construct(msg messages.Base) (data []byte, err error) {
@@ -299,7 +315,6 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 // This is where the client's logic is for communicating with the server.
 func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err error) {
 	cli.Message(cli.DEBUG, "Entering into clients.p2p.tcp.Send()")
-	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", messages.String(m.Type), client.connection.RemoteAddr()))
 
 	// Set the message padding
 	if client.paddingMax > 0 {
@@ -328,6 +343,17 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		return
 	}
 
+	// Repair broken connections
+	if client.connection == nil {
+		cli.Message(cli.NOTE, fmt.Sprintf("Client connection was empty. Waiting for an incoming connection..."))
+		err = client.Connect()
+		if err != nil {
+			err = fmt.Errorf("clients/tcp.Send(): %s", err)
+			return
+		}
+	}
+	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", messages.String(m.Type), client.connection.RemoteAddr()))
+
 	// Write the message
 	cli.Message(cli.DEBUG, fmt.Sprintf("Writing message size: %d to: %s", delegateBytes.Len(), client.connection.RemoteAddr()))
 	n, err := client.connection.Write(delegateBytes.Bytes())
@@ -342,9 +368,15 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	cli.Message(cli.NOTE, fmt.Sprintf("Waiting for response from %s...", client.connection.RemoteAddr()))
 
 	respData := make([]byte, 500000)
+
 	n, err = client.connection.Read(respData)
 	cli.Message(cli.DEBUG, fmt.Sprintf("Read %d bytes from connection %s", n, client.connection.RemoteAddr()))
 	if err != nil {
+		if err == io.EOF {
+			err = fmt.Errorf("received EOF from %s, the Agent's connection has been reset", client.connection.RemoteAddr())
+			client.connection = nil
+			return
+		}
 		err = fmt.Errorf("there was an error reading the message from the connection with %s: %s", client.connection.RemoteAddr(), err)
 		return
 	}
