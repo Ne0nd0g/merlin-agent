@@ -261,6 +261,7 @@ func (client *Client) Connect() (err error) {
 		if err != nil {
 			return fmt.Errorf("clients/udp.Connect(): there was an error reading data from %s : %s", client.client, err)
 		}
+
 		return
 	case REVERSE:
 		client.connection, err = net.Dial("udp", client.address)
@@ -353,7 +354,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	}
 
 	// Recover connection
-	if client.connection == nil {
+	if client.connection == nil && client.mode == REVERSE {
 		err = client.Connect()
 		if err != nil {
 			err = fmt.Errorf("clients/udp.Send(): %s", err)
@@ -379,7 +380,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	cli.Message(cli.DEBUG, fmt.Sprintf("Wrote %d bytes to connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
 
 	// Wait for the response
-	cli.Message(cli.NOTE, fmt.Sprintf("Waiting for response from %s...", client.client))
+	cli.Message(cli.NOTE, fmt.Sprintf("Waiting for response from %s at %s...", client.client, time.Now().UTC().Format(time.RFC3339)))
 
 	respData := make([]byte, 500000)
 	readTimeout := time.Minute * 5

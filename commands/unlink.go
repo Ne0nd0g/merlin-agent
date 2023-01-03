@@ -1,12 +1,19 @@
 package commands
 
 import (
+	// Standard
 	"fmt"
+	"net"
+
+	// 3rd Party
+	uuid "github.com/satori/go.uuid"
+
+	// Merlin
+	"github.com/Ne0nd0g/merlin/pkg/jobs"
+
+	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/p2p"
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
-	uuid "github.com/satori/go.uuid"
-	"net"
 )
 
 // Unlink terminates a peer-to-peer Agent connection

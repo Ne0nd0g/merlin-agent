@@ -98,13 +98,13 @@ func Connect(network string, args []string) (results jobs.Results) {
 		junk = base64.StdEncoding.EncodeToString([]byte(junk))
 		cli.Message(cli.NOTE, fmt.Sprintf("Initiating UDP connection to %s sending junk data: %s", linkedAgent.Conn.(net.Conn).RemoteAddr(), junk))
 		n, err = linkedAgent.Conn.(net.Conn).Write([]byte(junk))
-		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to UDP connection from %s", n, linkedAgent.Conn.(net.Conn).RemoteAddr()))
+		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to UDP connection from %s at %s", n, linkedAgent.Conn.(net.Conn).RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 		if err != nil {
 			results.Stderr = fmt.Sprintf("there was an error writing data to the UDP connection: %s", err)
 			return
 		}
 		// Wait for linked agent first checking message
-		cli.Message(cli.NOTE, fmt.Sprintf("Waiting to recieve UDP connection from %s...", linkedAgent.Conn.(net.Conn).RemoteAddr()))
+		cli.Message(cli.NOTE, fmt.Sprintf("Waiting to recieve UDP connection from %s at %s...", linkedAgent.Conn.(net.Conn).RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 	}
 
 	data := make([]byte, 50000)
