@@ -102,6 +102,8 @@ func executeJob() {
 					result = commands.PS()
 				case "ssh":
 					result = commands.SSH(job.Payload.(jobs.Command))
+				case "unlink":
+					result = commands.Unlink(job.Payload.(jobs.Command))
 				case "uptime":
 					result = commands.Uptime()
 				case "token":

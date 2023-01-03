@@ -219,16 +219,19 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 			}
 		}
 
-		// Send the message to the server
-		var msgs []messages.Base
-		msgs, err = client.Send(msg)
-		if err != nil {
-			return
-		}
+		// The "none" authenticator will return an empty Base message while an OPAQUE message will return type OPAQUE 2
+		if msg.Type != 0 {
+			// Send the message to the server
+			var msgs []messages.Base
+			msgs, err = client.Send(msg)
+			if err != nil {
+				return
+			}
 
-		// Add response message to the next loop iteration
-		if len(msgs) > 0 {
-			msg = msgs[0]
+			// Add response message to the next loop iteration
+			if len(msgs) > 0 {
+				msg = msgs[0]
+			}
 		}
 
 		// If the Agent is authenticated, exit the loop and return the function
@@ -320,7 +323,7 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 // This is where the client's logic is for communicating with the server.
 func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err error) {
 	cli.Message(cli.DEBUG, "Entering into clients/udp.Send()")
-	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", messages.String(m.Type), client.client))
+	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s at %s", messages.String(m.Type), client.client, time.Now().UTC().Format(time.RFC3339)))
 
 	// Set the message padding
 	if client.paddingMax > 0 {
@@ -359,7 +362,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	}
 
 	// Write the message
-	cli.Message(cli.DEBUG, fmt.Sprintf("Writing message size: %d to: %s", delegateBytes.Len(), client.client))
+	cli.Message(cli.DEBUG, fmt.Sprintf("Writing message size: %d to: %s at %s", delegateBytes.Len(), client.client, time.Now().UTC().Format(time.RFC3339)))
 	var n int
 	switch client.mode {
 	case BIND:
@@ -373,7 +376,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		return
 	}
 
-	cli.Message(cli.DEBUG, fmt.Sprintf("Wrote %d bytes to connection %s", n, client.client))
+	cli.Message(cli.DEBUG, fmt.Sprintf("Wrote %d bytes to connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
 
 	// Wait for the response
 	cli.Message(cli.NOTE, fmt.Sprintf("Waiting for response from %s...", client.client))
@@ -392,7 +395,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		n, err = client.connection.Read(respData)
 	}
 
-	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s", n, client.client))
+	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
 	if err != nil {
 		switch err2 := err.(type) {
 		case net.Error:

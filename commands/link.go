@@ -84,7 +84,7 @@ func Connect(network string, args []string) (results jobs.Results) {
 	// Establish connection to downstream agent
 	conn, err := net.Dial(network, args[0])
 	if err != nil {
-		results.Stderr = fmt.Sprintf("there was an error attempting to link the agent: %s", err.Error())
+		results.Stderr = fmt.Sprintf("commands/link.Connect(): there was an error attempting to link the agent: %s", err.Error())
 		return
 	}
 
@@ -112,7 +112,7 @@ func Connect(network string, args []string) (results jobs.Results) {
 	if err != nil {
 		cli.Message(cli.WARN, fmt.Sprintf("there was an error reading datat from linked agent %s: %s", args[0], err))
 	}
-	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked %s agent %s at %s", n, &linkedAgent, args[0], time.Now().UTC()))
+	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked %s agent %s at %s", n, &linkedAgent, args[0], time.Now().UTC().Format(time.RFC3339)))
 
 	// Decode GOB from server response into Base
 	var msg messages.Delegate

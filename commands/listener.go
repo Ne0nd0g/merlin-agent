@@ -41,11 +41,12 @@ const (
 	UDP = 1
 )
 
-// p2pListener is a structure for managing and tracking peer to peer listeners created on this Agent
+// p2pListener is a structure for managing and tracking peer to peer listeners created on this Agent as the parent used
+// to communicate with child Agents
 type p2pListener struct {
 	Addr     string      // Addr is a string representation of the address the listener is communicating with
-	Type     int         // Type is the p2pListener type
 	Listener interface{} // Listener holds the connection (e.g., net.Listener for TCP and net.PacketConn for UDP)
+	Type     int         // Type is the p2pListener type
 }
 
 // String returns a string representation of the p2pListener
@@ -157,20 +158,25 @@ func ListenTCP(addr string) error {
 
 	// Add to global listeners
 	var ok bool
-	for _, l := range p2pListeners {
+	var l p2pListener
+	for _, l = range p2pListeners {
 		if l.Type == TCP {
+			// Check to see if there is already a p2pListener in the map for this address
 			if listener.Addr() == l.Listener.(net.Listener).Addr() {
 				ok = true
+				break
 			}
 		}
 
 	}
+
 	if !ok {
-		p2pListeners = append(p2pListeners, p2pListener{
+		l = p2pListener{
 			Addr:     listener.Addr().String(),
-			Type:     TCP,
 			Listener: listener,
-		})
+			Type:     TCP,
+		}
+		p2pListeners = append(p2pListeners, l)
 	}
 
 	cli.Message(cli.NOTE, fmt.Sprintf("Started TCP listener on %s and waiting for a connection...", addr))
@@ -227,17 +233,18 @@ func listen(conn net.Conn) {
 		data := make([]byte, 500000)
 		n, err := bufio.NewReader(conn).Read(data)
 		if err != nil {
-			cli.Message(cli.WARN, fmt.Sprintf("commands/link.listen(): there was an error reading data from %s: %s", conn.RemoteAddr(), err))
-			break
+			cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listen(): there was an error reading data from %s: %s", conn.RemoteAddr(), err))
+			return
 		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked Agent %s at %s", n, conn.RemoteAddr(), time.Now().UTC()))
+
+		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked Agent %s at %s", n, conn.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 
 		// Gob decode the message
 		var msg messages.Delegate
 		reader := bytes.NewReader(data)
 		err = gob.NewDecoder(reader).Decode(&msg)
 		if err != nil {
-			cli.Message(cli.WARN, fmt.Sprintf("commands/link.listen(): there was an error gob decoding a delegate message: %s", err))
+			cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listen(): there was an error gob decoding a delegate message: %s", err))
 			return
 		}
 
@@ -270,7 +277,7 @@ func listenUDP(listener net.PacketConn) {
 	for {
 		data := make([]byte, 500000)
 		n, addr, err := listener.ReadFrom(data)
-		cli.Message(cli.NOTE, fmt.Sprintf("UDP listener read %d bytes from %s at %s", n, addr, time.Now().UTC()))
+		cli.Message(cli.NOTE, fmt.Sprintf("UDP listener read %d bytes from %s at %s", n, addr, time.Now().UTC().Format(time.RFC3339)))
 		if err != nil {
 			cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listenUDP(): there was an error accepting the UDP connection from %s : %s", addr, err))
 			break

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	// Merlin
 	"github.com/Ne0nd0g/merlin/pkg/messages"
@@ -100,7 +101,7 @@ func HandleDelegateMessages(delegates []messages.Delegate) {
 			cli.Message(cli.WARN, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): there was an error writing a message to the linked agent %s: %s\n", agent.(Agent).Conn.(net.Conn).RemoteAddr(), err))
 
 		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to the linked agent %s at %s\n", n, delegate.Agent, agent.(Agent).Remote))
+		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to the linked agent %s at %s at %s\n", n, delegate.Agent, agent.(Agent).Remote, time.Now().UTC().Format(time.RFC3339)))
 	}
 }
 

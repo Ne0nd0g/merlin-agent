@@ -29,6 +29,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
+
 	// 3rd Party
 	uuid "github.com/satori/go.uuid"
 
@@ -216,16 +218,19 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 			}
 		}
 
-		// Send the message to the server
-		var msgs []messages.Base
-		msgs, err = client.Send(msg)
-		if err != nil {
-			return
-		}
+		// The "none" authenticator will return an empty Base message while an OPAQUE message will return type OPAQUE 2
+		if msg.Type != 0 {
+			// Send the message to the server
+			var msgs []messages.Base
+			msgs, err = client.Send(msg)
+			if err != nil {
+				return
+			}
 
-		// Add response message to the next loop iteration
-		if len(msgs) > 0 {
-			msg = msgs[0]
+			// Add response message to the next loop iteration
+			if len(msgs) > 0 {
+				msg = msgs[0]
+			}
 		}
 
 		// If the Agent is authenticated, exit the loop and return the function
@@ -352,7 +357,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 			return
 		}
 	}
-	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", messages.String(m.Type), client.connection.RemoteAddr()))
+	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s at %s", messages.String(m.Type), client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 
 	// Write the message
 	cli.Message(cli.DEBUG, fmt.Sprintf("Writing message size: %d to: %s", delegateBytes.Len(), client.connection.RemoteAddr()))
@@ -365,12 +370,12 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	cli.Message(cli.DEBUG, fmt.Sprintf("Wrote %d bytes to connection %s", n, client.connection.RemoteAddr()))
 
 	// Wait for the response
-	cli.Message(cli.NOTE, fmt.Sprintf("Waiting for response from %s...", client.connection.RemoteAddr()))
+	cli.Message(cli.NOTE, fmt.Sprintf("Waiting for response from %s at %s...", client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 
 	respData := make([]byte, 500000)
 
 	n, err = client.connection.Read(respData)
-	cli.Message(cli.DEBUG, fmt.Sprintf("Read %d bytes from connection %s", n, client.connection.RemoteAddr()))
+	cli.Message(cli.DEBUG, fmt.Sprintf("Read %d bytes from connection %s at %s", n, client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 	if err != nil {
 		if err == io.EOF {
 			err = fmt.Errorf("received EOF from %s, the Agent's connection has been reset", client.connection.RemoteAddr())
