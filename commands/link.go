@@ -107,10 +107,14 @@ func Connect(network string, args []string) (results jobs.Results) {
 		cli.Message(cli.NOTE, fmt.Sprintf("Waiting to recieve UDP connection from %s at %s...", linkedAgent.Conn.(net.Conn).RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 	}
 
+	// Need to read data here in this function to retrieve the linked Agent's ID so the linkedAgent structure can be stored
 	data := make([]byte, 50000)
 	n, err = bufio.NewReader(linkedAgent.Conn.(net.Conn)).Read(data)
 	if err != nil {
-		cli.Message(cli.WARN, fmt.Sprintf("there was an error reading datat from linked agent %s: %s", args[0], err))
+		msg := fmt.Sprintf("there was an error reading data from linked agent %s: %s", args[0], err)
+		results.Stderr = msg
+		cli.Message(cli.WARN, msg)
+		return
 	}
 	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked %s agent %s at %s", n, &linkedAgent, args[0], time.Now().UTC().Format(time.RFC3339)))
 

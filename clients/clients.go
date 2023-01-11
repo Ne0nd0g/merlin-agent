@@ -34,9 +34,14 @@ type Client interface {
 	// Initial contains all the steps the agent and/or the communication profile need to take to set up and initiate
 	// communication with server
 	Initial() error
+	// Listen is used by synchronous Agents to consistently listen for new incoming messages that aren't the result of a check in
+	Listen() ([]messages.Base, error)
 	// Send takes in a Base message, transforms it according to the configured encoders/encrypters, and sends the message
 	// at the infrastructure layer according to the client's protocol
 	Send(base messages.Base) ([]messages.Base, error)
 	// Set updates a client's configured options
 	Set(key string, value string) error
+	// Synchronous identifies if the client connection is synchronous or asynchronous, used to determine how and when messages
+	// can be sent/received.
+	Synchronous() bool
 }

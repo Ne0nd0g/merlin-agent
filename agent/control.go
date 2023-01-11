@@ -61,6 +61,13 @@ func (a *Agent) control(job jobs.Job) {
 		a.KillDate = int64(d)
 
 		cli.Message(cli.INFO, fmt.Sprintf("Set Kill Date to: %s", time.Unix(a.KillDate, 0).UTC().Format(time.RFC3339)))
+	case "listener":
+		err := a.Client.Set("listener", cmd.Args[0])
+		if err != nil {
+			results.Stderr = fmt.Sprintf("there was an error changing the Agent's listener ID: %s", err.Error())
+			break
+		}
+		cli.Message(cli.NOTE, fmt.Sprintf("Changing the Agent's Listener ID to %s", cmd.Args[0]))
 	case "maxretry":
 		t, err := strconv.Atoi(cmd.Args[0])
 		if err != nil {

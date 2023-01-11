@@ -348,6 +348,12 @@ func (client *Client) getJWT() (string, error) {
 	return agentJWT, nil
 }
 
+// Listen waits for incoming data on an established connection, deconstructs the data into a Base messages, and returns them
+func (client *Client) Listen() (returnMessages []messages.Base, err error) {
+	err = fmt.Errorf("clients/http.Listen(): the HTTP client does not support the Listen function")
+	return
+}
+
 // Send takes in a Merlin message structure, performs any encoding or encryption, and sends it to the server
 // The function also decodes and decrypts response messages and return a Merlin message structure.
 // This is where the client's logic is for communicating with the server.
@@ -661,4 +667,10 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 func (client *Client) Initial() (err error) {
 	cli.Message(cli.DEBUG, "clients/http.Initial(): entering into function")
 	return client.Authenticate(messages.Base{})
+}
+
+// Synchronous identifies if the client connection is synchronous or asynchronous, used to determine how and when messages
+// can be sent/received.
+func (client *Client) Synchronous() bool {
+	return false
 }

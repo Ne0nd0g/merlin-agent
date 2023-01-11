@@ -205,7 +205,10 @@ func (a *Agent) Run() {
 		}
 		// Check in
 		if a.Authenticated {
-			cli.Message(cli.NOTE, "Checking in...")
+			// Synchronous clients will fill the console with this message because there is no sleep
+			if !a.Client.Synchronous() {
+				cli.Message(cli.NOTE, "Checking in...")
+			}
 			a.statusCheckIn()
 		} else {
 			err := a.Client.Initial()
@@ -217,6 +220,9 @@ func (a *Agent) Run() {
 				cli.Message(cli.SUCCESS, "Agent authentication successful")
 				a.Authenticated = true
 				a.iCheckIn = time.Now().UTC()
+				if a.Client.Synchronous() {
+					go a.listen()
+				}
 				// Used to immediately respond to AgentInfo request job from server
 				a.statusCheckIn()
 			}
@@ -226,15 +232,18 @@ func (a *Agent) Run() {
 			cli.Message(cli.WARN, fmt.Sprintf("maximum number of failed checkin attempts reached: %d", a.MaxRetry))
 			os.Exit(0)
 		}
-		// Sleep
-		var sleep time.Duration
-		if a.Skew > 0 {
-			sleep = a.WaitTime + (time.Duration(rand.Int63n(a.Skew)) * time.Millisecond) // #nosec G404 - Does not need to be cryptographically secure, deterministic is OK
-		} else {
-			sleep = a.WaitTime
+		// Synchronous Clients do not sleep
+		if !a.Client.Synchronous() {
+			// Sleep
+			var sleep time.Duration
+			if a.Skew > 0 {
+				sleep = a.WaitTime + (time.Duration(rand.Int63n(a.Skew)) * time.Millisecond) // #nosec G404 - Does not need to be cryptographically secure, deterministic is OK
+			} else {
+				sleep = a.WaitTime
+			}
+			cli.Message(cli.NOTE, fmt.Sprintf("Sleeping for %s at %s", sleep.String(), time.Now().UTC().Format(time.RFC3339)))
+			time.Sleep(sleep)
 		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Sleeping for %s at %s", sleep.String(), time.Now().UTC().Format(time.RFC3339)))
-		time.Sleep(sleep)
 	}
 }
 
@@ -245,6 +254,12 @@ func (a *Agent) statusCheckIn() {
 	msg := getJobs()
 	msg.Delegates = p2p.GetDelegateMessages()
 	msg.ID = a.ID
+
+	// Synchronous Agents do not need to send in a message to get new messages
+	if a.Client.Synchronous() && msg.Type == messages.CHECKIN && len(msg.Delegates) <= 0 {
+		//cli.Message(cli.DEBUG, "synchronous Agent client has no meaningful data to send, returning")
+		return
+	}
 
 	bases, err := a.Client.Send(msg)
 
@@ -272,4 +287,26 @@ func (a *Agent) statusCheckIn() {
 		a.messageHandler(base)
 	}
 
+}
+
+// listen is an infinite loop used with synchronous Agents to receive Base messages and send them to the message handler
+func (a *Agent) listen() {
+	var i int
+	for {
+		cli.Message(cli.DEBUG, fmt.Sprintf("Entering into agent.listen() on loop %d", i))
+		i++
+		msgs, err := a.Client.Listen()
+		if err != nil {
+			a.FailedCheckin++
+			cli.Message(cli.WARN, fmt.Sprintf("agent/agent.listen(): %s", err))
+			cli.Message(cli.NOTE, fmt.Sprintf("%d out of %d total failed checkins", a.FailedCheckin, a.MaxRetry))
+		} else {
+			a.FailedCheckin = 0
+			if len(msgs) > 0 {
+				for _, msg := range msgs {
+					a.messageHandler(msg)
+				}
+			}
+		}
+	}
 }

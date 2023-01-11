@@ -38,7 +38,7 @@ func New(id uuid.UUID) *Authenticator {
 
 // Authenticate returns true because the none package offers no authentication
 func (a *Authenticator) Authenticate(messages.Base) (messages.Base, bool, error) {
-	return messages.Base{ID: a.agent}, true, nil
+	return messages.Base{ID: a.agent, Type: messages.CHECKIN}, true, nil
 }
 
 // Secret returns an empty key because the none package offers no authentication and did not establish a secret

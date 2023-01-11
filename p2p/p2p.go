@@ -102,6 +102,8 @@ func HandleDelegateMessages(delegates []messages.Delegate) {
 
 		}
 		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to the linked agent %s at %s at %s\n", n, delegate.Agent, agent.(Agent).Remote, time.Now().UTC().Format(time.RFC3339)))
+		// Without a delay, synchronous connections can send multiple messages so fast that receiver things it is one message
+		time.Sleep(time.Millisecond * 30)
 	}
 }
 
