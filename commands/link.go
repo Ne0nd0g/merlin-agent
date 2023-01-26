@@ -53,6 +53,11 @@ func Link(cmd jobs.Command) (results jobs.Results) {
 		return Connect("tcp", cmd.Args[1:])
 	case "udp":
 		return Connect("udp", cmd.Args[1:])
+	case "smb":
+		if len(cmd.Args) < 3 {
+			return jobs.Results{Stderr: fmt.Sprintf("expected 2 arguments with the link smb command, received %d: %+v", len(cmd.Args), cmd.Args)}
+		}
+		return ConnectSMB(cmd.Args[1], cmd.Args[2])
 	default:
 		return jobs.Results{
 			Stderr: fmt.Sprintf("Unhandled link type: %s", cmd.Args[0]),
@@ -81,8 +86,17 @@ func Connect(network string, args []string) (results jobs.Results) {
 		return
 	}
 
+	var err error
+	var conn net.Conn
+
 	// Establish connection to downstream agent
-	conn, err := net.Dial(network, args[0])
+	switch linkedAgent.Type {
+	case p2p.TCPBIND, p2p.UDPBIND:
+		conn, err = net.Dial(network, args[0])
+	default:
+		err = fmt.Errorf("unhandled linked Agent type: %d", linkedAgent.Type)
+	}
+
 	if err != nil {
 		results.Stderr = fmt.Sprintf("commands/link.Connect(): there was an error attempting to link the agent: %s", err.Error())
 		return

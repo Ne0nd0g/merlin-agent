@@ -38,6 +38,7 @@ const (
 	TCPREVERSE = 1
 	UDPBIND    = 2
 	UDPREVERSE = 3
+	SMBBIND    = 4
 )
 
 // LinkedAgents is a map that holds information about peer-to-peer connected agents for receiving & routing messages
@@ -88,7 +89,7 @@ func HandleDelegateMessages(delegates []messages.Delegate) {
 		var n int
 		var err error
 		switch agent.(Agent).Type {
-		case TCPBIND, TCPREVERSE, UDPBIND:
+		case TCPBIND, TCPREVERSE, UDPBIND, SMBBIND:
 			n, err = agent.(Agent).Conn.(net.Conn).Write(delegate.Payload)
 		case UDPREVERSE:
 			n, err = agent.(Agent).Conn.(net.PacketConn).WriteTo(delegate.Payload, agent.(Agent).Remote)

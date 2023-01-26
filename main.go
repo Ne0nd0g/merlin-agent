@@ -22,6 +22,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/Ne0nd0g/merlin-agent/clients/smb"
 	"io"
 	"os"
 	"strings"
@@ -110,7 +111,7 @@ func main() {
 	flag.StringVar(&transforms, "transforms", transforms, "Ordered CSV of transforms to construct a message")
 	flag.StringVar(&url, "url", url, "Full URL for agent to connect to")
 	flag.StringVar(&psk, "psk", psk, "Pre-Shared Key used to encrypt initial communications")
-	flag.StringVar(&protocol, "proto", protocol, "Protocol for the agent to connect with [https (HTTP/1.1), http (HTTP/1.1 Clear-Text), h2 (HTTP/2), h2c (HTTP/2 Clear-Text), http3 (QUIC or HTTP/3.0), tcp-bind, tcp-reverse, udp-bind, udp-reverse]")
+	flag.StringVar(&protocol, "proto", protocol, "Protocol for the agent to connect with [https (HTTP/1.1), http (HTTP/1.1 Clear-Text), h2 (HTTP/2), h2c (HTTP/2 Clear-Text), http3 (QUIC or HTTP/3.0), tcp-bind, tcp-reverse, udp-bind, udp-reverse, smb-bind]")
 	flag.StringVar(&proxy, "proxy", proxy, "Hardcoded proxy to use for http/1.1 traffic only that will override host configuration")
 	flag.StringVar(&host, "host", host, "HTTP Host header")
 	flag.StringVar(&ja3, "ja3", ja3, "JA3 signature string (not the MD5 hash). Overrides -proto flag")
@@ -243,6 +244,31 @@ func main() {
 
 		// Get the client
 		a.Client, err = udp.New(config)
+		if err != nil {
+			if *verbose {
+				color.Red(err.Error())
+			}
+			os.Exit(1)
+		}
+	case "smb-bind", "smb-reverse":
+		listenerID, err := uuid.FromString(listener)
+		if err != nil {
+			if *verbose {
+				color.Red(err.Error())
+			}
+		}
+		config := smb.Config{
+			Address:      []string{addr},
+			AgentID:      a.ID,
+			AuthPackage:  auth,
+			ListenerID:   listenerID,
+			Padding:      padding,
+			PSK:          psk,
+			Transformers: transforms,
+			Mode:         protocol,
+		}
+		// Get the client
+		a.Client, err = smb.New(config)
 		if err != nil {
 			if *verbose {
 				color.Red(err.Error())

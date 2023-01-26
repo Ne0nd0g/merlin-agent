@@ -7,6 +7,7 @@ require (
 	github.com/Ne0nd0g/go-clr v1.0.2
 	github.com/Ne0nd0g/ja3transport v0.0.0-20200203013218-e81e31892d84
 	github.com/Ne0nd0g/merlin v1.5.0
+	github.com/Ne0nd0g/npipe v0.0.0-20230125181239-59953cb2dbe0
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 	github.com/cretz/gopaque v0.1.0
 	github.com/fatih/color v1.13.0
@@ -15,7 +16,7 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d
 	golang.org/x/net v0.0.0-20220708220712-1185a9018129
-	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8
+	golang.org/x/sys v0.4.0
 	gopkg.in/square/go-jose.v2 v2.6.0
 )
 

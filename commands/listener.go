@@ -39,6 +39,7 @@ import (
 const (
 	TCP = 0
 	UDP = 1
+	SMB = 2
 )
 
 // p2pListener is a structure for managing and tracking peer to peer listeners created on this Agent as the parent used
@@ -56,6 +57,8 @@ func (p *p2pListener) String() string {
 		return "TCP"
 	case UDP:
 		return "UDP"
+	case SMB:
+		return "SMB"
 	default:
 		return fmt.Sprintf("commands/listener/p2pListener.String() unhandled p2pListener type %d", p.Type)
 	}
@@ -100,6 +103,14 @@ func Listener(cmd jobs.Command) (results jobs.Results) {
 				return
 			}
 			results.Stdout = fmt.Sprintf("Successfully started UDP listener on %s", cmd.Args[2])
+			return
+		case "smb":
+			err := ListenSMB(cmd.Args[2])
+			if err != nil {
+				results.Stderr = err.Error()
+				return
+			}
+			results.Stdout = fmt.Sprintf("Successfully started SMB listener on \\\\.\\pipe\\%s", cmd.Args[2])
 			return
 		default:
 			results.Stderr = fmt.Sprintf("Unknown listener type %s", cmd.Args[1])
