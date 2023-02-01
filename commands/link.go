@@ -43,15 +43,30 @@ import (
 func Link(cmd jobs.Command) (results jobs.Results) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("commands/link.Link(): entering into function with %+v", cmd))
 
-	if len(cmd.Args) < 2 {
-		return jobs.Results{Stderr: fmt.Sprintf("expected 2 arguments with the link command, received %d: %+v", len(cmd.Args), cmd.Args)}
+	if len(cmd.Args) < 1 {
+		return jobs.Results{Stderr: fmt.Sprintf("expected 1 argument with the link command, received %d: %+v", len(cmd.Args), cmd.Args)}
 	}
 
 	// switch on first argument
 	switch strings.ToLower(cmd.Args[0]) {
+	case "list":
+		p2p.LinkedAgents.Range(
+			func(k, v interface{}) bool {
+				agent := v.(p2p.Agent)
+				results.Stdout += fmt.Sprintf("%s:%s:%s\n", agent.String(), k, agent.Remote)
+				return true
+			},
+		)
+		return
 	case "tcp":
+		if len(cmd.Args) < 2 {
+			return jobs.Results{Stderr: fmt.Sprintf("expected 2 arguments with the link tcp command, received %d: %+v", len(cmd.Args), cmd.Args)}
+		}
 		return Connect("tcp", cmd.Args[1:])
 	case "udp":
+		if len(cmd.Args) < 2 {
+			return jobs.Results{Stderr: fmt.Sprintf("expected 2 arguments with the link udp command, received %d: %+v", len(cmd.Args), cmd.Args)}
+		}
 		return Connect("udp", cmd.Args[1:])
 	case "smb":
 		if len(cmd.Args) < 3 {
@@ -83,6 +98,20 @@ func Connect(network string, args []string) (results jobs.Results) {
 	// args[0] = target (e.g., 192.168.1.10:8080)
 	if len(args) <= 0 {
 		results.Stderr = fmt.Sprintf("Expected 1 argument, received %d", len(args))
+		return
+	}
+
+	// See if there is already a connection to the target IP & Port
+	p2p.LinkedAgents.Range(
+		func(k, v any) bool {
+			agent := v.(p2p.Agent)
+			if agent.Type == linkedAgent.Type && agent.Remote.String() == args[0] {
+				results.Stderr = fmt.Sprintf("already connected to %s: %s:%s\n", agent.Remote, agent.String(), k)
+			}
+			return true
+		},
+	)
+	if results.Stderr != "" {
 		return
 	}
 

@@ -319,7 +319,16 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 		//fmt.Printf("Transformer %T: %+v\n", transform, transform)
 		ret, err := transform.Deconstruct(data, client.secret)
 		if err != nil {
-			return messages.Base{}, err
+			cli.Message(cli.WARN, fmt.Sprintf("clients/tcp.Deconstruct(): unable to deconstruct with Agent's secret, retrying with PSK"))
+			// Try to see if the PSK works
+			k := sha256.Sum256([]byte(client.psk))
+			ret, err = transform.Deconstruct(data, k[:])
+			if err != nil {
+				return messages.Base{}, err
+			}
+			// If the PSK worked, assume the agent is unauthenticated to the server
+			client.authenticated = false
+			client.secret = k[:]
 		}
 		switch ret.(type) {
 		case []uint8:
@@ -345,8 +354,9 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 		err = client.Connect()
 		if err != nil {
 			err = fmt.Errorf("clients/tcp.Listen(): %s", err)
-			return
 		}
+		// Return now so that failed checkin counter returns to 0
+		return
 	}
 
 	// Wait for the response

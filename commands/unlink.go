@@ -46,7 +46,7 @@ func Unlink(cmd jobs.Command) (results jobs.Results) {
 			results.Stderr += fmt.Sprintf("commands/unlink.Unlink(): there was an error closing the network connection for %s: %s", agentID, err)
 			return
 		}
-		results.Stdout = fmt.Sprintf("Successfull unlinked from %s and closed the network connection", agentID)
+		results.Stdout = fmt.Sprintf("Successfully unlinked from %s and closed the network connection", agentID)
 	default:
 		results.Stderr = fmt.Sprintf("commands/unlink.Unlink(): unhandled peer-to-peer Agent connection type %d", agent.(p2p.Agent).Type)
 		return
