@@ -54,8 +54,13 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/core"
 	transformer "github.com/Ne0nd0g/merlin-agent/transformers"
+	"github.com/Ne0nd0g/merlin-agent/transformers/encoders/base64"
 	"github.com/Ne0nd0g/merlin-agent/transformers/encoders/gob"
+	"github.com/Ne0nd0g/merlin-agent/transformers/encoders/hex"
+	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/aes"
 	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/jwe"
+	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/rc4"
+	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/xor"
 	opaque2 "github.com/Ne0nd0g/merlin/pkg/opaque"
 )
 
@@ -126,12 +131,26 @@ func New(config Config) (*Client, error) {
 	for _, transform := range transforms {
 		var t transformer.Transformer
 		switch strings.ToLower(transform) {
+		case "aes":
+			t = aes.NewEncrypter()
+		case "base64-byte":
+			t = base64.NewEncoder(base64.BYTE)
+		case "base64-string":
+			t = base64.NewEncoder(base64.STRING)
 		case "gob-base":
 			t = gob.NewEncoder(gob.BASE)
 		case "gob-string":
 			t = gob.NewEncoder(gob.STRING)
+		case "hex-byte":
+			t = hex.NewEncoder(hex.BYTE)
+		case "hex-string":
+			t = hex.NewEncoder(hex.STRING)
 		case "jwe":
 			t = jwe.NewEncrypter()
+		case "rc4":
+			t = rc4.NewEncrypter()
+		case "xor":
+			t = xor.NewEncrypter()
 		default:
 			err := fmt.Errorf("clients/http.New(): unhandled transform type: %s", transform)
 			if err != nil {
@@ -358,7 +377,7 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 // The function also decodes and decrypts response messages and return a Merlin message structure.
 // This is where the client's logic is for communicating with the server.
 func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err error) {
-	cli.Message(cli.DEBUG, "Entering into agent.sendMessage()")
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Send(): Entering into function with message: %+v", m))
 	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", messages.String(m.Type), client.URL[client.currentURL]))
 
 	// Set the message padding
@@ -620,14 +639,18 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 }
 
 // Construct takes in a messages.Base structure that is ready to be sent to the server and runs all the configured transforms
-// on it to encode and encrypt it.
+// on it to encode and encrypt it. Transforms will go from last in the slice to first in the slice
 func (client *Client) Construct(msg messages.Base) (data []byte, err error) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Construct(): entering into function with message: %+v", msg))
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Construct(): Transformers: %+v", client.transformers))
 	for i := len(client.transformers); i > 0; i-- {
 		if i == len(client.transformers) {
 			// First call should always take a Base message
 			data, err = client.transformers[i-1].Construct(msg, client.secret)
+			cli.Message(cli.DEBUG, fmt.Sprintf("%d call with transform %s - Constructed data(%d) %T: %X\n", i, client.transformers[i-1], len(data), data, data))
 		} else {
 			data, err = client.transformers[i-1].Construct(data, client.secret)
+			cli.Message(cli.DEBUG, fmt.Sprintf("%d call with transform %s - Constructed data(%d) %T: %X\n", i, client.transformers[i-1], len(data), data, data))
 		}
 		if err != nil {
 			return nil, fmt.Errorf("clients/http.Construct(): there was an error calling the transformer construct function: %s", err)

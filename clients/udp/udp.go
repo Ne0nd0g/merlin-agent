@@ -44,9 +44,13 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/core"
 	transformer "github.com/Ne0nd0g/merlin-agent/transformers"
+	b64 "github.com/Ne0nd0g/merlin-agent/transformers/encoders/base64"
 	gob2 "github.com/Ne0nd0g/merlin-agent/transformers/encoders/gob"
+	"github.com/Ne0nd0g/merlin-agent/transformers/encoders/hex"
 	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/aes"
 	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/jwe"
+	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/rc4"
+	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/xor"
 )
 
 const (
@@ -149,14 +153,26 @@ func New(config Config) (*Client, error) {
 	for _, transform := range transforms {
 		var t transformer.Transformer
 		switch strings.ToLower(transform) {
+		case "aes":
+			t = aes.NewEncrypter()
+		case "base64-byte":
+			t = b64.NewEncoder(b64.BYTE)
+		case "base64-string":
+			t = b64.NewEncoder(b64.STRING)
 		case "gob-base":
 			t = gob2.NewEncoder(gob2.BASE)
 		case "gob-string":
 			t = gob2.NewEncoder(gob2.STRING)
-		case "aes":
-			t = aes.NewEncrypter()
+		case "hex-byte":
+			t = hex.NewEncoder(hex.BYTE)
+		case "hex-string":
+			t = hex.NewEncoder(hex.STRING)
 		case "jwe":
 			t = jwe.NewEncrypter()
+		case "rc4":
+			t = rc4.NewEncrypter()
+		case "xor":
+			t = xor.NewEncrypter()
 		default:
 			err := fmt.Errorf("clients/udp.New(): unhandled transform type: %s", transform)
 			if err != nil {
