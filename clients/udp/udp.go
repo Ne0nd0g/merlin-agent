@@ -23,8 +23,10 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/gob"
 	"fmt"
+	"math"
 	"math/rand"
 	"net"
 	"strconv"
@@ -56,6 +58,12 @@ import (
 const (
 	BIND    = 0
 	REVERSE = 1
+)
+
+const (
+	// MaxSize is the maximum size that a UDP fragment can be, following the moderate school of thought due to 1500 MTU
+	// http://ithare.com/udp-from-mog-perspective/
+	MaxSize = 1450
 )
 
 // Client is a type of MerlinClient that is used to send and receive Merlin messages from the Merlin server
@@ -279,14 +287,14 @@ func (client *Client) Connect() (err error) {
 			cli.Message(cli.NOTE, fmt.Sprintf("Started %s listener on %s", client, client.address))
 		}
 		var n int
-		buffer := make([]byte, 500000)
+		buffer := make([]byte, 4096)
 		cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming connection..."))
+		// First connection is junk data to establish a connection but otherwise has no value or meaning and can be discarded
 		n, client.client, err = client.listener.ReadFrom(buffer)
 		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from %s", n, client.client))
 		if err != nil {
 			return fmt.Errorf("clients/udp.Connect(): there was an error reading data from %s : %s", client.client, err)
 		}
-
 		return
 	case REVERSE:
 		client.connection, err = net.Dial("udp", client.address)
@@ -358,22 +366,67 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 
 	cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming messages from %s at %s...", client.client, time.Now().UTC().Format(time.RFC3339)))
 
-	respData := make([]byte, 500000)
 	readTimeout := time.Minute * 5
 	var n int
-
-	switch client.mode {
-	case BIND:
-		n, client.client, err = client.listener.ReadFrom(respData)
-	case REVERSE:
-		err = client.connection.SetReadDeadline(time.Now().Add(readTimeout))
-		if err != nil {
-			cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Listen(): there was an error setting the connection read deadline to 5 minutes: %s", err))
+	var tag uint32
+	var length uint64
+	var buff bytes.Buffer
+	for {
+		respData := make([]byte, MaxSize)
+		switch client.mode {
+		case BIND:
+			n, client.client, err = client.listener.ReadFrom(respData)
+		case REVERSE:
+			err = client.connection.SetReadDeadline(time.Now().Add(readTimeout))
+			if err != nil {
+				cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Listen(): there was an error setting the connection read deadline to 5 minutes: %s", err))
+			}
+			n, err = client.connection.Read(respData)
 		}
-		n, err = client.connection.Read(respData)
-	}
 
-	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
+		// Add the bytes to the buffer
+		n, err = buff.Write(respData[:n])
+		if err != nil {
+			err = fmt.Errorf("clients/udp.Listen(): there was an error writing %d incoming bytes to the local buffer: %s", n, err)
+			client.connection = nil
+			return
+		}
+
+		// If this is the first read on the connection determine the tag and data length
+		if tag == 0 {
+			// Ensure we have enough data to read the tag/type which is 4-bytes
+			if buff.Len() < 4 {
+				cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Listen(): Need at least 4 bytes in the buffer to read the Type/Tag for TLV but only have %d", buff.Len()))
+				continue
+			}
+			tag = binary.BigEndian.Uint32(respData[:4])
+			if tag != 1 {
+				err = fmt.Errorf("clients/udp.Listen(): Expected a type/tag value of 1 for TLV but got %d", tag)
+				client.connection = nil
+				return
+			}
+		}
+
+		if length == 0 {
+			// Ensure we have enough data to read the Length from TLV which is 8-bytes plus the 4-byte tag/type size
+			if buff.Len() < 12 {
+				cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Listen(): Need at least 12 bytes in the buffer to read the Length for TLV but only have %d", buff.Len()))
+				continue
+			}
+			length = binary.BigEndian.Uint64(respData[4:12])
+		}
+
+		// If we've read all the data according to the length provided in TLV, then break the for loop
+		// Type/Tag size is 4-bytes, Length size is 8-bytes for TLV
+		if uint64(buff.Len()) == length+4+8 {
+			cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Listen(): Finished reading data length of %d bytes into the buffer and moving forward to deconstruct the data", length))
+			break
+		} else {
+			cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Listen(): Read %d of %d bytes into the buffer", buff.Len(), length))
+		}
+	}
+	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s at %s", buff.Len(), client.client, time.Now().UTC().Format(time.RFC3339)))
+
 	if err != nil {
 		switch err2 := err.(type) {
 		case net.Error:
@@ -388,13 +441,14 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 	}
 
 	var msg messages.Base
-	msg, err = client.Deconstruct(respData[:n])
+	// Type/Tag size is 4-bytes, Length size is 8-bytes for a total of 12-bytes for TLV
+	msg, err = client.Deconstruct(buff.Bytes()[12:])
 	if err != nil {
 		err = fmt.Errorf("clients/udp.Listen(): there was an error deconstructing the data: %s", err)
 		cli.Message(cli.DEBUG, err.Error())
 		// See if the data was from initial link command from another agent
 		b64 := make([]byte, base64.StdEncoding.EncodedLen(n))
-		_, errBase64 := base64.StdEncoding.Decode(b64, respData[:n])
+		_, errBase64 := base64.StdEncoding.Decode(b64, buff.Bytes()[12:])
 		if errBase64 == nil {
 			cli.Message(cli.INFO, fmt.Sprintf("Received Base64 encoded string from %s. Treating as a new connection...", client.client))
 			// Send gratuitous checkin to provide parent Agent with linked agent data
@@ -454,14 +508,44 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		}
 	}
 
+	// Add in Tag/Type and Length for TLV
+	tag := make([]byte, 4)
+	binary.BigEndian.PutUint32(tag, 1)
+	length := make([]byte, 8)
+	binary.BigEndian.PutUint64(length, uint64(delegateBytes.Len()))
+
+	// Create TLV
+	outData := append(tag, length...)
+	outData = append(outData, delegateBytes.Bytes()...)
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Send(): Added Tag: %d and Length: %d to data size of %d", tag, uint64(delegateBytes.Len()), len(outData)))
+
+	// Determine number of fragments based on MaxSize
+	fragments := int(math.Ceil(float64(len(outData)) / float64(MaxSize)))
+
 	// Write the message
-	cli.Message(cli.DEBUG, fmt.Sprintf("Writing message size: %d to: %s at %s", delegateBytes.Len(), client.client, time.Now().UTC().Format(time.RFC3339)))
+	cli.Message(cli.NOTE, fmt.Sprintf("Writing message size: %d equaling %d fragments to: %s at %s", len(outData), fragments, client.client, time.Now().UTC().Format(time.RFC3339)))
 	var n int
-	switch client.mode {
-	case BIND:
-		n, err = client.listener.WriteTo(delegateBytes.Bytes(), client.client)
-	case REVERSE:
-		n, err = client.connection.Write(delegateBytes.Bytes())
+	var i int
+	size := len(outData)
+	for i < fragments {
+		start := i * MaxSize
+		var stop int
+		// if bytes remaining are less than max size, read until the end
+		if size < MaxSize {
+			stop = len(outData)
+		} else {
+			stop = (i + 1) * MaxSize
+		}
+		switch client.mode {
+		case BIND:
+			//fmt.Printf("[*-%d]%d:%d\n", i, start, stop)
+			n, err = client.listener.WriteTo(outData[start:stop], client.client)
+		case REVERSE:
+			n, err = client.connection.Write(outData[start:stop])
+		}
+		cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Send(): Wrote %d bytes to connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
+		i++
+		size = size - MaxSize
 	}
 
 	if err != nil {
@@ -469,7 +553,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		return
 	}
 
-	cli.Message(cli.DEBUG, fmt.Sprintf("Wrote %d bytes to connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
+	cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to connection %s at %s", len(outData), client.client, time.Now().UTC().Format(time.RFC3339)))
 
 	return
 }

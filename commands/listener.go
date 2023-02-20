@@ -19,8 +19,8 @@ package commands
 
 import (
 	// Standard
-	"bufio"
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 	"fmt"
 	"net"
@@ -40,6 +40,12 @@ const (
 	TCP = 0
 	UDP = 1
 	SMB = 2
+)
+
+const (
+	// MaxSizeUDP is the maximum size that a UDP fragment can be, following the moderate school of thought due to 1500 MTU
+	// http://ithare.com/udp-from-mog-perspective/
+	MaxSizeUDP = 1450
 )
 
 // p2pListener is a structure for managing and tracking peer to peer listeners created on this Agent as the parent used
@@ -241,18 +247,69 @@ func accept(listener net.Listener) {
 // listen is an infinite loop, used as a go routine, to receive data from incoming connections and subsequently add Delegate messages to the outgoing queue
 func listen(conn net.Conn) {
 	for {
-		data := make([]byte, 500000)
-		n, err := bufio.NewReader(conn).Read(data)
-		if err != nil {
-			cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listen(): there was an error reading data from %s: %s", conn.RemoteAddr(), err))
-			return
-		}
+		var n int
+		var err error
+		var tag uint32
+		var length uint64
+		var buff bytes.Buffer
+		for {
+			data := make([]byte, 4096)
+			n, err = conn.Read(data)
+			if err != nil {
+				err = fmt.Errorf("commands/listener.listen(): there was an error reading data from linked agent %s: %s", conn.RemoteAddr(), err)
+				break
+			}
 
-		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked Agent %s at %s", n, conn.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+			// Add the bytes to the buffer
+			n, err = buff.Write(data[:n])
+			if err != nil {
+				err = fmt.Errorf("commands/listener.listen(): there was an error writing %d bytes from linked agent into the buffer %s: %s", n, conn.RemoteAddr(), err)
+				break
+			}
+
+			// If this is the first read on the connection determine the tag and data length
+			if tag == 0 {
+				// Ensure we have enough data to read the tag/type which is 4-bytes
+				if buff.Len() < 4 {
+					cli.Message(cli.DEBUG, fmt.Sprintf("commands/listener.listen(): Need at least 4 bytes in the buffer to read the Type/Tag for TLV but only have %d", buff.Len()))
+					continue
+				}
+				tag = binary.BigEndian.Uint32(data[:4])
+				if tag != 1 {
+					err = fmt.Errorf("commands/listener.listen(): Expected a type/tag value of 1 for TLV but got %d", tag)
+					break
+				}
+			}
+
+			if length == 0 {
+				// Ensure we have enough data to read the Length from TLV which is 8-bytes plus the 4-byte tag/type size
+				if buff.Len() < 12 {
+					cli.Message(cli.DEBUG, fmt.Sprintf("commands/listener.listen(): Need at least 12 bytes in the buffer to read the Length for TLV but only have %d", buff.Len()))
+					continue
+				}
+				length = binary.BigEndian.Uint64(data[4:12])
+			}
+
+			// If we've read all the data according to the length provided in TLV, then break the for loop
+			// Type/Tag size is 4-bytes, Length size is 8-bytes for TLV
+			if uint64(buff.Len()) == length+4+8 {
+				cli.Message(cli.DEBUG, fmt.Sprintf("commands/listener.listen(): Finished reading data length of %d bytes into the buffer and moving forward to deconstruct the data", length))
+				break
+			} else {
+				cli.Message(cli.DEBUG, fmt.Sprintf("commands/listener.listen(): Read %d of %d bytes into the buffer", buff.Len(), length))
+			}
+		}
+		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked Agent %s at %s", buff.Len(), conn.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+
+		// Check for errors from the nested FOR loop
+		if err != nil {
+			cli.Message(cli.WARN, err.Error())
+			break
+		}
 
 		// Gob decode the message
 		var msg messages.Delegate
-		reader := bytes.NewReader(data)
+		reader := bytes.NewReader(buff.Bytes()[12:])
 		err = gob.NewDecoder(reader).Decode(&msg)
 		if err != nil {
 			cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listen(): there was an error gob decoding a delegate message: %s", err))
@@ -286,17 +343,71 @@ func listen(conn net.Conn) {
 // listenUDP is an infinite loop, used as a go routine, to receive data from incoming connections and subsequently add Delegate messages to the outgoing queue
 func listenUDP(listener net.PacketConn) {
 	for {
-		data := make([]byte, 500000)
-		n, addr, err := listener.ReadFrom(data)
-		cli.Message(cli.NOTE, fmt.Sprintf("UDP listener read %d bytes from %s at %s", n, addr, time.Now().UTC().Format(time.RFC3339)))
+		var err error
+		var addr net.Addr
+		var n int
+		var tag uint32
+		var length uint64
+		var buff bytes.Buffer
+		for {
+			data := make([]byte, MaxSizeUDP)
+			n, addr, err = listener.ReadFrom(data)
+			cli.Message(cli.INFO, fmt.Sprintf("UDP listener read %d bytes from %s at %s", n, addr, time.Now().UTC().Format(time.RFC3339)))
+			if err != nil {
+				err = fmt.Errorf("commands/listener.listenUDP(): there was an error accepting the UDP connection from %s : %s", addr, err)
+				break
+			}
+
+			// Add the bytes to the buffer
+			n, err = buff.Write(data[:n])
+			if err != nil {
+				err = fmt.Errorf("commands/listener.listenUDP(): there was an error writing %d bytes from linked agent into the buffer %s: %s", n, addr, err)
+				break
+			}
+
+			// If this is the first read on the connection determine the tag and data length
+			if tag == 0 {
+				// Ensure we have enough data to read the tag/type which is 4-bytes
+				if buff.Len() < 4 {
+					cli.Message(cli.DEBUG, fmt.Sprintf("commands/listener.listenUDP(): Need at least 4 bytes in the buffer to read the Type/Tag for TLV but only have %d", buff.Len()))
+					continue
+				}
+				tag = binary.BigEndian.Uint32(data[:4])
+				if tag != 1 {
+					err = fmt.Errorf("commands/listener.listenUDP(): Expected a type/tag value of 1 for TLV but got %d", tag)
+					break
+				}
+			}
+
+			if length == 0 {
+				// Ensure we have enough data to read the Length from TLV which is 8-bytes plus the 4-byte tag/type size
+				if buff.Len() < 12 {
+					cli.Message(cli.DEBUG, fmt.Sprintf("commands/listener.listenUDP(): Need at least 12 bytes in the buffer to read the Length for TLV but only have %d", buff.Len()))
+					continue
+				}
+				length = binary.BigEndian.Uint64(data[4:12])
+			}
+
+			// If we've read all the data according to the length provided in TLV, then break the for loop
+			// Type/Tag size is 4-bytes, Length size is 8-bytes for TLV
+			if uint64(buff.Len()) == length+4+8 {
+				cli.Message(cli.DEBUG, fmt.Sprintf("commands/listener.listenUDP(): Finished reading data length of %d bytes into the buffer and moving forward to deconstruct the data", length))
+				break
+			} else {
+				cli.Message(cli.DEBUG, fmt.Sprintf("commands/listener.listenUDP(): Read %d of %d bytes into the buffer", buff.Len(), length))
+			}
+		}
+		cli.Message(cli.NOTE, fmt.Sprintf("UDP listener read %d bytes from %s at %s", buff.Len(), addr, time.Now().UTC().Format(time.RFC3339)))
+
+		// Check for errors from the nested FOR loop
 		if err != nil {
-			cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listenUDP(): there was an error accepting the UDP connection from %s : %s", addr, err))
+			cli.Message(cli.WARN, err.Error())
 			break
 		}
 
 		// Gob decode the message
 		var msg messages.Delegate
-		reader := bytes.NewReader(data)
+		reader := bytes.NewReader(buff.Bytes()[12:])
 		err = gob.NewDecoder(reader).Decode(&msg)
 		if err != nil {
 			cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listenUDP(): there was an error gob decoding a delegate message: %s", err))

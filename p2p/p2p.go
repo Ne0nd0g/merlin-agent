@@ -20,7 +20,9 @@ package p2p
 
 import (
 	// Standard
+	"encoding/binary"
 	"fmt"
+	"math"
 	"net"
 	"sync"
 	"time"
@@ -39,6 +41,12 @@ const (
 	UDPBIND    = 2
 	UDPREVERSE = 3
 	SMBBIND    = 4
+)
+
+const (
+	// MaxSizeUDP is the maximum size of a UDP fragment
+	// http://ithare.com/udp-from-mog-perspective/
+	MaxSizeUDP = 1450
 )
 
 // LinkedAgents is a map that holds information about peer-to-peer connected agents for receiving & routing messages
@@ -76,7 +84,7 @@ func AddDelegateMessage(msg messages.Delegate) {
 	out <- msg
 }
 
-// HandleDelegateMessages takes in a list of incoming Delegate messages
+// HandleDelegateMessages takes in a list of incoming Delegate messages to this parent Agent and sends it to the child or linked Agent
 func HandleDelegateMessages(delegates []messages.Delegate) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): received %d delegate messages", len(delegates)))
 
@@ -86,23 +94,65 @@ func HandleDelegateMessages(delegates []messages.Delegate) {
 			cli.Message(cli.WARN, fmt.Sprintf("%s is not a known linked agent\n", delegate.Agent))
 			break
 		}
+
+		// Tag/Type, Length, Value (TLV)
+		// Determine the message type, which is static right now
+		// uint is 32-bits (4 bytes)
+		tag := make([]byte, 4)
+		binary.BigEndian.PutUint32(tag, uint32(1))
+		// Going for uint64 (8 bytes)
+		length := make([]byte, 8)
+		binary.BigEndian.PutUint64(length, uint64(len(delegate.Payload)))
+		// Prepend the data length
+		delegate.Payload = append(length, delegate.Payload...)
+		// Prepend the data type/tag
+		delegate.Payload = append(tag, delegate.Payload...)
+
 		var n int
 		var err error
 		switch agent.(Agent).Type {
-		case TCPBIND, TCPREVERSE, UDPBIND, SMBBIND:
+		case TCPBIND, TCPREVERSE, SMBBIND:
 			n, err = agent.(Agent).Conn.(net.Conn).Write(delegate.Payload)
-		case UDPREVERSE:
-			n, err = agent.(Agent).Conn.(net.PacketConn).WriteTo(delegate.Payload, agent.(Agent).Remote)
+			cli.Message(cli.DEBUG, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): Wrote %d bytes to the linked agent %s at %s at %s\n", n, delegate.Agent, agent.(Agent).Remote, time.Now().UTC().Format(time.RFC3339)))
+		case UDPBIND, UDPREVERSE:
+			// Split into fragments of MaxSize
+			fragments := int(math.Ceil(float64(len(delegate.Payload)) / float64(MaxSizeUDP)))
+			cli.Message(cli.DEBUG, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): UDP data size is: %d, max UDP fragment size is %d, creating %d fragements", len(delegate.Payload), MaxSizeUDP, fragments))
+			var i int
+			size := len(delegate.Payload)
+			for i < fragments {
+				start := i * MaxSizeUDP
+				var stop int
+				// if bytes remaining are less than max size, read until the end
+				if size < MaxSizeUDP {
+					stop = len(delegate.Payload)
+				} else {
+					stop = (i + 1) * MaxSizeUDP
+				}
+				switch agent.(Agent).Type {
+				case UDPBIND:
+					n, err = agent.(Agent).Conn.(net.Conn).Write(delegate.Payload[start:stop])
+				case UDPREVERSE:
+					n, err = agent.(Agent).Conn.(net.PacketConn).WriteTo(delegate.Payload[start:stop], agent.(Agent).Remote)
+				}
+				if err != nil {
+					cli.Message(cli.WARN, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): there was an error writing a message to the linked agent %s: %s\n", agent.(Agent).Conn.(net.Conn).RemoteAddr(), err))
+					break
+				}
+				cli.Message(cli.INFO, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): Wrote UDP fragment %d of %d", i+1, fragments))
+				i++
+				size = size - MaxSizeUDP
+			}
 		default:
-			cli.Message(cli.WARN, fmt.Sprintf("p2p.HandleDelegateMessages() unhandled Agent type: %d", agent.(Agent).Type))
+			cli.Message(cli.WARN, fmt.Sprintf("p2p.HandleDelegateMessages(): unhandled Agent type: %d", agent.(Agent).Type))
 			break
 		}
 
 		if err != nil {
 			cli.Message(cli.WARN, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): there was an error writing a message to the linked agent %s: %s\n", agent.(Agent).Conn.(net.Conn).RemoteAddr(), err))
-
+			break
 		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to the linked agent %s at %s at %s\n", n, delegate.Agent, agent.(Agent).Remote, time.Now().UTC().Format(time.RFC3339)))
+		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to the linked agent %s at %s at %s\n", len(delegate.Payload), delegate.Agent, agent.(Agent).Remote, time.Now().UTC().Format(time.RFC3339)))
 		// Without a delay, synchronous connections can send multiple messages so fast that receiver things it is one message
 		time.Sleep(time.Millisecond * 30)
 	}

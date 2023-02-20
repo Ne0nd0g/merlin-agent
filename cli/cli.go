@@ -40,32 +40,45 @@ const (
 
 // Message is used to print text to Standard Out
 func Message(level int, message string) {
-	core.Mutex.Lock()
-	defer core.Mutex.Unlock()
+	if core.Verbose == false && core.Debug == false {
+		return
+	}
 	switch level {
 	case INFO:
 		if core.Verbose {
+			core.Mutex.Lock()
 			color.Cyan("[i]" + message)
+			core.Mutex.Unlock()
 		}
 	case NOTE:
 		if core.Verbose {
+			core.Mutex.Lock()
 			color.Yellow("[-]" + message)
+			core.Mutex.Unlock()
 		}
 	case WARN:
 		if core.Verbose {
+			core.Mutex.Lock()
 			color.Red("[!]" + message)
+			core.Mutex.Unlock()
 		}
 	case DEBUG:
 		if core.Debug {
+			core.Mutex.Lock()
 			color.Red("[DEBUG]" + message)
+			core.Mutex.Unlock()
 		}
 	case SUCCESS:
 		if core.Verbose {
+			core.Mutex.Lock()
 			color.Green("[+]" + message)
+			core.Mutex.Unlock()
 		}
 	default:
 		if core.Verbose {
+			core.Mutex.Lock()
 			color.Red("[_-_]Invalid message level: " + message)
+			core.Mutex.Unlock()
 		}
 	}
 }
