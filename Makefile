@@ -48,7 +48,7 @@ AUTH ?= opaque
 XAUTH=-X "main.auth=${AUTH}"
 ADDR ?= 127.0.0.1:4444
 XADDR=-X "main.addr=${ADDR}"
-TRANSFORMS ?= gob-string,jwe,gob-base
+TRANSFORMS ?= jwe,gob-base
 XTRANSFORMS=-X "main.transforms=${TRANSFORMS}"
 LISTENER ?=
 XLISTENER=-X "main.listener=${LISTENER}"

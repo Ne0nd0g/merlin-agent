@@ -137,7 +137,13 @@ func checkIn() {
 		agentService.IncrementFailed()
 		a := agentService.Get()
 		cli.Message(cli.WARN, err.Error())
-		cli.Message(cli.NOTE, fmt.Sprintf("%d out of %d total failed checkins", a.Failed(), a.MaxRetry()))
+		// Determine if the max number of failed checkins has been reached
+		if a.Failed() >= a.MaxRetry() {
+			cli.Message(cli.WARN, fmt.Sprintf("maximum number of failed checkin attempts reached: %d, quitting...", a.MaxRetry()))
+			os.Exit(0)
+		} else {
+			cli.Message(cli.NOTE, fmt.Sprintf("%d out of %d total failed checkins", a.Failed(), a.MaxRetry()))
+		}
 
 		// Put the jobs back into the queue if there was an error
 		if msg.Type == messages.JOBS {
@@ -162,6 +168,14 @@ func checkIn() {
 		err = messageService.Handle(base)
 		if err != nil {
 			agentService.IncrementFailed()
+			// Determine if the max number of failed checkins has been reached
+			a := agentService.Get()
+			if a.Failed() >= a.MaxRetry() {
+				cli.Message(cli.WARN, fmt.Sprintf("maximum number of failed checkin attempts reached: %d, quitting...", a.MaxRetry()))
+				os.Exit(0)
+			} else {
+				cli.Message(cli.NOTE, fmt.Sprintf("%d out of %d total failed checkins", a.Failed(), a.MaxRetry()))
+			}
 		}
 	}
 }
@@ -177,14 +191,29 @@ func listen() {
 			agentService.IncrementFailed()
 			a := agentService.Get()
 			cli.Message(cli.WARN, fmt.Sprintf("run.listen(): %s", err))
-			cli.Message(cli.NOTE, fmt.Sprintf("%d out of %d total failed checkins", a.Failed(), a.MaxRetry()))
+			// Determine if the max number of failed checkins has been reached
+			if a.Failed() >= a.MaxRetry() {
+				cli.Message(cli.WARN, fmt.Sprintf("maximum number of failed checkin attempts reached: %d, quitting...", a.MaxRetry()))
+				os.Exit(0)
+			} else {
+				cli.Message(cli.NOTE, fmt.Sprintf("%d out of %d total failed checkins", a.Failed(), a.MaxRetry()))
+			}
 		} else {
 			agentService.SetFailedCheckIn(0)
 			if len(msgs) > 0 {
 				for _, msg := range msgs {
 					err = messageService.Handle(msg)
 					if err != nil {
+						cli.Message(cli.WARN, fmt.Sprintf("run.listen(): %s", err))
 						agentService.IncrementFailed()
+						// Determine if the max number of failed checkins has been reached
+						a := agentService.Get()
+						if a.Failed() >= a.MaxRetry() {
+							cli.Message(cli.WARN, fmt.Sprintf("maximum number of failed checkin attempts reached: %d, quitting...", a.MaxRetry()))
+							os.Exit(0)
+						} else {
+							cli.Message(cli.NOTE, fmt.Sprintf("%d out of %d total failed checkins", a.Failed(), a.MaxRetry()))
+						}
 					}
 				}
 			}

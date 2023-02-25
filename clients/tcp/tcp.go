@@ -390,11 +390,12 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 		cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Listen(): Read %d bytes from connection %s at %s", n, client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 		if err != nil {
 			if err == io.EOF {
-				err = fmt.Errorf("received EOF from %s, the Agent's connection has been reset", client.connection.RemoteAddr())
+				err = fmt.Errorf("clients/tcp.Listen(): received EOF from %s, the Agent's connection has been reset", client.connection.RemoteAddr())
 				client.connection = nil
 				return
 			}
-			err = fmt.Errorf("there was an error reading the message from the connection with %s: %s", client.connection.RemoteAddr(), err)
+			err = fmt.Errorf("clients/tcp.Listen(): there was an error reading the message from the connection with %s: %s", client.connection.RemoteAddr(), err)
+			client.connection = nil
 			return
 		}
 
