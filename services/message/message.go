@@ -146,7 +146,8 @@ func (s *Service) Handle(msg messages.Base) (err error) {
 
 	// If there are any Delegate messages, send them to the Handler
 	if len(msg.Delegates) > 0 {
-		s.P2PService.Handle(msg.Delegates)
+		// Use a go routine so that P2P functions don't block the Agent from continuing
+		go s.P2PService.Handle(msg.Delegates)
 	}
 
 	cli.Message(cli.DEBUG, "services/messages.Handle(): Leaving function...")

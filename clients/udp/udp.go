@@ -361,9 +361,9 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 	return messages.Base{}, fmt.Errorf("clients/udp.Deconstruct(): unable to transform data into messages.Base structure")
 }
 
+// Listen is composed of an infinite loop that waits up to 5 minutes per loop to receive a UDP connection from a peer
 func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 	cli.Message(cli.DEBUG, "Entering into clients/udp.Listen()")
-
 	cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming messages from %s at %s...", client.client, time.Now().UTC().Format(time.RFC3339)))
 
 	readTimeout := time.Minute * 5
@@ -523,7 +523,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	fragments := int(math.Ceil(float64(len(outData)) / float64(MaxSize)))
 
 	// Write the message
-	cli.Message(cli.NOTE, fmt.Sprintf("Writing message size: %d equaling %d fragments to: %s at %s", len(outData), fragments, client.client, time.Now().UTC().Format(time.RFC3339)))
+	cli.Message(cli.NOTE, fmt.Sprintf("Writing message size %d bytes equaling %d fragments to %s at %s", len(outData), fragments, client.client, time.Now().UTC().Format(time.RFC3339)))
 	var n int
 	var i int
 	size := len(outData)
@@ -546,6 +546,10 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Send(): Wrote %d bytes to connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
 		i++
 		size = size - MaxSize
+		// UDP packets seemed to get dropped if too many are sent too fast
+		if fragments > 1000 {
+			time.Sleep(time.Millisecond * 1)
+		}
 	}
 
 	if err != nil {

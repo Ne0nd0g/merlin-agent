@@ -119,7 +119,7 @@ func Run(a agent.Agent, c clients.Client) {
 
 // checkIn is the function that agent runs at every sleep/skew interval to check in with the server for jobs
 func checkIn() {
-	cli.Message(cli.DEBUG, "run/checkIn(): entering into function...")
+	cli.Message(cli.DEBUG, "run/run.checkIn(): entering into function...")
 	c := clientService.Get()
 	var msg messages.Base
 	if c.Synchronous() {

@@ -111,7 +111,7 @@ func (s *Service) Check() (delegates []messages.Delegate) {
 
 // Handle takes in a list of incoming Delegate messages to this parent Agent and sends it to the child or linked Agent
 func (s *Service) Handle(delegates []messages.Delegate) {
-	cli.Message(cli.DEBUG, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): received %d delegate messages", len(delegates)))
+	cli.Message(cli.DEBUG, fmt.Sprintf("services/p2p.Handle(): received %d delegate messages", len(delegates)))
 
 	for _, delegate := range delegates {
 		link, err := s.repo.Get(delegate.Agent)
@@ -138,11 +138,11 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 		switch link.Type() {
 		case p2p.TCPBIND, p2p.TCPREVERSE, p2p.SMBBIND:
 			n, err = link.Conn().(net.Conn).Write(delegate.Payload)
-			cli.Message(cli.DEBUG, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): Wrote %d bytes to the linked agent %s at %s at %s\n", n, delegate.Agent, link.Remote(), time.Now().UTC().Format(time.RFC3339)))
+			cli.Message(cli.DEBUG, fmt.Sprintf("services/p2p.Handle(): Wrote %d bytes to the linked agent %s at %s at %s\n", n, delegate.Agent, link.Remote(), time.Now().UTC().Format(time.RFC3339)))
 		case p2p.UDPBIND, p2p.UDPREVERSE:
 			// Split into fragments of MaxSize
 			fragments := int(math.Ceil(float64(len(delegate.Payload)) / float64(p2p.MaxSizeUDP)))
-			cli.Message(cli.DEBUG, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): UDP data size is: %d, max UDP fragment size is %d, creating %d fragements", len(delegate.Payload), p2p.MaxSizeUDP, fragments))
+			cli.Message(cli.INFO, fmt.Sprintf("services/p2p.Handle(): UDP data size is: %d, max UDP fragment size is %d, creating %d fragments", len(delegate.Payload), p2p.MaxSizeUDP, fragments))
 			var i int
 			size := len(delegate.Payload)
 			for i < fragments {
@@ -161,12 +161,16 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 					n, err = link.Conn().(net.PacketConn).WriteTo(delegate.Payload[start:stop], link.Remote())
 				}
 				if err != nil {
-					cli.Message(cli.WARN, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): there was an error writing a message to the linked agent %s: %s\n", link.Conn().(net.Conn).RemoteAddr(), err))
+					cli.Message(cli.WARN, fmt.Sprintf("services/p2p.Handle(): there was an error writing a message to the linked agent %s: %s\n", link.Conn().(net.Conn).RemoteAddr(), err))
 					break
 				}
-				cli.Message(cli.INFO, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): Wrote UDP fragment %d of %d", i+1, fragments))
+				cli.Message(cli.DEBUG, fmt.Sprintf("services/p2p.Handle(): Wrote UDP fragment %d of %d", i+1, fragments))
 				i++
 				size = size - p2p.MaxSizeUDP
+				// UDP packets seemed to get dropped if too many are sent too fast
+				if fragments > 1000 {
+					time.Sleep(time.Millisecond * 1)
+				}
 			}
 		default:
 			cli.Message(cli.WARN, fmt.Sprintf("p2p.HandleDelegateMessages(): unhandled Agent type: %d", link.Type()))
@@ -174,11 +178,11 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 		}
 
 		if err != nil {
-			cli.Message(cli.WARN, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): there was an error writing a message to the linked agent %s: %s\n", link.Conn().(net.Conn).RemoteAddr(), err))
+			cli.Message(cli.WARN, fmt.Sprintf("services/p2p.Handle(): there was an error writing a message to the linked agent %s: %s\n", link.Conn().(net.Conn).RemoteAddr(), err))
 			break
 		}
 		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to the linked agent %s at %s at %s\n", len(delegate.Payload), delegate.Agent, link.Remote(), time.Now().UTC().Format(time.RFC3339)))
-		// Without a delay, synchronous connections can send multiple messages so fast that receiver things it is one message
+		// Without a delay, synchronous connections can send multiple messages so fast that receiver thinks it is one message
 		time.Sleep(time.Millisecond * 30)
 	}
 }
