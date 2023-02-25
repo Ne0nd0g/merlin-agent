@@ -142,7 +142,7 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 		case p2p.UDPBIND, p2p.UDPREVERSE:
 			// Split into fragments of MaxSize
 			fragments := int(math.Ceil(float64(len(delegate.Payload)) / float64(p2p.MaxSizeUDP)))
-			cli.Message(cli.INFO, fmt.Sprintf("services/p2p.Handle(): UDP data size is: %d, max UDP fragment size is %d, creating %d fragments", len(delegate.Payload), p2p.MaxSizeUDP, fragments))
+			cli.Message(cli.DEBUG, fmt.Sprintf("services/p2p.Handle(): UDP data size is: %d, max UDP fragment size is %d, creating %d fragments", len(delegate.Payload), p2p.MaxSizeUDP, fragments))
 			var i int
 			size := len(delegate.Payload)
 			for i < fragments {
@@ -190,8 +190,9 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 // List returns a numbered list of peer-to-peer Links that exist each seperated by a new line
 func (s *Service) List() (list string) {
 	agents := s.repo.GetAll()
-	for _, agent := range agents {
-		list += fmt.Sprintf("%s:%s:%s\n", agent.String(), agent.ID, agent.Remote)
+	list = "\n"
+	for i, agent := range agents {
+		list += fmt.Sprintf("%d. %s:%s:%s\n", i, agent.String(), agent.ID(), agent.Remote())
 	}
 	return
 }
@@ -204,7 +205,7 @@ func (s *Service) Remove(id uuid.UUID) error {
 	}
 
 	switch link.Type() {
-	case p2p.TCPBIND, p2p.UDPBIND:
+	case p2p.TCPBIND, p2p.UDPBIND, p2p.SMBBIND:
 		// Close the connection
 		err = link.Conn().(net.Conn).Close()
 		if err != nil {

