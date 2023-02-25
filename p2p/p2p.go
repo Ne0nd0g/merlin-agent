@@ -1,6 +1,6 @@
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
-// Copyright (C) 2022  Russel Van Tuyl
+// Copyright (C) 2023  Russel Van Tuyl
 
 // Merlin is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,21 +20,17 @@ package p2p
 
 import (
 	// Standard
-	"encoding/binary"
 	"fmt"
-	"math"
 	"net"
-	"sync"
-	"time"
+
+	// 3rd Party
+	uuid "github.com/satori/go.uuid"
 
 	// Merlin
 	"github.com/Ne0nd0g/merlin/pkg/messages"
-
-	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
 )
 
-// Types of Peer-to-peer Agents
+// Types of peer-to-peer links/connections
 const (
 	TCPBIND    = 0
 	TCPREVERSE = 1
@@ -49,118 +45,86 @@ const (
 	MaxSizeUDP = 1450
 )
 
-// LinkedAgents is a map that holds information about peer-to-peer connected agents for receiving & routing messages
-var LinkedAgents = sync.Map{}
-
-// out a global map of Delegate messages that are outgoing from this Agent to its parent or the server
-var out = make(chan messages.Delegate, 100)
-
-// Agent holds information about peer-to-peer linked agents
-type Agent struct {
-	In     chan messages.Base // In a channel of incoming Base messages coming in from the linked Agent
-	Out    chan messages.Base // Out a channel of outgoing Base messages to be sent to the linked Agent
-	Conn   interface{}        // Conn the network connection used to communicate with the linked Agent
-	Type   int                // Type of the linked Agent (e.g., tcp-bind, SMB, etc.)
-	Remote net.Addr           // Remote is the name or address of the remote Agent data is being sent to
+// Link holds information about peer-to-peer linked agents
+type Link struct {
+	id       uuid.UUID          // id is Agent id for this peer-to-peer connection
+	in       chan messages.Base // in a channel of incoming Base messages coming in from the linked Agent
+	out      chan messages.Base // out a channel of outgoing Base messages to be sent to the linked Agent
+	conn     interface{}        // conn the network connection used to communicate with the linked Agent
+	connType int                // connType of the linked Agent (e.g., tcp-bind, SMB, etc.)
+	remote   net.Addr           // remote is the name or address of the remote Agent data is being sent to
 }
 
-// GetDelegateMessages infinitely loops through the global Delegate message channel and return a list of them
-func GetDelegateMessages() (messages []messages.Delegate) {
-	// Check the output channel
-	for {
-		if len(out) > 0 {
-			msg := <-out
-			messages = append(messages, msg)
-		} else {
-			break
-		}
-	}
-	return
-}
-
-// AddDelegateMessage places an incoming Delegate message into the global out channel
-func AddDelegateMessage(msg messages.Delegate) {
-	// Convert to Job and add it to the queue
-	out <- msg
-}
-
-// HandleDelegateMessages takes in a list of incoming Delegate messages to this parent Agent and sends it to the child or linked Agent
-func HandleDelegateMessages(delegates []messages.Delegate) {
-	cli.Message(cli.DEBUG, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): received %d delegate messages", len(delegates)))
-
-	for _, delegate := range delegates {
-		agent, ok := LinkedAgents.Load(delegate.Agent)
-		if !ok {
-			cli.Message(cli.WARN, fmt.Sprintf("%s is not a known linked agent\n", delegate.Agent))
-			break
-		}
-
-		// Tag/Type, Length, Value (TLV)
-		// Determine the message type, which is static right now
-		// uint is 32-bits (4 bytes)
-		tag := make([]byte, 4)
-		binary.BigEndian.PutUint32(tag, uint32(1))
-		// Going for uint64 (8 bytes)
-		length := make([]byte, 8)
-		binary.BigEndian.PutUint64(length, uint64(len(delegate.Payload)))
-		// Prepend the data length
-		delegate.Payload = append(length, delegate.Payload...)
-		// Prepend the data type/tag
-		delegate.Payload = append(tag, delegate.Payload...)
-
-		var n int
-		var err error
-		switch agent.(Agent).Type {
-		case TCPBIND, TCPREVERSE, SMBBIND:
-			n, err = agent.(Agent).Conn.(net.Conn).Write(delegate.Payload)
-			cli.Message(cli.DEBUG, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): Wrote %d bytes to the linked agent %s at %s at %s\n", n, delegate.Agent, agent.(Agent).Remote, time.Now().UTC().Format(time.RFC3339)))
-		case UDPBIND, UDPREVERSE:
-			// Split into fragments of MaxSize
-			fragments := int(math.Ceil(float64(len(delegate.Payload)) / float64(MaxSizeUDP)))
-			cli.Message(cli.DEBUG, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): UDP data size is: %d, max UDP fragment size is %d, creating %d fragements", len(delegate.Payload), MaxSizeUDP, fragments))
-			var i int
-			size := len(delegate.Payload)
-			for i < fragments {
-				start := i * MaxSizeUDP
-				var stop int
-				// if bytes remaining are less than max size, read until the end
-				if size < MaxSizeUDP {
-					stop = len(delegate.Payload)
-				} else {
-					stop = (i + 1) * MaxSizeUDP
-				}
-				switch agent.(Agent).Type {
-				case UDPBIND:
-					n, err = agent.(Agent).Conn.(net.Conn).Write(delegate.Payload[start:stop])
-				case UDPREVERSE:
-					n, err = agent.(Agent).Conn.(net.PacketConn).WriteTo(delegate.Payload[start:stop], agent.(Agent).Remote)
-				}
-				if err != nil {
-					cli.Message(cli.WARN, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): there was an error writing a message to the linked agent %s: %s\n", agent.(Agent).Conn.(net.Conn).RemoteAddr(), err))
-					break
-				}
-				cli.Message(cli.INFO, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): Wrote UDP fragment %d of %d", i+1, fragments))
-				i++
-				size = size - MaxSizeUDP
-			}
-		default:
-			cli.Message(cli.WARN, fmt.Sprintf("p2p.HandleDelegateMessages(): unhandled Agent type: %d", agent.(Agent).Type))
-			break
-		}
-
-		if err != nil {
-			cli.Message(cli.WARN, fmt.Sprintf("clients/p2p.HandleDelegateMessages(): there was an error writing a message to the linked agent %s: %s\n", agent.(Agent).Conn.(net.Conn).RemoteAddr(), err))
-			break
-		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to the linked agent %s at %s at %s\n", len(delegate.Payload), delegate.Agent, agent.(Agent).Remote, time.Now().UTC().Format(time.RFC3339)))
-		// Without a delay, synchronous connections can send multiple messages so fast that receiver things it is one message
-		time.Sleep(time.Millisecond * 30)
+// NewLink is a factory to build and return a Link structure
+func NewLink(id uuid.UUID, conn interface{}, linkType int, remote net.Addr) Link {
+	return Link{
+		id:       id,
+		in:       make(chan messages.Base, 100),
+		out:      make(chan messages.Base, 100),
+		conn:     conn,
+		connType: linkType,
+		remote:   remote,
 	}
 }
 
-// Returns the Agent's type as a string
-func (a *Agent) String() string {
-	switch a.Type {
+// AddIn takes in a base message from a parent Agent or the Merlin server and adds it to the incoming message channel,
+// so it can be sent to the child Agent
+func (l *Link) AddIn(base messages.Base) {
+	l.in <- base
+}
+
+// AddOut takes in a base message from a child Agent and adds it to the outgoing message channel, so it can be sent to
+// the Merlin server
+func (l *Link) AddOut(base messages.Base) {
+	l.out <- base
+}
+
+// Conn returns the peer-to-peer network connection used to read and write network traffic
+func (l *Link) Conn() interface{} {
+	return l.conn
+}
+
+// GetIn blocks waiting for a Base message from the incoming message channel and returns it
+func (l *Link) GetIn() messages.Base {
+	return <-l.in
+}
+
+// GetOut blocks waiting for a Base message from the outgoing message channel and returns it
+func (l *Link) GetOut() messages.Base {
+	return <-l.out
+}
+
+// ID returns the peer-to-peer Link's id
+func (l *Link) ID() uuid.UUID {
+	return l.id
+}
+
+// Type returns what type of peer-to-peer Link this is (e.g., TCP reverse or SMB bind)
+func (l *Link) Type() int {
+	return l.connType
+}
+
+// Remote returns the address the peer-to-peer Link is connected to
+func (l *Link) Remote() net.Addr {
+	return l.remote
+}
+
+// UpdateConn updates the peer-to-peer Link's network connection
+// The updated object must be subsequently stored in the repository
+func (l *Link) UpdateConn(conn interface{}) {
+	l.conn = conn
+}
+
+// String returns the peer-to-peer Link's type as a string
+func (l *Link) String() string {
+	return String(l.connType)
+}
+
+// String converts the peer-to-peer Link type from a constant to a string
+func String(linkType int) string {
+	switch linkType {
+	case SMBBIND:
+		return "smb-bind"
 	case TCPBIND:
 		return "tcp-bind"
 	case TCPREVERSE:
@@ -170,6 +134,6 @@ func (a *Agent) String() string {
 	case UDPREVERSE:
 		return "udp-reverse"
 	default:
-		return fmt.Sprintf("unknown peer-to-peer agent type %d", a.Type)
+		return fmt.Sprintf("unknown peer-to-peer agent link type %d", linkType)
 	}
 }

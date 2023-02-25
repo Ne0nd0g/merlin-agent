@@ -3,7 +3,7 @@
 
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
-// Copyright (C) 2022  Russel Van Tuyl
+// Copyright (C) 2023  Russel Van Tuyl
 
 // Merlin is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
 
+// Package http implements the Client interface and contains the structures and functions to communicate to the Merlin
+// server over the HTTP protocol
 package http
 
 import (
@@ -52,6 +54,7 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/authenticators/none"
 	oAuth "github.com/Ne0nd0g/merlin-agent/authenticators/opaque"
 	"github.com/Ne0nd0g/merlin-agent/cli"
+	"github.com/Ne0nd0g/merlin-agent/clients/memory"
 	"github.com/Ne0nd0g/merlin-agent/core"
 	transformer "github.com/Ne0nd0g/merlin-agent/transformers"
 	"github.com/Ne0nd0g/merlin-agent/transformers/encoders/base64"
@@ -216,10 +219,13 @@ func New(config Config) (*Client, error) {
 	cli.Message(cli.INFO, fmt.Sprintf("\tPayload Padding Max: %d", client.PaddingMax))
 	cli.Message(cli.INFO, fmt.Sprintf("\tJA3 String: %s", client.JA3))
 
+	// Add the client to repository
+	memory.NewRepository().Add(&client)
+
 	return &client, nil
 }
 
-// getClient returns a HTTP client for the passed in protocol (i.e. h2 or http3)
+// getClient returns an HTTP client for the passed in protocol (i.e. h2 or http3)
 func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, error) {
 	cli.Message(cli.DEBUG, "Entering into clients.http.getClient()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Protocol: %s, Proxy: %s, JA3 String: %s", protocol, proxyURL, ja3))

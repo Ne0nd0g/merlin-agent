@@ -3,7 +3,7 @@
 
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
-// Copyright (C) 2022  Russel Van Tuyl
+// Copyright (C) 2023  Russel Van Tuyl
 
 // Merlin is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -43,36 +43,42 @@ func executeCommand(name string, args []string) (stdout string, stderr string) {
 }
 
 // ExecuteShellcodeSelf executes provided shellcode in the current process
+//
 //lint:ignore SA4009 Function needs to mirror exec_windows.go and inputs must be used
 func ExecuteShellcodeSelf(shellcode []byte) error {
 	return errors.New("shellcode execution is not implemented for this operating system")
 }
 
 // ExecuteShellcodeRemote executes provided shellcode in the provided target process
+//
 //lint:ignore SA4009 Function needs to mirror exec_windows.go and inputs must be used
 func ExecuteShellcodeRemote(shellcode []byte, pid uint32) error {
 	return errors.New("shellcode execution is not implemented for this operating system")
 }
 
 // ExecuteShellcodeRtlCreateUserThread executes provided shellcode in the provided target process using the Windows RtlCreateUserThread call
+//
 //lint:ignore SA4009 Function needs to mirror exec_windows.go and inputs must be used
 func ExecuteShellcodeRtlCreateUserThread(shellcode []byte, pid uint32) error {
 	return errors.New("shellcode execution is not implemented for this operating system")
 }
 
 // ExecuteShellcodeQueueUserAPC executes provided shellcode in the provided target process using the Windows QueueUserAPC API call
+//
 //lint:ignore SA4009 Function needs to mirror exec_windows.go and inputs must be used
 func ExecuteShellcodeQueueUserAPC(shellcode []byte, pid uint32) error {
 	return errors.New("shellcode execution is not implemented for this operating system")
 }
 
 // ExecuteShellcodeCreateProcessWithPipe creates a child process, redirects STDOUT/STDERR to an anonymous pipe, injects/executes shellcode, and retrieves output
+//
 //lint:ignore SA4009 Function needs to mirror exec_windows.go and inputs must be used
 func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args string) (stdout string, stderr string, err error) {
 	return stdout, stderr, fmt.Errorf("CreateProcess modules in not implemented for this operating  system")
 }
 
 // miniDump is a Windows only module function to dump the memory of the provided process
+//
 //lint:ignore SA4009 Function needs to mirror exec_windows.go and inputs must be used
 func miniDump(tempDir string, process string, inPid uint32) (map[string]interface{}, error) {
 	var mini map[string]interface{}

@@ -3,7 +3,6 @@ package commands
 import (
 	// Standard
 	"fmt"
-	"net"
 
 	// 3rd Party
 	uuid "github.com/satori/go.uuid"
@@ -13,7 +12,6 @@ import (
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin-agent/p2p"
 )
 
 // Unlink terminates a peer-to-peer Agent connection
@@ -31,29 +29,13 @@ func Unlink(cmd jobs.Command) (results jobs.Results) {
 		return
 	}
 
-	// Find connection
-	agent, ok := p2p.LinkedAgents.Load(agentID)
-	if !ok {
-		results.Stderr = fmt.Sprintf("commands/unlink.Unlink(): unable to find Agent %s in the peer-to-peer Agent map", agentID)
-		return
-	}
-
-	switch agent.(p2p.Agent).Type {
-	case p2p.TCPBIND, p2p.UDPBIND:
-		// Close the connection
-		err = agent.(p2p.Agent).Conn.(net.Conn).Close()
-		if err != nil {
-			results.Stderr += fmt.Sprintf("commands/unlink.Unlink(): there was an error closing the network connection for %s: %s", agentID, err)
-			return
-		}
+	// Remove the link
+	err = peerToPeerService.Remove(agentID)
+	if err != nil {
+		results.Stderr += fmt.Sprintf("commands/unlink.Unlink(): there was an error removing the link for %s: %s", agentID, err)
+	} else {
 		results.Stdout = fmt.Sprintf("Successfully unlinked from %s and closed the network connection", agentID)
-	default:
-		results.Stderr = fmt.Sprintf("commands/unlink.Unlink(): unhandled peer-to-peer Agent connection type %d", agent.(p2p.Agent).Type)
-		return
 	}
-
-	// Delete connection
-	p2p.LinkedAgents.Delete(agentID)
 
 	return
 }

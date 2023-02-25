@@ -17,7 +17,7 @@ BUILD=$(shell git rev-parse HEAD)
 DIR=bin/v${VERSION}/${BUILD}
 
 # Merlin Agent Variables
-XBUILD=-X "main.build=${BUILD}" -X "github.com/Ne0nd0g/merlin-agent/agent.build=${BUILD}"
+XBUILD=-X "github.com/Ne0nd0g/merlin-agent/core.Build=${BUILD}"
 URL ?= https://127.0.0.1:443
 XURL=-X "main.url=${URL}"
 PSK ?= merlin

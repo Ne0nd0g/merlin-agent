@@ -6,8 +6,8 @@ package commands
 
 import (
 	// Standard
-	"bufio"
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 	"fmt"
 	"net"
@@ -45,13 +45,6 @@ func ConnectSMB(host, pipe string) (results jobs.Results) {
 
 	address := fmt.Sprintf("\\\\%s\\pipe\\%s", host, pipe)
 
-	linkedAgent := p2p.Agent{
-		In:  make(chan messages.Base, 100),
-		Out: make(chan messages.Base, 100),
-	}
-
-	linkedAgent.Type = p2p.SMBBIND
-
 	// Establish connection to downstream agent
 	conn, err := npipe.Dial(address)
 	if err != nil {
@@ -59,41 +52,88 @@ func ConnectSMB(host, pipe string) (results jobs.Results) {
 		return
 	}
 
-	linkedAgent.Conn = conn
-	linkedAgent.Remote = conn.RemoteAddr()
-
-	// Need to read data here in this function to retrieve the linked Agent's ID so the linkedAgent structure can be stored
 	var n int
-	data := make([]byte, 50000)
-	n, err = bufio.NewReader(linkedAgent.Conn.(net.Conn)).Read(data)
-	if err != nil {
-		msg := fmt.Sprintf("there was an error reading data from linked agent %s: %s", address, err)
-		results.Stderr = msg
-		cli.Message(cli.WARN, msg)
-		return
+	var tag uint32
+	var length uint64
+	var buff bytes.Buffer
+	for {
+		data := make([]byte, 4096)
+		// Need to have a read on the network connection for data here in this function to retrieve the linked Agent's ID so the linkedAgent structure can be stored
+		n, err = conn.Read(data)
+		if err != nil {
+			msg := fmt.Sprintf("there was an error reading data from linked agent %s: %s", address, err)
+			results.Stderr = msg
+			cli.Message(cli.WARN, msg)
+			return
+		}
+		cli.Message(cli.DEBUG, fmt.Sprintf("commands/link.ConnectSMB(): Read %d bytes from linked %s agent %s at %s", n, p2p.String(p2p.SMBBIND), address, time.Now().UTC().Format(time.RFC3339)))
+
+		// Add the bytes to the buffer
+		n, err = buff.Write(data[:n])
+		if err != nil {
+			msg := fmt.Sprintf("commands/link.ConnectSMB(): there was an error writing %d bytes from linked agent into the buffer %s: %s", n, address, err)
+			results.Stderr = msg
+			cli.Message(cli.WARN, msg)
+			return
+		}
+
+		// If this is the first read on the connection determine the tag and data length
+		if tag == 0 {
+			// Ensure we have enough data to read the tag/type which is 4-bytes
+			if buff.Len() < 4 {
+				cli.Message(cli.DEBUG, fmt.Sprintf("commands/link.ConnectSMB(): Need at least 4 bytes in the buffer to read the Type/Tag for TLV but only have %d", buff.Len()))
+				continue
+			}
+			tag = binary.BigEndian.Uint32(data[:4])
+			if tag != 1 {
+				msg := fmt.Sprintf("commands/link.ConnectSMB(): Expected a type/tag value of 1 for TLV but got %d", tag)
+				results.Stderr = msg
+				cli.Message(cli.WARN, msg)
+				return
+			}
+		}
+
+		if length == 0 {
+			// Ensure we have enough data to read the Length from TLV which is 8-bytes plus the 4-byte tag/type size
+			if buff.Len() < 12 {
+				cli.Message(cli.DEBUG, fmt.Sprintf("command/link.ConnectSMB(): Need at least 12 bytes in the buffer to read the Length for TLV but only have %d", buff.Len()))
+				continue
+			}
+			length = binary.BigEndian.Uint64(data[4:12])
+		}
+
+		// If we've read all the data according to the length provided in TLV, then break the for loop
+		// Type/Tag size is 4-bytes, Length size is 8-bytes for TLV
+		if uint64(buff.Len()) == length+4+8 {
+			cli.Message(cli.DEBUG, fmt.Sprintf("command/link.ConnectSMB(): Finished reading data length of %d bytes into the buffer and moving forward to deconstruct the data", length))
+			break
+		} else {
+			cli.Message(cli.DEBUG, fmt.Sprintf("command/link.ConnectSMB(): Read %d of %d bytes into the buffer", buff.Len(), length+4+8))
+		}
 	}
-	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked %s agent %s at %s", n, &linkedAgent, address, time.Now().UTC().Format(time.RFC3339)))
+	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked %s agent %s at %s", buff.Len(), p2p.String(p2p.SMBBIND), address, time.Now().UTC().Format(time.RFC3339)))
 
 	// Decode GOB from server response into Base
 	var msg messages.Delegate
-	reader := bytes.NewReader(data)
+	// First 4-bytes are for the Type/Tag, next 8-bytes are for the Length in TLV
+	reader := bytes.NewReader(buff.Bytes()[12:])
 
-	//fmt.Printf("DATA: %s\n", data)
 	errD := gob.NewDecoder(reader).Decode(&msg)
 	if errD != nil {
-		err = fmt.Errorf("there was an error decoding the gob message:\r\n%s", errD.Error())
+		err = fmt.Errorf("there was an error decoding the gob message: %s", errD)
 		return
 	}
 
 	// Store LinkedAgent
-	p2p.LinkedAgents.Store(msg.Agent, linkedAgent)
+	link := p2p.NewLink(msg.Agent, conn, p2p.SMBBIND, conn.RemoteAddr())
+	peerToPeerService.AddLink(link)
 
-	p2p.AddDelegateMessage(msg)
+	peerToPeerService.AddDelegate(msg)
 
 	results.Stdout = fmt.Sprintf("Successfully connected to %s at %s", msg.Agent, address)
 
 	// The listen function is in commands/listen.go
-	go listen(linkedAgent.Conn.(net.Conn))
+	go listen(conn)
 	return
 }
 

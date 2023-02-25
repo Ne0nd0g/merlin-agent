@@ -1,6 +1,6 @@
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
-// Copyright (C) 2022  Russel Van Tuyl
+// Copyright (C) 2023  Russel Van Tuyl
 
 // Merlin is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -317,26 +317,21 @@ func listen(conn net.Conn) {
 		}
 
 		// Store LinkedAgent
-		agent, ok := p2p.LinkedAgents.Load(msg.Agent)
-		if !ok {
+		_, err = peerToPeerService.GetLink(msg.Agent)
+		if err != nil {
 			// Reverse TCP agents need to be added after initial checkin
-			linkedAgent := p2p.Agent{
-				In:     make(chan messages.Base, 100),
-				Out:    make(chan messages.Base, 100),
-				Conn:   conn,
-				Type:   p2p.TCPREVERSE,
-				Remote: conn.RemoteAddr(),
-			}
-			p2p.LinkedAgents.Store(msg.Agent, linkedAgent)
+			linkedAgent := p2p.NewLink(msg.Agent, conn, p2p.TCPREVERSE, conn.RemoteAddr())
+			peerToPeerService.AddLink(linkedAgent)
 		} else {
-			// Update the Agent's connection to the current one
-			linkedAgent := agent.(p2p.Agent)
-			linkedAgent.Conn = conn
-			p2p.LinkedAgents.Store(msg.Agent, linkedAgent)
+			// Update the Link's connection to the current one
+			err = peerToPeerService.UpdateConnection(msg.Agent, conn)
+			if err != nil {
+				cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listen(): %s", err))
+			}
 		}
 
 		// Add the message to the queue
-		p2p.AddDelegateMessage(msg)
+		peerToPeerService.AddDelegate(msg)
 	}
 }
 
@@ -352,7 +347,7 @@ func listenUDP(listener net.PacketConn) {
 		for {
 			data := make([]byte, MaxSizeUDP)
 			n, addr, err = listener.ReadFrom(data)
-			cli.Message(cli.INFO, fmt.Sprintf("UDP listener read %d bytes from %s at %s", n, addr, time.Now().UTC().Format(time.RFC3339)))
+			cli.Message(cli.DEBUG, fmt.Sprintf("UDP listener read %d bytes from %s at %s", n, addr, time.Now().UTC().Format(time.RFC3339)))
 			if err != nil {
 				err = fmt.Errorf("commands/listener.listenUDP(): there was an error accepting the UDP connection from %s : %s", addr, err)
 				break
@@ -415,24 +410,20 @@ func listenUDP(listener net.PacketConn) {
 		}
 
 		// Store LinkedAgent
-		agent, ok := p2p.LinkedAgents.Load(msg.Agent)
-		if !ok {
+		_, err = peerToPeerService.GetLink(msg.Agent)
+		if err != nil {
 			// Reverse UDP agents need to be added after initial checkin
-			linkedAgent := p2p.Agent{
-				In:     make(chan messages.Base, 100),
-				Out:    make(chan messages.Base, 100),
-				Type:   p2p.UDPREVERSE,
-				Conn:   listener,
-				Remote: addr,
-			}
-			p2p.LinkedAgents.Store(msg.Agent, linkedAgent)
+			linkedAgent := p2p.NewLink(msg.Agent, listener, p2p.UDPREVERSE, addr)
+			peerToPeerService.AddLink(linkedAgent)
 		} else {
-			// Update the Agent's connection to the current one
-			linkedAgent := agent.(p2p.Agent)
-			p2p.LinkedAgents.Store(msg.Agent, linkedAgent)
+			// Update the Link's connection to the current one
+			err = peerToPeerService.UpdateConnection(msg.Agent, listener)
+			if err != nil {
+				cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listen(): %s", err))
+			}
 		}
 
 		// Add the message to the queue
-		p2p.AddDelegateMessage(msg)
+		peerToPeerService.AddDelegate(msg)
 	}
 }
