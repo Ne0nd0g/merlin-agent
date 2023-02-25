@@ -199,7 +199,7 @@ func ListenTCP(addr string) error {
 	cli.Message(cli.NOTE, fmt.Sprintf("Started TCP listener on %s and waiting for a connection...", addr))
 
 	// Listen for initial connection from upstream agent
-	go accept(listener)
+	go accept(listener, p2p.TCPREVERSE)
 	return nil
 }
 
@@ -233,19 +233,19 @@ func ListenUDP(addr string) error {
 }
 
 // accept is an infinite loop listening for new connections from Agents
-func accept(listener net.Listener) {
+func accept(listener net.Listener, listenerType int) {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			cli.Message(cli.WARN, fmt.Sprintf("commands/listen.accept(): there was an error accepting the connection: %s", err))
 			break
 		}
-		go listen(conn)
+		go listen(conn, listenerType)
 	}
 }
 
 // listen is an infinite loop, used as a go routine, to receive data from incoming connections and subsequently add Delegate messages to the outgoing queue
-func listen(conn net.Conn) {
+func listen(conn net.Conn, listenerType int) {
 	for {
 		var n int
 		var err error
@@ -319,8 +319,8 @@ func listen(conn net.Conn) {
 		// Store LinkedAgent
 		_, err = peerToPeerService.GetLink(msg.Agent)
 		if err != nil {
-			// Reverse TCP agents need to be added after initial checkin
-			linkedAgent := p2p.NewLink(msg.Agent, conn, p2p.TCPREVERSE, conn.RemoteAddr())
+			// Reverse SMB & TCP agents need to be added after initial checkin
+			linkedAgent := p2p.NewLink(msg.Agent, conn, listenerType, conn.RemoteAddr())
 			peerToPeerService.AddLink(linkedAgent)
 		} else {
 			// Update the Link's connection to the current one

@@ -220,6 +220,6 @@ func Connect(network string, args []string) (results jobs.Results) {
 	results.Stdout = fmt.Sprintf("Successfully connected to %s at %s", msg.Agent, args[0])
 
 	// The listen function is in commands/listen.go
-	go listen(conn)
+	go listen(conn, linkType)
 	return
 }

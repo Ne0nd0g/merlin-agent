@@ -136,7 +136,7 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 		var n int
 
 		switch link.Type() {
-		case p2p.TCPBIND, p2p.TCPREVERSE, p2p.SMBBIND:
+		case p2p.TCPBIND, p2p.TCPREVERSE, p2p.SMBBIND, p2p.SMBREVERSE:
 			n, err = link.Conn().(net.Conn).Write(delegate.Payload)
 			cli.Message(cli.DEBUG, fmt.Sprintf("services/p2p.Handle(): Wrote %d bytes to the linked agent %s at %s at %s\n", n, delegate.Agent, link.Remote(), time.Now().UTC().Format(time.RFC3339)))
 		case p2p.UDPBIND, p2p.UDPREVERSE:
@@ -173,7 +173,7 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 				}
 			}
 		default:
-			cli.Message(cli.WARN, fmt.Sprintf("p2p.HandleDelegateMessages(): unhandled Agent type: %d", link.Type()))
+			cli.Message(cli.WARN, fmt.Sprintf("services/p2p.Handle(): unhandled Agent type: %d", link.Type()))
 			break
 		}
 
@@ -190,7 +190,7 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 // List returns a numbered list of peer-to-peer Links that exist each seperated by a new line
 func (s *Service) List() (list string) {
 	agents := s.repo.GetAll()
-	list = "\n"
+	list = fmt.Sprintf("Peer-to-Peer Links (%d)\n", len(agents))
 	for i, agent := range agents {
 		list += fmt.Sprintf("%d. %s:%s:%s\n", i, agent.String(), agent.ID(), agent.Remote())
 	}

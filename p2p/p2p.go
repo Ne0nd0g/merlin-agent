@@ -37,6 +37,7 @@ const (
 	UDPBIND    = 2
 	UDPREVERSE = 3
 	SMBBIND    = 4
+	SMBREVERSE = 5
 )
 
 const (
@@ -123,6 +124,8 @@ func (l *Link) String() string {
 // String converts the peer-to-peer Link type from a constant to a string
 func String(linkType int) string {
 	switch linkType {
+	case SMBREVERSE:
+		return "smb-reverse"
 	case SMBBIND:
 		return "smb-bind"
 	case TCPBIND:

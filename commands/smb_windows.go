@@ -133,7 +133,7 @@ func ConnectSMB(host, pipe string) (results jobs.Results) {
 	results.Stdout = fmt.Sprintf("Successfully connected to %s at %s", msg.Agent, address)
 
 	// The listen function is in commands/listen.go
-	go listen(conn)
+	go listen(conn, p2p.SMBBIND)
 	return
 }
 
@@ -204,6 +204,6 @@ func ListenSMB(pipe string) error {
 	cli.Message(cli.NOTE, fmt.Sprintf("Started SMB listener on %s and waiting for a connection...", addr))
 
 	// Listen for initial connection from upstream agent
-	go accept(listener)
+	go accept(listener, p2p.SMBREVERSE)
 	return nil
 }
