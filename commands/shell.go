@@ -26,6 +26,6 @@ import (
 )
 
 // shell is used to execute a command on a host using the operating system's default shell
-func shell(name string, args []string) (stdout string, stderr string) {
+func shell(args []string) (stdout string, stderr string) {
 	return "", fmt.Sprintf("the default shell for the %s operating system is unknown, use the \"run\" command instead", runtime.GOOS)
 }
