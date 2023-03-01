@@ -547,8 +547,8 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		i++
 		size = size - MaxSize
 		// UDP packets seemed to get dropped if too many are sent too fast
-		if fragments > 1000 {
-			time.Sleep(time.Millisecond * 1)
+		if fragments > 100 {
+			time.Sleep(time.Millisecond * 10)
 		}
 	}
 

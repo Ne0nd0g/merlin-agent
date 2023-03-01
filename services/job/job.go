@@ -76,6 +76,7 @@ func NewJobService(agentID uuid.UUID) *Service {
 
 // AddResult creates a Job Results structure and places it in the out going channel
 func (s *Service) AddResult(agent uuid.UUID, stdOut, stdErr string) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("services/job.AddResult(): entering into function with agent: %s, stdOut: %s, stdErr: %s", agent, stdOut, stdErr))
 	result := jobs.Results{
 		Stdout: stdOut,
 		Stderr: stdErr,
@@ -90,13 +91,15 @@ func (s *Service) AddResult(agent uuid.UUID, stdOut, stdErr string) {
 
 // Get blocks waiting for a job from the out channel
 func (s *Service) Get() []jobs.Job {
+	cli.Message(cli.DEBUG, "services/job.Get(): entering into function")
 	job := <-out
+	cli.Message(cli.DEBUG, fmt.Sprintf("services/job.Check(): leaving function with: %+v", job))
 	return []jobs.Job{job}
 }
 
 // Check does not block and returns any jobs ready to be returned to the Merlin server
 func (s *Service) Check() (returnJobs []jobs.Job) {
-	cli.Message(cli.DEBUG, "services/job.Check(): Entering into function")
+	cli.Message(cli.DEBUG, "services/job.Check(): entering into function")
 	// Check the output channel
 	for {
 		if len(out) > 0 {
@@ -112,6 +115,7 @@ func (s *Service) Check() (returnJobs []jobs.Job) {
 
 // Control handles jobs that have the CONTROL type used to configure the Agent or the network communication client
 func (s *Service) Control(job jobs.Job) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("services/job.Control(): entering into function with %+v", job))
 	cmd := job.Payload.(jobs.Command)
 	cli.Message(cli.NOTE, fmt.Sprintf("Received Agent Control Message: %s", cmd.Command))
 	var results jobs.Results
@@ -200,13 +204,8 @@ func (s *Service) Control(job jobs.Job) {
 			results.Stderr = fmt.Sprintf("there was an error changing the agent waitTime: %s", err)
 			break
 		}
-		if t >= 0 {
-			s.AgentService.SetSleep(t)
-			cli.Message(cli.NOTE, fmt.Sprintf("Setting agent sleep time to %s", cmd.Args[0]))
-		} else {
-			results.Stderr = fmt.Sprintf("the agent was provided with a time that was not greater than or equal to zero: %s", t.String())
-			break
-		}
+		s.AgentService.SetSleep(t)
+		cli.Message(cli.NOTE, fmt.Sprintf("Setting agent sleep time to %s", cmd.Args[0]))
 	default:
 		results.Stderr = fmt.Sprintf("%s is not a valid AgentControl message type.", cmd.Command)
 	}
@@ -239,11 +238,12 @@ func (s *Service) Control(job jobs.Job) {
 	}
 	aInfo.Payload = s.AgentService.AgentInfo()
 	out <- aInfo
+	cli.Message(cli.DEBUG, fmt.Sprintf("services/job.Control(): leaving function with %+v", aInfo))
 }
 
 // Handle takes a list of jobs and places them into job channel if they are a valid type, so they can be executed
 func (s *Service) Handle(Jobs []jobs.Job) {
-	cli.Message(cli.DEBUG, "Entering into agent.jobHandler() function")
+	cli.Message(cli.DEBUG, fmt.Sprintf("services/job.Handle(): entering into function with %+v", Jobs))
 	for _, job := range Jobs {
 		// If the job belongs to this agent
 		if job.AgentID == s.Agent {
@@ -282,7 +282,7 @@ func (s *Service) Handle(Jobs []jobs.Job) {
 			}
 		}
 	}
-	cli.Message(cli.DEBUG, "Leaving agent.jobHandler() function")
+	cli.Message(cli.DEBUG, "services/job.Handle(): leaving function")
 }
 
 // execute is executed a go routine that regularly checks for jobs from the in channel, executes them, and returns results to the out channel

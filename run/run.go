@@ -71,7 +71,7 @@ func Run(a agent.Agent, c clients.Client) {
 		// Check in
 		if a.Authenticated() {
 			// Synchronous clients will fill the console with this message because there is no sleep
-			if !c.Synchronous() {
+			if a.Wait() >= 0 {
 				cli.Message(cli.NOTE, "Checking in...")
 			}
 			checkIn()
@@ -86,11 +86,18 @@ func Run(a agent.Agent, c clients.Client) {
 				cli.Message(cli.SUCCESS, "Agent authentication successful")
 				agentService.SetAuthenticated(true)
 				agentService.SetInitialCheckIn(time.Now().UTC())
+				// If the Agent is synchronous, start a listener in a go routine to receive upstream messages anytime
 				if c.Synchronous() {
 					go listen()
 				}
-				// Used to immediately respond to AgentInfo request job from server
-				checkIn()
+				// If the Agent doesn't sleep, start go routines that block waiting for a message to send back to the server
+				if a.Wait() < 0 {
+					go messageService.GetJobs()
+					go messageService.GetDelegates()
+				} else {
+					// Used to immediately respond to AgentInfo request job from server
+					checkIn()
+				}
 			}
 		}
 		// Get the latest copy of agent and client after incoming messages have been processed
@@ -98,12 +105,11 @@ func Run(a agent.Agent, c clients.Client) {
 		c = clientService.Get()
 
 		// Determine if the max number of failed checkins has been reached
-		if a.Failed() >= a.MaxRetry() {
+		if a.Failed() >= a.MaxRetry() && a.MaxRetry() != 0 {
 			cli.Message(cli.WARN, fmt.Sprintf("maximum number of failed checkin attempts reached: %d, quitting...", a.MaxRetry()))
 			os.Exit(0)
 		}
-		// Synchronous Clients do not sleep
-		if !c.Synchronous() {
+		if a.Wait() >= 0 {
 			// Sleep
 			var sleepTime time.Duration
 			if a.Skew() > 0 {
@@ -120,11 +126,14 @@ func Run(a agent.Agent, c clients.Client) {
 // checkIn is the function that agent runs at every sleep/skew interval to check in with the server for jobs
 func checkIn() {
 	cli.Message(cli.DEBUG, "run/run.checkIn(): entering into function...")
+	a := agentService.Get()
 	c := clientService.Get()
 	var msg messages.Base
-	if c.Synchronous() {
+	if a.Wait() < 0 {
 		// This call blocks until there is a message to return
+		cli.Message(cli.NOTE, fmt.Sprintf("Waiting for a message to send upstream at %s", time.Now().UTC().Format(time.RFC3339)))
 		msg = messageService.Get()
+		cli.Message(cli.NOTE, fmt.Sprintf("Received message at %s", time.Now().UTC().Format(time.RFC3339)))
 	} else {
 		// This call DOES NOT block and will return a CheckIn message if there are no other messages in the queue
 		msg = messageService.Check()
@@ -138,7 +147,7 @@ func checkIn() {
 		a := agentService.Get()
 		cli.Message(cli.WARN, err.Error())
 		// Determine if the max number of failed checkins has been reached
-		if a.Failed() >= a.MaxRetry() {
+		if a.Failed() >= a.MaxRetry() && a.MaxRetry() != 0 {
 			cli.Message(cli.WARN, fmt.Sprintf("maximum number of failed checkin attempts reached: %d, quitting...", a.MaxRetry()))
 			os.Exit(0)
 		} else {
@@ -170,7 +179,7 @@ func checkIn() {
 			agentService.IncrementFailed()
 			// Determine if the max number of failed checkins has been reached
 			a := agentService.Get()
-			if a.Failed() >= a.MaxRetry() {
+			if a.Failed() >= a.MaxRetry() && a.MaxRetry() != 0 {
 				cli.Message(cli.WARN, fmt.Sprintf("maximum number of failed checkin attempts reached: %d, quitting...", a.MaxRetry()))
 				os.Exit(0)
 			} else {
@@ -192,7 +201,7 @@ func listen() {
 			a := agentService.Get()
 			cli.Message(cli.WARN, fmt.Sprintf("run.listen(): %s", err))
 			// Determine if the max number of failed checkins has been reached
-			if a.Failed() >= a.MaxRetry() {
+			if a.Failed() >= a.MaxRetry() && a.MaxRetry() != 0 {
 				cli.Message(cli.WARN, fmt.Sprintf("maximum number of failed checkin attempts reached: %d, quitting...", a.MaxRetry()))
 				os.Exit(0)
 			} else {
@@ -208,7 +217,7 @@ func listen() {
 						agentService.IncrementFailed()
 						// Determine if the max number of failed checkins has been reached
 						a := agentService.Get()
-						if a.Failed() >= a.MaxRetry() {
+						if a.Failed() >= a.MaxRetry() && a.MaxRetry() != 0 {
 							cli.Message(cli.WARN, fmt.Sprintf("maximum number of failed checkin attempts reached: %d, quitting...", a.MaxRetry()))
 							os.Exit(0)
 						} else {

@@ -197,7 +197,7 @@ func New(config Config) (*Client, error) {
 
 // Initial executes the specific steps required to establish a connection with the C2 server and checkin or register an agent
 func (client *Client) Initial() error {
-	cli.Message(cli.DEBUG, "Entering client/tcp.Initial function")
+	cli.Message(cli.DEBUG, "clients/tcp.Initial(): entering into function")
 
 	err := client.Connect()
 	if err != nil {
@@ -206,13 +206,14 @@ func (client *Client) Initial() error {
 
 	// Authenticate
 	err = client.Authenticate(messages.Base{})
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Initial(): leaving function with %s", err))
 	return err
 }
 
 // Authenticate is the top-level function used to authenticate an agent to server using a specific authentication protocol
 // The function must take in a Base message for when the C2 server requests re-authentication through a message
 func (client *Client) Authenticate(msg messages.Base) (err error) {
-	cli.Message(cli.DEBUG, fmt.Sprintf("clients/p2p/tcp.Authenticate(): entering into function with message: %+v", msg))
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Authenticate(): entering into function with message: %+v", msg))
 	var authenticated bool
 	// Reset the Agent's PSK
 	k := sha256.Sum256([]byte(client.psk))
@@ -270,8 +271,10 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 
 // Connect establish a connection with the remote host depending on the Client's type (e.g., BIND or REVERSE)
 func (client *Client) Connect() (err error) {
+	cli.Message(cli.DEBUG, "clients/tcp.Connect(): entering into function")
 	client.Lock()
 	defer client.Unlock()
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Connect(): leaving function with error %s", err))
 	// Check to see if the connection was restored by a different call stack
 	if client.connection != nil {
 		return nil
@@ -457,7 +460,7 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 // Send takes in a Merlin message structure, performs any encoding or encryption, converts it to a delegate and writes it to the output stream.
 // This function DOES not wait or listen for response messages.
 func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err error) {
-	cli.Message(cli.DEBUG, "Entering into client/tcp.Send()")
+	cli.Message(cli.DEBUG, fmt.Sprintf("client/tcp.Send(): entering into function with Base message: %+v", m))
 
 	// Set the message padding
 	if client.paddingMax > 0 {

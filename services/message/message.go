@@ -60,16 +60,12 @@ func NewMessageService(agent uuid.UUID) *Service {
 			JobService:    job.NewJobService(agent),
 		}
 	}
-	if memoryService.ClientService.Synchronous() {
-		// Start go routines to listen for incoming jobs and delegates
-		go memoryService.getDelegates()
-		go memoryService.getJobs()
-	}
 	return memoryService
 }
 
 // Check does not block but looks to see if there are any jobs or delegates that need to be returned to the Merlin server
 func (s *Service) Check() (msg messages.Base) {
+	cli.Message(cli.DEBUG, "services/message.Check(): entering into function")
 	msg.ID = s.Agent
 	// Check to see if there are any Jobs to be returned to the Merlin server
 	returnJobs := s.JobService.Check()
@@ -85,17 +81,24 @@ func (s *Service) Check() (msg messages.Base) {
 	if len(delegates) > 0 {
 		msg.Delegates = delegates
 	}
+	cli.Message(cli.DEBUG, fmt.Sprintf("services/message.Check(): leaving function with %+v", msg))
 	return
 }
 
 // Get blocks until there is a return base message to send back to the Merlin server
 func (s *Service) Get() (msg messages.Base) {
-	return <-out
+	cli.Message(cli.DEBUG, "services/message.Get(): entering into function")
+	msg = <-out
+	cli.Message(cli.DEBUG, fmt.Sprintf("services/message.Get(): leaving function with %+v", msg))
+	return
 }
 
-// getDelegates blocks waiting for a delegate message that needs to be returned to the Merlin server and adds it to the
-// out channel as a message type of CHECKIN because it will not be aggregated with other return message types
-func (s *Service) getDelegates() {
+// GetDelegates blocks waiting for a delegate message that needs to be returned to the Merlin server and adds it to the
+// out channel as a Base message type of CHECKIN because it will not be aggregated with other return message types.
+// Used when the Agent doesn't sleep and only communicates when there is a message to send
+func (s *Service) GetDelegates() {
+	cli.Message(cli.DEBUG, "services/message.getDelegates(): entering into function")
+	defer cli.Message(cli.DEBUG, "services/message.getDelegates(): leaving function")
 	for {
 		msg := messages.Base{
 			ID:      s.Agent,
@@ -107,14 +110,18 @@ func (s *Service) getDelegates() {
 	}
 }
 
-// getJobs waits for a return job, places it in base message, and adds it to the out channel
-func (s *Service) getJobs() {
+// GetJobs blocks waiting for a return job to exist, adds it to a Base message, and adds it to the out channel.
+// Used when the Agent doesn't sleep and only communicates when there is a message to send
+func (s *Service) GetJobs() {
+	cli.Message(cli.DEBUG, "services/message.getJobs(): entering into function")
+	defer cli.Message(cli.DEBUG, "services/message.getJobs(): leaving function")
 	for {
 		msg := messages.Base{
 			ID:   s.Agent,
 			Type: messages.JOBS,
 		}
 		msg.Payload = s.JobService.Get()
+		cli.Message(cli.DEBUG, fmt.Sprintf("services/message.getJobs(): added message Base to outgoing message channel: %+v\n", msg))
 		out <- msg
 	}
 }
