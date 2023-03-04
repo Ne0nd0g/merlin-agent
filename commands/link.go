@@ -24,6 +24,7 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
+	"math"
 	"math/rand"
 	"net"
 	"strings"
@@ -128,13 +129,51 @@ func Connect(network string, args []string) (results jobs.Results) {
 	// We must first write data to the UDP connection to let the UDP bind Agent know we're listening and ready
 	if linkType == p2p.UDPBIND {
 		junk := core.RandStringBytesMaskImprSrc(rand.Intn(100))
-		junk = base64.StdEncoding.EncodeToString([]byte(junk))
+		b64 := make([]byte, base64.StdEncoding.EncodedLen(len(junk)))
+		base64.StdEncoding.Encode(b64, []byte(junk))
+
+		// Add in Tag/Type and Length for TLV
+		tag := make([]byte, 4)
+		binary.BigEndian.PutUint32(tag, 1)
+		length := make([]byte, 8)
+		binary.BigEndian.PutUint64(length, uint64(len(b64)))
+
+		// Create TLV
+		outData := append(tag, length...)
+		outData = append(outData, b64...)
+		cli.Message(cli.DEBUG, fmt.Sprintf("commands/link.Connect(): Added Tag: %d and Length: %d to data size of %d", tag, len(b64), len(outData)))
+
+		// Determine number of fragments based on MaxSize
+		MaxSize := 1450
+		fragments := int(math.Ceil(float64(len(outData)) / float64(MaxSize)))
+
+		// Write the message
 		cli.Message(cli.NOTE, fmt.Sprintf("Initiating UDP connection to %s sending junk data: %s", conn.RemoteAddr(), junk))
-		n, err = conn.Write([]byte(junk))
-		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to UDP connection from %s at %s", n, conn.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
-		if err != nil {
-			results.Stderr = fmt.Sprintf("there was an error writing data to the UDP connection: %s", err)
-			return
+		cli.Message(cli.NOTE, fmt.Sprintf("Writing message size %d bytes equaling %d fragments to %s at %s", len(outData), fragments, conn.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+		var m int
+		var i int
+		size := len(outData)
+		for i < fragments {
+			start := i * MaxSize
+			var stop int
+			// if bytes remaining are less than max size, read until the end
+			if size < MaxSize {
+				stop = len(outData)
+			} else {
+				stop = (i + 1) * MaxSize
+			}
+			m, err = conn.Write(outData[start:stop])
+			cli.Message(cli.DEBUG, fmt.Sprintf("commands/link.Connect(): Wrote %d bytes to connection %s at %s", m, conn.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+			if err != nil {
+				results.Stderr = fmt.Sprintf("commands/link.Connect(): there was an error writing data to the UDP connection: %s", err)
+				return
+			}
+			i++
+			size = size - MaxSize
+			// UDP packets seemed to get dropped if too many are sent too fast
+			if fragments > 100 {
+				time.Sleep(time.Millisecond * 10)
+			}
 		}
 		// Wait for linked agent first checking message
 		cli.Message(cli.NOTE, fmt.Sprintf("Waiting to recieve UDP connection from %s at %s...", conn.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
