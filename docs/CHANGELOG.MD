@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 1.6.2 - 2023-03-08
+
+### Fixed
+
+- [Issue 22](https://github.com/Ne0nd0g/merlin-agent/issues/22) - Upgraded https://github.com/Ne0nd0g/merlin from v1.5.0 to v1.5.1
+
+### Security
+
+- [PR 23](https://github.com/Ne0nd0g/merlin-agent/pull/23) - Bump golang.org/x/net from 0.1.0 to 0.7.0 by dependabot
+
 ## 1.6.1 - 2023-03-01
 
 ### Fixed

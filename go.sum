@@ -5,8 +5,8 @@ github.com/C-Sto/BananaPhone v0.0.0-20220220002628-6585e5913761 h1:0144WWUvo86bV
 github.com/C-Sto/BananaPhone v0.0.0-20220220002628-6585e5913761/go.mod h1:QsEPWHZooj8uXL2YEdpQX+hDr00Plw7myenTiduBHRA=
 github.com/Ne0nd0g/go-clr v1.0.3 h1:xt92wwuqY23ZSC7RuHD3mKu3K22Bk5NNbxI803vojK4=
 github.com/Ne0nd0g/go-clr v1.0.3/go.mod h1:TKYSQ/5xT25EvBUttAlUrzpR8yHuI0qTRK495I5xG/I=
-github.com/Ne0nd0g/merlin v1.5.0 h1:cuUrBNubcze2QwBcZ+s3k6SGx07iEAh6eNM8Ie3NNJI=
-github.com/Ne0nd0g/merlin v1.5.0/go.mod h1:iDxpCFVreL0Gco9Zs06hamq5YlUiE/OnaTIWOPNYCXM=
+github.com/Ne0nd0g/merlin v1.5.1 h1:LDymwSEWzT2F9e0stcRFIrLERMNzYTC+k9fb26tdURc=
+github.com/Ne0nd0g/merlin v1.5.1/go.mod h1:tBMkLNIK43tggHztuskIhRgt4boQvz/d7pWV93r4Qp4=
 github.com/andybalholm/brotli v1.0.4 h1:V7DdXeJtZscaqfNuAdSRuRFzuiKlHSC/Zh3zl9qY3JY=
 github.com/andybalholm/brotli v1.0.4/go.mod h1:fO7iG3H7G2nSZ7m0zPUDn85XEX2GTukHGRSepvi9Eig=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
