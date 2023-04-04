@@ -53,7 +53,7 @@ type CheckIn struct {
 	OS            string `json:"os"`                        // "os": "macOS 10.15", // os version - required
 	User          string `json:"user"`                      // "user": "its-a-feature", // username of current user - required
 	Host          string `json:"host"`                      // "host": "spooky.local", // hostname of the computer - required
-	PID           string `json:"pid"`                       // "pid": 4444, // pid of the current process - required
+	PID           int    `json:"pid"`                       // "pid": 4444, // pid of the current process - required
 	PayloadID     string `json:"uuid"`                      // "uuid": "payload uuid", //uuid of the payload - required
 	Arch          string `json:"architecture,omitempty"`    //  "architecture": "x64", // platform arch - optional
 	Domain        string `json:"domain,omitempty"`          // "domain": "test", // domain of the host - optional
