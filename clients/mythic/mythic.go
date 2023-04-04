@@ -274,7 +274,7 @@ func (client *Client) Initial(agent messages.AgentInfo) (messages.Base, error) {
 		OS:            agent.SysInfo.Platform,
 		User:          agent.SysInfo.UserName,
 		Host:          agent.SysInfo.HostName,
-		PID:           strconv.Itoa(agent.SysInfo.Pid),
+		PID:           agent.SysInfo.Pid,
 		PayloadID:     client.MythicID.String(), // Need to set now because it will be changed to tempUUID from RSA key exchange
 		Arch:          agent.SysInfo.Architecture,
 		Domain:        agent.SysInfo.Domain,

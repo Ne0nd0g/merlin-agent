@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 1.6.3 - 2023-03-15
+
+### Fixed
+
+- [Issue 25](https://github.com/Ne0nd0g/merlin-agent/issues/25) - Updated Mythic CheckIn structure's PID to integer
+
 ## 1.6.2 - 2023-03-08
 
 ### Fixed
