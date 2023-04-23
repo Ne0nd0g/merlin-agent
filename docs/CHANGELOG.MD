@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Upgraded [quic-go](https://github.com/quic-go/quic-go) to v0.34.0
 - Minimum supported Go version is now 1.19
 - Added support for Go version 1.20
+- HTTP URL rotation strategy is now random instead of round-robin
 
 ## 1.5.0 - 2022-07-22
 

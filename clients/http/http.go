@@ -418,17 +418,26 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		req.Header.Set(header, value)
 	}
 
-	// Rotate URL
-	if client.currentURL < (len(client.URL) - 1) {
-		client.currentURL++
-	} else {
-		client.currentURL = 0
-	}
-
 	// Send the request
-	cli.Message(cli.DEBUG, fmt.Sprintf("Sending POST request size: %d to: %s", req.ContentLength, client.URL))
+	cli.Message(cli.DEBUG, fmt.Sprintf("Sending POST request size: %d to: %s", req.ContentLength, client.URL[client.currentURL]))
 	cli.Message(cli.DEBUG, fmt.Sprintf("HTTP Request:\r\n%+v", req))
 	resp, err := client.Client.Do(req)
+
+	// Must rotate URL before error check to keep the URL from getting stuck on the same server
+	if client.Authenticator.String() == "OPAQUE" && len(client.secret) != 64 {
+		// Don't rotate URL until OPAQUE registration/authentication is complete
+		// AES PSK is 32-bytes but OPAQUE PSK is 64-bytes
+		// Don't do anything
+	} else if len(client.URL) > 1 {
+		// Randomly rotate URL for the NEXT request
+		client.currentURL = rand.Intn(len(client.URL))
+
+		// Sequentially rotate URL for the NEXT request
+		//if client.currentURL < (len(client.URL) - 1) {
+		//	client.currentURL++
+		//}
+		cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Send(): Rotating URL to: %s", client.URL[client.currentURL]))
+	}
 
 	if err != nil {
 		// Handle HTTP3 Errors
@@ -477,8 +486,6 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		break
 	case 401:
 		cli.Message(cli.NOTE, "Server returned a 401, re-registering and re-authenticating this orphaned agent")
-		//returnMessage, err = client.Auth("opaque", true)
-		//returnMessages = append(returnMessages, returnMessage)
 		base := messages.Base{
 			ID:      client.AgentID,
 			Type:    messages.OPAQUE,

