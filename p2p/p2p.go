@@ -44,6 +44,11 @@ const (
 	// MaxSizeUDP is the maximum size of a UDP fragment
 	// http://ithare.com/udp-from-mog-perspective/
 	MaxSizeUDP = 1450
+	// MaxSizeSMB is the maximum size of an SMB fragment
+	// The WriteFileEx Windows API function says:
+	// "Pipe write operations across a network are limited to 65,535 bytes per write"
+	// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefileex
+	MaxSizeSMB = 65535
 )
 
 // Link holds information about peer-to-peer linked agents

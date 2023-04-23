@@ -21,6 +21,8 @@ github.com/Ne0nd0g/ja3transport v0.0.0-20200203013218-e81e31892d84 h1:CxXYecCuU2
 github.com/Ne0nd0g/ja3transport v0.0.0-20200203013218-e81e31892d84/go.mod h1:wxn6ch+dbwLI8e+ndsotd9vb+Txzk5JM0OTdzMNq1K0=
 github.com/Ne0nd0g/npipe v0.0.0-20230125181239-59953cb2dbe0 h1:BrtuiU4kMY5rGfvWUYk9IiFMqcxfeAKJAivY1VjR9Kg=
 github.com/Ne0nd0g/npipe v0.0.0-20230125181239-59953cb2dbe0/go.mod h1:yMDz65ohae2n3m/p+mH+Kl3DGbIfpIDvdI7Fp1f5ssY=
+github.com/Ne0nd0g/npipe v1.1.0 h1:oTDJfD8yrr2BLGZpKEllCmeGpcbmx6LW1uuS2bxIBoM=
+github.com/Ne0nd0g/npipe v1.1.0/go.mod h1:GKyLKRkYambQuI9VIfMrz1Mf5hOGlEvZkhw1chph/IQ=
 github.com/anmitsu/go-shlex v0.0.0-20161002113705-648efa622239/go.mod h1:2FmKhYUyUczH0OGQWaF5ceTx0UBShxjsH6f8oGKYe2c=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
@@ -283,8 +285,8 @@ golang.org/x/sys v0.0.0-20210927094055-39ccf1dd6fa6/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.0.0-20220330033206-e17cdc41300f/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220412211240-33da011f77ad/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.4.0 h1:Zr2JFtRQNX3BCZ8YtxRE9hNJYC8J6I1MVbMg6owUp18=
-golang.org/x/sys v0.4.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.7.0 h1:3jlCCIQZPdOYu1h8BkNvLz8Kgwtae2cagcG/VamtZRU=
+golang.org/x/sys v0.7.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 h1:JGgROgKl9N8DuW20oFS5gxc+lE67/N3FcwmBPMe7ArY=
 golang.org/x/term v0.0.0-20210927222741-03fcf44c2211/go.mod h1:jbD1KX2456YbFQfuXm/mYQcufACuNUgVhRMnK/tPxf8=

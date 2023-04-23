@@ -136,7 +136,31 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 		var n int
 
 		switch link.Type() {
-		case p2p.TCPBIND, p2p.TCPREVERSE, p2p.SMBBIND, p2p.SMBREVERSE:
+		case p2p.SMBBIND, p2p.SMBREVERSE:
+			// Split into fragments of MaxSize
+			fragments := int(math.Ceil(float64(len(delegate.Payload)) / float64(p2p.MaxSizeSMB)))
+			cli.Message(cli.DEBUG, fmt.Sprintf("services/p2p.Handle(): SMB data size is: %d, max SMB fragment size is %d, creating %d fragments", len(delegate.Payload), p2p.MaxSizeSMB, fragments))
+			var i int
+			size := len(delegate.Payload)
+			for i < fragments {
+				start := i * p2p.MaxSizeSMB
+				var stop int
+				// if bytes remaining are less than max size, read until the end
+				if size < p2p.MaxSizeSMB {
+					stop = len(delegate.Payload)
+				} else {
+					stop = (i + 1) * p2p.MaxSizeSMB
+				}
+				n, err = link.Conn().(net.Conn).Write(delegate.Payload[start:stop])
+				if err != nil {
+					cli.Message(cli.WARN, fmt.Sprintf("services/p2p.Handle(): there was an error writing a message to the linked agent %s: %s\n", link.Conn().(net.Conn).RemoteAddr(), err))
+					break
+				}
+				cli.Message(cli.DEBUG, fmt.Sprintf("services/p2p.Handle(): Wrote SMB fragment %d of %d", i+1, fragments))
+				i++
+				size = size - p2p.MaxSizeSMB
+			}
+		case p2p.TCPBIND, p2p.TCPREVERSE:
 			n, err = link.Conn().(net.Conn).Write(delegate.Payload)
 			cli.Message(cli.DEBUG, fmt.Sprintf("services/p2p.Handle(): Wrote %d bytes to the linked agent %s at %s at %s\n", n, delegate.Agent, link.Remote(), time.Now().UTC().Format(time.RFC3339)))
 		case p2p.UDPBIND, p2p.UDPREVERSE:

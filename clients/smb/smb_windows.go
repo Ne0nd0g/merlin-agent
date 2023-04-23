@@ -28,6 +28,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
+	"math"
 	"math/rand"
 	"net"
 	"strconv"
@@ -65,6 +66,14 @@ import (
 const (
 	BIND    = 0
 	REVERSE = 1
+)
+
+const (
+	// MaxSize is the maximum size of an SMB fragment
+	// The WriteFileEx Windows API function says:
+	// "Pipe write operations across a network are limited to 65,535 bytes per write"
+	// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefileex
+	MaxSize = 65535
 )
 
 // Client is a type of MerlinClient that is used to send and receive Merlin messages from the Merlin server
@@ -327,17 +336,17 @@ func (client *Client) Connect() (err error) {
 				InheritHandle:      1,
 			}
 
-			mode := windows.PIPE_ACCESS_DUPLEX | windows.FILE_FLAG_OVERLAPPED | windows.FILE_FLAG_FIRST_PIPE_INSTANCE
-			client.listener, err = npipe.NewPipeListener(client.address, uint32(mode), windows.PIPE_TYPE_BYTE, windows.PIPE_UNLIMITED_INSTANCES, 512, 512, 0, &sa)
+			openMode := windows.PIPE_ACCESS_DUPLEX | windows.FILE_FLAG_OVERLAPPED | windows.FILE_FLAG_FIRST_PIPE_INSTANCE
+			pipeMode := windows.PIPE_TYPE_BYTE | windows.PIPE_READMODE_BYTE | windows.PIPE_WAIT // Effectively equals 0 and could just specify the first flag
+			client.listener, err = npipe.NewPipeListener(client.address, uint32(openMode), uint32(pipeMode), windows.PIPE_UNLIMITED_INSTANCES, 512, 512, 0, &sa)
 			if err != nil {
 				// Try again without FILE_FLAG_FIRST_PIPE_INSTANCE
-				mode = windows.PIPE_ACCESS_DUPLEX | windows.FILE_FLAG_OVERLAPPED
-				client.listener, err = npipe.NewPipeListener(client.address, uint32(mode), windows.PIPE_TYPE_BYTE, windows.PIPE_UNLIMITED_INSTANCES, 512, 512, 0, &sa)
+				openMode = windows.PIPE_ACCESS_DUPLEX | windows.FILE_FLAG_OVERLAPPED
+				client.listener, err = npipe.NewPipeListener(client.address, uint32(openMode), uint32(pipeMode), windows.PIPE_UNLIMITED_INSTANCES, 512, 512, 0, &sa)
 				if err != nil {
 					return fmt.Errorf("clients/smb.Connect(): there was an error listening on %s: %s", client.address, err)
 				}
 			}
-
 			cli.Message(cli.NOTE, fmt.Sprintf("Started %s on %s", client, client.address))
 		}
 
@@ -563,14 +572,31 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 
 	// Write the message
 	cli.Message(cli.DEBUG, fmt.Sprintf("Writing message size: %d to: %s", delegateBytes.Len(), client.connection.RemoteAddr()))
-	n, err := client.connection.Write(outData)
-	if err != nil {
-		err = fmt.Errorf("there was an error writing the message to the connection with %s: %s", client.connection.RemoteAddr(), err)
-		return
+
+	// Split into fragments of MaxSize
+	fragments := int(math.Ceil(float64(len(outData)) / float64(MaxSize)))
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/smb.Send(): SMB data size is: %d, max SMB fragment size is %d, creating %d fragments", len(outData), MaxSize, fragments))
+	var i int
+	size := len(outData)
+	for i < fragments {
+		start := i * MaxSize
+		var stop int
+		// if bytes remaining are less than max size, read until the end
+		if size < MaxSize {
+			stop = len(outData)
+		} else {
+			stop = (i + 1) * MaxSize
+		}
+		var n int
+		n, err = client.connection.Write(outData[start:stop])
+		if err != nil {
+			err = fmt.Errorf("client/smb.Send(): there was an error writing SMB fragment %d of %d to the connection with %s: %s", i, fragments, client.connection.RemoteAddr(), err)
+			return
+		}
+		cli.Message(cli.DEBUG, fmt.Sprintf("client/smb.Send(): Wrote %d bytes, SMB fragment %d of %d, to %s", n, i+1, fragments, client.connection.RemoteAddr()))
+		i++
+		size = size - MaxSize
 	}
-
-	cli.Message(cli.DEBUG, fmt.Sprintf("Wrote %d bytes to connection %s", n, client.connection.RemoteAddr()))
-
 	return
 }
 
