@@ -71,12 +71,17 @@ func New(config Config) (agent Agent, err error) {
 		Platform:     runtime.GOOS,
 	}
 
-	// Integrity Level
+	agent.process = Process{
+		ID: os.Getpid(),
+	}
+
+	// Process integrity Level
 	agent.process.Integrity, err = merlinOS.GetIntegrityLevel()
 	if err != nil {
 		cli.Message(cli.DEBUG, fmt.Sprintf("there was an error determining the agent's integrity level: %s", err))
 	}
 
+	// Process username and User GUID
 	var u *user.User
 	u, err = user.Current()
 	if err != nil {
@@ -86,15 +91,16 @@ func New(config Config) (agent Agent, err error) {
 	agent.process.UserName = u.Username
 	agent.process.UserGUID = u.Gid
 
-	agent.host.Name, err = os.Hostname()
-	if err != nil {
-		err = fmt.Errorf("there was an error getting the hostname: %s", err)
-		return
-	}
-
+	// Process Name
 	agent.process.Name, err = os.Executable()
 	if err != nil {
 		err = fmt.Errorf("there was an error getting the process name: %s", err)
+		return
+	}
+
+	agent.host.Name, err = os.Hostname()
+	if err != nil {
+		err = fmt.Errorf("there was an error getting the hostname: %s", err)
 		return
 	}
 
@@ -166,14 +172,14 @@ func New(config Config) (agent Agent, err error) {
 
 	cli.Message(cli.INFO, "Host Information:")
 	cli.Message(cli.INFO, fmt.Sprintf("\tAgent UUID: %s", agent.id))
+	cli.Message(cli.INFO, fmt.Sprintf("\tHostname: %s", agent.host.Name))
 	cli.Message(cli.INFO, fmt.Sprintf("\tPlatform: %s", agent.host.Platform))
 	cli.Message(cli.INFO, fmt.Sprintf("\tArchitecture: %s", agent.host.Architecture))
-	cli.Message(cli.INFO, fmt.Sprintf("\tUser Name: %s", agent.process.UserName)) //TODO A username like _svctestaccont causes error
+	cli.Message(cli.INFO, fmt.Sprintf("\tPID: %d", agent.process.ID))
+	cli.Message(cli.INFO, fmt.Sprintf("\tProcess: %s", agent.process.Name))
+	cli.Message(cli.INFO, fmt.Sprintf("\tUser Name: %s", agent.process.UserName))
 	cli.Message(cli.INFO, fmt.Sprintf("\tUser GUID: %s", agent.process.UserGUID))
 	cli.Message(cli.INFO, fmt.Sprintf("\tIntegrity Level: %d", agent.process.Integrity))
-	cli.Message(cli.INFO, fmt.Sprintf("\tHostname: %s", agent.host.Name))
-	cli.Message(cli.INFO, fmt.Sprintf("\tProcess: %s", agent.process.Name))
-	cli.Message(cli.INFO, fmt.Sprintf("\tPID: %d", agent.process.ID))
 	cli.Message(cli.INFO, fmt.Sprintf("\tIPs: %v", agent.host.IPs))
 	cli.Message(cli.DEBUG, "Leaving agent.New function")
 
