@@ -65,13 +65,16 @@ type Client struct {
 	address       string                       // address is the network interface and port the agent will bind to
 	agentID       uuid.UUID                    // agentID the Agent's UUID
 	authenticated bool                         // authenticated tracks if the Agent has successfully authenticated
+	authComplete  chan bool                    // authComplete is a channel that is used to block sending messages until the Agent has successfully completed authenticated
 	authenticator authenticators.Authenticator // authenticator the method the Agent will use to authenticate to the server
+	connected     chan bool                    // connected is a channel that is used to track if the Agent is connected to a Parent
 	connection    net.Conn                     // connection the network socket connection used to handle traffic
 	listener      net.Listener                 // listener the network socket connection listening for traffic
 	listenerID    uuid.UUID                    // listenerID the UUID of the listener that this Agent is configured to communicate with
 	paddingMax    int                          // paddingMax the maximum amount of random padding to apply to every Base message
 	psk           string                       // psk the pre-shared key used for encrypting messages until authentication is complete
 	secret        []byte                       // secret the key used to encrypt messages
+	sending       bool                         // sending is a flag that is used to track if the Agent is currently sending a message
 	transformers  []transformer.Transformer    // Transformers an ordered list of transforms (encoding/encryption) to apply when constructing a message
 	mode          int                          // mode the type of client or communication mode (e.g., BIND or REVERSE)
 	sync.Mutex                                 // used to lock the Client when changes are being made by one function or routine
@@ -91,9 +94,11 @@ type Config struct {
 
 // New instantiates and returns a Client that is constructed from the passed in Config
 func New(config Config) (*Client, error) {
-	cli.Message(cli.DEBUG, "Entering into client/tcp.New()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Config: %+v", config))
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.New() entering into function with config: %+v", config))
+
 	client := Client{}
+	client.authComplete = make(chan bool, 1)
+	client.connected = make(chan bool, 1)
 	if config.AgentID == uuid.Nil {
 		return nil, fmt.Errorf("clients/p2p/tcp.New(): a nil Agent UUID was provided")
 	}
@@ -196,28 +201,39 @@ func New(config Config) (*Client, error) {
 }
 
 // Initial executes the specific steps required to establish a connection with the C2 server and checkin or register an agent
-func (client *Client) Initial() error {
+func (client *Client) Initial() (err error) {
 	cli.Message(cli.DEBUG, "clients/tcp.Initial(): entering into function")
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Initial(): leaving function with error: %+v", err))
 
-	err := client.Connect()
+	err = client.Connect()
 	if err != nil {
-		return fmt.Errorf("clients/tcp.Initial(): %s", err)
+		err = fmt.Errorf("clients/tcp.Initial(): %s", err)
+		return
 	}
+	<-client.connected
 
 	// Authenticate
 	err = client.Authenticate(messages.Base{})
-	cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Initial(): leaving function with %s", err))
-	return err
+	return
 }
 
 // Authenticate is the top-level function used to authenticate an agent to server using a specific authentication protocol
 // The function must take in a Base message for when the C2 server requests re-authentication through a message
 func (client *Client) Authenticate(msg messages.Base) (err error) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Authenticate(): entering into function with message: %+v", msg))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Authenticate(): leaving function with error: %+v", err))
+	client.Lock()
+	client.authenticated = false
+	client.Unlock()
+	if len(client.authComplete) > 0 {
+		<-client.authComplete
+	}
 	var authenticated bool
 	// Reset the Agent's PSK
 	k := sha256.Sum256([]byte(client.psk))
+	client.Lock()
 	client.secret = k[:]
+	client.Unlock()
 
 	// Repeat until authenticator is complete and Agent is authenticated
 	for {
@@ -225,10 +241,16 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 		if err != nil {
 			return
 		}
+		// An empty message was received indicating to exit the function
+		if msg.Type == 0 {
+			return
+		}
 
 		// Once authenticated, update the client's secret used to encrypt messages
 		if authenticated {
+			client.Lock()
 			client.authenticated = true
+			client.Unlock()
 			var key []byte
 			key, err = client.authenticator.Secret()
 			if err != nil {
@@ -236,7 +258,9 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 			}
 			// Don't update the secret if the authenticator returned an empty key
 			if len(key) > 0 {
+				client.Lock()
 				client.secret = key
+				client.Unlock()
 			}
 		}
 
@@ -264,6 +288,7 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 
 		// If the Agent is authenticated, exit the loop and return the function
 		if authenticated {
+			client.authComplete <- true
 			return
 		}
 	}
@@ -272,9 +297,16 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 // Connect establish a connection with the remote host depending on the Client's type (e.g., BIND or REVERSE)
 func (client *Client) Connect() (err error) {
 	cli.Message(cli.DEBUG, "clients/tcp.Connect(): entering into function")
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Connect(): leaving function with error %+v", err))
+
+	// Ensure the connected channel is empty. If the Agent's sleep is less than 0, the channel might be full from a prior reconnect
+	if len(client.connected) > 0 {
+		<-client.connected
+	}
+
 	client.Lock()
 	defer client.Unlock()
-	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Connect(): leaving function with error %s", err))
+
 	// Check to see if the connection was restored by a different call stack
 	if client.connection != nil {
 		return nil
@@ -290,16 +322,18 @@ func (client *Client) Connect() (err error) {
 		}
 
 		// Listen for initial connection from upstream agent
-		cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming connection..."))
+		cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming connection at %s...", time.Now().UTC().Format(time.RFC3339)))
 		client.connection, err = client.listener.Accept()
 		if err != nil {
 			return fmt.Errorf("clients/tcp.Connect(): there was an error accepting the connection: %s", err)
 		}
 		cli.Message(cli.NOTE, fmt.Sprintf("Received new connection from %s", client.connection.RemoteAddr()))
-		// Send gratuitous checkin to provide parent Agent with linked agent data
+		// When an Agent previously authenticated, has a sleep less than 0, and has been unlinked, it will send an IDLE message to the server when a new link is established
 		if client.authenticated {
+			cli.Message(cli.NOTE, fmt.Sprintf("Sending gratuitious StatusCheckIn at %s...", time.Now().UTC().Format(time.RFC3339)))
 			_, err = client.Send(messages.Base{ID: client.agentID, Type: messages.CHECKIN})
 		}
+		client.connected <- true
 		return err
 	case REVERSE:
 		client.connection, err = net.Dial("tcp", client.address)
@@ -307,6 +341,7 @@ func (client *Client) Connect() (err error) {
 			return fmt.Errorf("clients/tcp.Connect(): there was an error connecting to %s: %s", client.address, err)
 		}
 		cli.Message(cli.NOTE, fmt.Sprintf("Successfully connected to %s", client.address))
+		client.connected <- true
 		return nil
 	default:
 		return fmt.Errorf("clients/tcp.Connect(): Unhandled Client mode %d", client.mode)
@@ -368,15 +403,34 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 // Listen waits for incoming data on an established TCP connection, deconstructs the data into a Base messages, and returns them
 func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 	cli.Message(cli.DEBUG, "clients/tcp.Listen(): entering into function")
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Listen(): leaving function with error %+v and return messages: %+v", err, returnMessages))
+
 	// Repair broken connections
 	if client.connection == nil {
-		cli.Message(cli.NOTE, fmt.Sprintf("Client connection was empty. Waiting for an incoming connection..."))
-		err = client.Connect()
-		if err != nil {
-			err = fmt.Errorf("clients/tcp.Listen(): %s", err)
+		switch client.mode {
+		case BIND:
+			// If the connection is empty and this is a BIND agent, wait for connection from Parent Agent
+			cli.Message(cli.NOTE, fmt.Sprintf("Client connection was empty. Re-establishing connection at %s...", time.Now().UTC().Format(time.RFC3339)))
+			err = client.Connect()
+			if err != nil {
+				err = fmt.Errorf("clients/tcp.Listen(): %s", err)
+				return
+			}
+		case REVERSE:
+			if !client.sending {
+				// If the Agent's sleep is 0, which isn't known in this package, then there will never be a message to send and this will cause a deadlock
+				// Return a message so that there is a message to send, forcing the communication
+				client.Lock()
+				client.sending = true
+				client.Unlock()
+				cli.Message(cli.NOTE, fmt.Sprintf("Client connection was empty and sending signal is false, returning gratuitious StatusCheckIn messages at %s", time.Now().UTC().Format(time.RFC3339)))
+				return []messages.Base{messages.Base{ID: client.agentID, Type: messages.CHECKIN}}, nil
+			} else {
+				// If the connection is empty and this is a REVERSE agent, wait here until the connection is established
+				cli.Message(cli.INFO, fmt.Sprintf("Waiting for a client connection before listening for messages at %s", time.Now().UTC().Format(time.RFC3339)))
+				<-client.connected
+			}
 		}
-		// Return now so that failed checkin counter returns to 0
-		return
 	}
 
 	// Wait for the response
@@ -393,7 +447,8 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 		cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Listen(): Read %d bytes from connection %s at %s", n, client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 		if err != nil {
 			if err == io.EOF {
-				err = fmt.Errorf("clients/tcp.Listen(): received EOF from %s, the Agent's connection has been reset", client.connection.RemoteAddr())
+				cli.Message(cli.WARN, fmt.Sprintf("clients/tcp.Listen(): received EOF from %s, the Agent's connection has been reset", client.connection.RemoteAddr()))
+				err = nil
 				client.connection = nil
 				return
 			}
@@ -460,7 +515,42 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 // Send takes in a Merlin message structure, performs any encoding or encryption, converts it to a delegate and writes it to the output stream.
 // This function DOES not wait or listen for response messages.
 func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err error) {
-	cli.Message(cli.DEBUG, fmt.Sprintf("client/tcp.Send(): entering into function with Base message: %+v", m))
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Send(): entering into function with Base message: %+v", m))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Send(): leaving function with error: %v and returnMessages: %+v", err, returnMessages))
+
+	// Recover connection
+	if client.connection == nil {
+		switch client.mode {
+		case BIND:
+			// If the connection is empty and this is a BIND agent, wait here for listener to receive a connection
+			cli.Message(cli.NOTE, fmt.Sprintf("Waiting for a client connection before sending message at %s", time.Now().UTC().Format(time.RFC3339)))
+			<-client.connected
+		case REVERSE:
+			// Signal to the listen() function that we are attempting to recover the connection
+			client.Lock()
+			client.sending = true
+			client.Unlock()
+			// If the connection is empty and this is a REVERSE agent, attempt to connect to the listener
+			cli.Message(cli.NOTE, fmt.Sprintf("Client connection was empty. Re-establishing connection at %s...", time.Now().UTC().Format(time.RFC3339)))
+			err = client.Connect()
+			if err != nil {
+				err = fmt.Errorf("clients/tcp.Send(): %s", err)
+				return
+			}
+			// Once the connection has successfully been recovered, and a message has been sent, reset the sending signal for the listen() function
+			defer func() {
+				client.Lock()
+				client.sending = false
+				client.Unlock()
+			}()
+		}
+	}
+
+	if !client.authenticated && m.Type != messages.OPAQUE {
+		cli.Message(cli.INFO, fmt.Sprintf("Waiting for authentication to complete before sending message at %s", time.Now().UTC().Format(time.RFC3339)))
+		<-client.authComplete
+		cli.Message(cli.INFO, fmt.Sprintf("Authentication completed, continuing with sending held message at %s", time.Now().UTC().Format(time.RFC3339)))
+	}
 
 	// Set the message padding
 	if client.paddingMax > 0 {
@@ -489,15 +579,6 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		return
 	}
 
-	// Repair broken connections
-	if client.connection == nil {
-		cli.Message(cli.NOTE, fmt.Sprintf("Client connection was empty. Waiting for an incoming connection..."))
-		err = client.Connect()
-		if err != nil {
-			err = fmt.Errorf("clients/tcp.Send(): %s", err)
-			return
-		}
-	}
 	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s at %s", messages.String(m.Type), client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 
 	// Add in Tag/Type and Length for TLV
@@ -519,7 +600,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		return
 	}
 
-	cli.Message(cli.DEBUG, fmt.Sprintf("Wrote %d bytes to connection %s", n, client.connection.RemoteAddr()))
+	cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to connection %s", n, client.connection.RemoteAddr()))
 
 	return
 }

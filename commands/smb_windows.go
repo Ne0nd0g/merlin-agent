@@ -125,12 +125,12 @@ func ConnectSMB(host, pipe string) (results jobs.Results) {
 	}
 
 	// Store LinkedAgent
-	link := p2p.NewLink(msg.Agent, conn, p2p.SMBBIND, conn.RemoteAddr())
+	link := p2p.NewLink(msg.Agent, msg.Listener, conn, p2p.SMBBIND, conn.RemoteAddr())
 	peerToPeerService.AddLink(link)
 
 	peerToPeerService.AddDelegate(msg)
 
-	results.Stdout = fmt.Sprintf("Successfully connected to %s at %s", msg.Agent, address)
+	results.Stdout = fmt.Sprintf("Successfully connected to %s Agent %s at %s", link.String(), msg.Agent, address)
 
 	// The listen function is in commands/listen.go
 	go listen(conn, p2p.SMBBIND)

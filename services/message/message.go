@@ -48,7 +48,7 @@ type Service struct {
 var memoryService *Service
 
 // out is a channel of outgoing Base messages for the agent to send back to the server
-var out = make(chan messages.Base, 10)
+var out = make(chan messages.Base, 100)
 
 // NewMessageService is the factory to create a new service for handling base messages
 func NewMessageService(agent uuid.UUID) *Service {
@@ -146,6 +146,9 @@ func (s *Service) Handle(msg messages.Base) (err error) {
 			s.JobService.AddResult(s.Agent, "", err.Error())
 			return
 		}
+	case messages.CHECKIN:
+		// Used when the Agent needs to force a checkin with the server by creating and sending a Checkin message
+		out <- msg
 	default:
 		stdErr := fmt.Sprintf("%s is not a valid message type", messages.String(msg.Type))
 		s.JobService.AddResult(s.Agent, "", stdErr)
@@ -159,4 +162,12 @@ func (s *Service) Handle(msg messages.Base) (err error) {
 
 	cli.Message(cli.DEBUG, "services/messages.Handle(): Leaving function...")
 	return
+}
+
+// Store adds a Base message to the out channel to be sent back to the Merlin server
+// Used when there is an error sending a message, and it needs to be preserved
+func (s *Service) Store(msg messages.Base) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("services/messages.Store(): Entering into function with: %+v", msg))
+	defer cli.Message(cli.DEBUG, "services/messages.Store(): Leaving function...")
+	out <- msg
 }

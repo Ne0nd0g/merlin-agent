@@ -19,10 +19,12 @@
 package client
 
 import (
+	"fmt"
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/clients"
 	"github.com/Ne0nd0g/merlin-agent/clients/memory"
 	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"strings"
 )
 
 // Service is the structure used to interact with Client objects
@@ -74,6 +76,19 @@ func (s *Service) Listen() ([]messages.Base, error) {
 	return s.ClientRepo.Get().Listen()
 }
 
+// Reset resets the client's listener to its initial state to allow for a new connection
+func (s *Service) Reset() (err error) {
+	client := s.ClientRepo.Get()
+	proto := client.Get("protocol")
+	switch strings.ToLower(proto) {
+	case "udp-bind":
+		err = client.Set("bind", "")
+	default:
+		err = fmt.Errorf("services/client.Reset(): protocol %s not supported", proto)
+	}
+	return
+}
+
 // Send takes in a Base message and uses the Agent's Client to send it to the Merlin server or parent Agent
 func (s *Service) Send(msg messages.Base) ([]messages.Base, error) {
 	return s.ClientRepo.Get().Send(msg)
@@ -94,7 +109,7 @@ func (s *Service) SetPadding(padding string) error {
 	return s.ClientRepo.SetPadding(padding)
 }
 
-// Synchronous returns if the client if the client doesn't sleep (synchronous) or if it does sleep (asynchronous)
+// Synchronous returns if the client doesn't sleep (synchronous) or if it does sleep (asynchronous)
 func (s *Service) Synchronous() bool {
 	return s.ClientRepo.Get().Synchronous()
 }

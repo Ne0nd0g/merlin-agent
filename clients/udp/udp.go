@@ -31,6 +31,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	// 3rd Party
@@ -38,7 +39,6 @@ import (
 
 	// Merlin
 	"github.com/Ne0nd0g/merlin/pkg/messages"
-
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/authenticators"
 	"github.com/Ne0nd0g/merlin-agent/authenticators/none"
@@ -70,9 +70,11 @@ const (
 type Client struct {
 	address       string                       // address is the network interface and port the agent will bind to
 	agentID       uuid.UUID                    // agentID the Agent's UUID
+	authComplete  chan bool                    // authComplete is a channel that is used to block sending messages until the Agent has successfully completed authenticated
 	authenticated bool                         // authenticated tracks if the Agent has successfully authenticated
 	authenticator authenticators.Authenticator // authenticator the method the Agent will use to authenticate to the server
 	client        net.Addr                     // client is the address of the UDP client that initiated the connection, returned from PacketConn.ReadFrom
+	connected     chan bool                    // connected is a channel that is used to track if the Agent is connected to a Parent
 	connection    net.Conn                     // connection the network socket connection used to handle traffic
 	listener      net.PacketConn               // listener the network socket connection listening for traffic
 	listenerID    uuid.UUID                    // listenerID the UUID of the listener that this Agent is configured to communicate with
@@ -81,6 +83,7 @@ type Client struct {
 	secret        []byte                       // secret the key used to encrypt messages
 	transformers  []transformer.Transformer    // Transformers an ordered list of transforms (encoding/encryption) to apply when constructing a message
 	mode          int                          // mode the type of client or communication mode (e.g., BIND or REVERSE)
+	sync.Mutex                                 // used to lock the Client when changes are being made by one function or routine
 }
 
 // Config is a structure that is used to pass in all necessary information to instantiate a new Client
@@ -100,6 +103,8 @@ func New(config Config) (*Client, error) {
 	cli.Message(cli.DEBUG, "Entering into clients/udp.New()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Config: %+v", config))
 	client := Client{}
+	client.authComplete = make(chan bool, 1)
+	client.connected = make(chan bool, 1)
 	if config.AgentID == uuid.Nil {
 		return nil, fmt.Errorf("clients/udp.New(): a nil Agent UUID was provided")
 	}
@@ -202,27 +207,39 @@ func New(config Config) (*Client, error) {
 }
 
 // Initial executes the specific steps required to establish a connection with the C2 server and checkin or register an agent
-func (client *Client) Initial() error {
-	cli.Message(cli.DEBUG, "Entering clients/udp.Initial() function")
+func (client *Client) Initial() (err error) {
+	cli.Message(cli.DEBUG, "clients/upd.Initial(): entering clients/udp.Initial() function")
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/upd.Initial(): exiting function with error: %+v", err))
 
-	err := client.Connect()
+	err = client.Connect()
 	if err != nil {
 		return fmt.Errorf("clients/udp.Initial(): %s", err)
 	}
+	<-client.connected
 
 	// Authenticate
-	err = client.Authenticate(messages.Base{})
-	return err
+	return client.Authenticate(messages.Base{})
 }
 
 // Authenticate is the top-level function used to authenticate an agent to server using a specific authentication protocol
 // The function must take in a Base message for when the C2 server requests re-authentication through a message
 func (client *Client) Authenticate(msg messages.Base) (err error) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Authenticate(): entering into function with message: %+v", msg))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Authenticate(): leaving function with error: %+v", err))
+
+	client.Lock()
+	client.authenticated = false
+	client.Unlock()
+	if len(client.authComplete) > 0 {
+		<-client.authComplete
+	}
+
 	var authenticated bool
 	// Reset the Agent's PSK
 	k := sha256.Sum256([]byte(client.psk))
+	client.Lock()
 	client.secret = k[:]
+	client.Unlock()
 
 	// Repeat until authenticator is complete and Agent is authenticated
 	for {
@@ -230,10 +247,16 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 		if err != nil {
 			return
 		}
+		// An empty message was received indicating to exit the function
+		if msg.Type == 0 {
+			return
+		}
 
 		// Once authenticated, update the client's secret used to encrypt messages
 		if authenticated {
+			client.Lock()
 			client.authenticated = true
+			client.Unlock()
 			var key []byte
 			key, err = client.authenticator.Secret()
 			if err != nil {
@@ -241,7 +264,9 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 			}
 			// Don't update the secret if the authenticator returned an empty key
 			if len(key) > 0 {
+				client.Lock()
 				client.secret = key
+				client.Unlock()
 			}
 		}
 
@@ -269,6 +294,7 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 
 		// If the Agent is authenticated, exit the loop and return the function
 		if authenticated {
+			client.authComplete <- true
 			return
 		}
 	}
@@ -276,33 +302,55 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 
 // Connect establish a connection with the remote host depending on the Client's type (e.g., BIND or REVERSE)
 func (client *Client) Connect() (err error) {
+	cli.Message(cli.DEBUG, "Entering clients/udp.Connect() function")
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/upd.Connect(): exiting function with error: %+v", err))
+
+	// Ensure the connected channel is empty. If the Agent's sleep is less than 0, the channel might be full from a prior reconnect
+	if len(client.connected) > 0 {
+		<-client.connected
+	}
+
 	switch client.mode {
 	case BIND:
 		// Will hit this if connection was lost during initialization steps because a Listener will already exist
 		if client.listener == nil {
 			client.listener, err = net.ListenPacket("udp", client.address)
 			if err != nil {
-				return fmt.Errorf("clients/udp.Connect(): there was an error listening on %s: %s", client.address, err)
+				err = fmt.Errorf("clients/udp.Connect(): there was an error listening on %s: %s", client.address, err)
+				return
 			}
 			cli.Message(cli.NOTE, fmt.Sprintf("Started %s listener on %s", client, client.address))
 		}
 		var n int
 		buffer := make([]byte, 4096)
-		cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming connection..."))
+		cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming connection at %s...", time.Now().UTC().Format(time.RFC3339)))
 		// First connection is junk data to establish a connection but otherwise has no value or meaning and can be discarded
 		n, client.client, err = client.listener.ReadFrom(buffer)
-		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from %s", n, client.client))
+		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
 		if err != nil {
-			return fmt.Errorf("clients/udp.Connect(): there was an error reading data from %s : %s", client.client, err)
+			err = fmt.Errorf("clients/udp.Connect(): there was an error reading data from %s : %s", client.client, err)
+			return
+		}
+		client.connected <- true
+		// When an Agent previously authenticated, has a sleep less than 0, and has been unlinked, it will send an IDLE message to the server when a new link is established
+		if client.authenticated {
+			cli.Message(cli.NOTE, fmt.Sprintf("Sending gratuitious StatusCheckIn at %s...", time.Now().UTC().Format(time.RFC3339)))
+			_, err = client.Send(messages.Base{ID: client.agentID, Type: messages.CHECKIN})
+			if err != nil {
+				err = fmt.Errorf("clients/udp.Listen(): %s", err)
+				return
+			}
 		}
 		return
 	case REVERSE:
 		client.connection, err = net.Dial("udp", client.address)
 		if err != nil {
-			return fmt.Errorf("clients/udp.Connect(): there was an error connecting to %s: %s", client.address, err)
+			err = fmt.Errorf("clients/udp.Connect(): there was an error connecting to %s: %s", client.address, err)
+			return
 		}
 		client.client = client.connection.RemoteAddr()
-		cli.Message(cli.NOTE, fmt.Sprintf("successfully connected to %s", client.address))
+		cli.Message(cli.NOTE, fmt.Sprintf("Successfully connected to %s", client.address))
+		client.connected <- true
 		return
 	default:
 		return fmt.Errorf("clients/udp.Connect(): unhandled UDP client mode: %d", client.mode)
@@ -363,7 +411,24 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 
 // Listen is composed of an infinite loop that waits up to 5 minutes per loop to receive a UDP connection from a peer
 func (client *Client) Listen() (returnMessages []messages.Base, err error) {
-	cli.Message(cli.DEBUG, "Entering into clients/udp.Listen()")
+	cli.Message(cli.DEBUG, "clients/udp.Listen(): entering into function")
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Listen(): leaving function with messages: %+v and error: %+v", returnMessages, err))
+
+	// Repair broken connections
+	if client.mode == REVERSE && client.connection == nil {
+		// If the connection is empty and this is a REVERSE agent, wait here until the connection is established
+		cli.Message(cli.INFO, fmt.Sprintf("Waiting for a client connection before listening for messages at %s", time.Now().UTC().Format(time.RFC3339)))
+		<-client.connected
+	} else if client.mode == BIND && client.listener == nil {
+		// If the connection is empty and this is a BIND agent, wait for connection from Parent Agent
+		cli.Message(cli.NOTE, fmt.Sprintf("Client connection was empty. Re-establishing connection at %s...", time.Now().UTC().Format(time.RFC3339)))
+		err = client.Connect()
+		if err != nil {
+			err = fmt.Errorf("clients/udp.Listen(): %s", err)
+			return
+		}
+	}
+
 	cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming messages from %s at %s...", client.client, time.Now().UTC().Format(time.RFC3339)))
 
 	readTimeout := time.Minute * 5
@@ -460,7 +525,6 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 		return
 	}
 
-	//fmt.Printf("Received message: %+v\n", msg)
 	returnMessages = append(returnMessages, msg)
 	return
 }
@@ -469,7 +533,30 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 // The function also decodes and decrypts response messages and return a Merlin message structure.
 // This is where the client's logic is for communicating with the server.
 func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err error) {
-	cli.Message(cli.DEBUG, "Entering into clients/udp.Send()")
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Send(): entering into function with message: %+v", m))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Send(): exiting function with error: %v and return messages: %+v", err, returnMessages))
+
+	// Recover connection
+	if client.mode == REVERSE && client.connection == nil {
+		// If the connection is empty and this is a REVERSE agent, attempt to connect to the listener
+		cli.Message(cli.NOTE, fmt.Sprintf("Client connection was empty. Re-establishing connection at %s...", time.Now().UTC().Format(time.RFC3339)))
+		err = client.Connect()
+		if err != nil {
+			err = fmt.Errorf("clients/udp.Send(): %s", err)
+			return
+		}
+	} else if client.mode == BIND && client.client == nil {
+		// If the connection is empty and this is a BIND agent, wait here for listener to receive a connection
+		cli.Message(cli.INFO, fmt.Sprintf("Waiting for a client connection before sending message at %s", time.Now().UTC().Format(time.RFC3339)))
+		<-client.connected
+	}
+
+	if !client.authenticated && m.Type != messages.OPAQUE {
+		cli.Message(cli.INFO, fmt.Sprintf("Waiting for authentication to complete before sending message at %s", time.Now().UTC().Format(time.RFC3339)))
+		<-client.authComplete
+		cli.Message(cli.INFO, fmt.Sprintf("Authentication completed, continuing with sending held message at %s", time.Now().UTC().Format(time.RFC3339)))
+	}
+
 	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s at %s", messages.String(m.Type), client.client, time.Now().UTC().Format(time.RFC3339)))
 
 	// Set the message padding
@@ -497,15 +584,6 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	if err != nil {
 		err = fmt.Errorf("clients/udp.Send(): there was an error encoding the %s message to a gob:\r\n%s", messages.String(m.Type), err)
 		return
-	}
-
-	// Recover connection
-	if client.connection == nil && client.mode == REVERSE {
-		err = client.Connect()
-		if err != nil {
-			err = fmt.Errorf("clients/udp.Send(): %s", err)
-			return
-		}
 	}
 
 	// Add in Tag/Type and Length for TLV
@@ -592,12 +670,35 @@ func (client *Client) Get(key string) string {
 	}
 }
 
+// ResetListener closes the listener for BIND Agents and sets it and the client to nil to facilitate a new client connection
+func (client *Client) ResetListener() (err error) {
+	cli.Message(cli.DEBUG, "clients/udp.ResetListener(): entering into function...")
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.ResetListener(): leaving function with error: %v", err))
+	if client.listener != nil {
+		cli.Message(cli.NOTE, fmt.Sprintf("UDP listener reset at %s", time.Now().UTC().Format(time.RFC3339)))
+		err = client.listener.Close()
+		if err != nil {
+			return fmt.Errorf("clients/udp.ResetListener(): there was an error closing the listener: %s", err)
+		}
+		client.Lock()
+		client.listener = nil
+		client.client = nil
+		client.Unlock()
+		if len(client.connected) > 0 {
+			<-client.connected
+		}
+	}
+	return
+}
+
 // Set is a generic function that is used to modify a Client's field values
 func (client *Client) Set(key string, value string) error {
 	cli.Message(cli.DEBUG, "Entering into clients/udp.Set()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s, Value: %s", key, value))
 	var err error
 	switch strings.ToLower(key) {
+	case "bind":
+		err = client.ResetListener()
 	case "listener":
 		var id uuid.UUID
 		id, err = uuid.FromString(value)

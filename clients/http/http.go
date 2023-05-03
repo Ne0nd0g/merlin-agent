@@ -56,6 +56,7 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/clients/memory"
 	"github.com/Ne0nd0g/merlin-agent/core"
+	"github.com/Ne0nd0g/merlin-agent/services/p2p"
 	transformer "github.com/Ne0nd0g/merlin-agent/transformers"
 	"github.com/Ne0nd0g/merlin-agent/transformers/encoders/base64"
 	"github.com/Ne0nd0g/merlin-agent/transformers/encoders/gob"
@@ -70,6 +71,7 @@ import (
 // Client is a type of MerlinClient that is used to send and receive Merlin messages from the Merlin server
 type Client struct {
 	Authenticator authenticators.Authenticator
+	authenticated bool         // authenticated tracks if the Agent has successfully authenticated
 	Client        *http.Client // Client to send messages with
 	Protocol      string
 	URL           []string                  // A slice of URLs to send messages to (e.g., https://127.0.0.1:443/test.php)
@@ -601,6 +603,7 @@ func (client *Client) Get(key string) string {
 // The function must take in a Base message for when the C2 server requests re-authentication through a message
 func (client *Client) Authenticate(msg messages.Base) (err error) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Authenticate(): entering into function with message: %+v", msg))
+	client.authenticated = false
 	var authenticated bool
 	// Reset the Agent's PSK
 	k := sha256.Sum256([]byte(client.psk))
@@ -618,9 +621,15 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 		if err != nil {
 			return
 		}
+		// An empty message was received indicating to exit the function
+		if msg.Type == 0 {
+			return
+		}
 
 		// Once authenticated, update the client's secret used to encrypt messages
 		if authenticated {
+			client.authenticated = true
+			p2p.NewP2PService().Refresh()
 			var key []byte
 			key, err = client.Authenticator.Secret()
 			if err != nil {

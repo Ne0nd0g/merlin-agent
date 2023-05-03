@@ -76,6 +76,9 @@ func Link(cmd jobs.Command) (results jobs.Results) {
 			return jobs.Results{Stderr: fmt.Sprintf("expected 2 arguments with the link smb command, received %d: %+v\n Example: link smb 192.168.1.1 merlinPipe", len(cmd.Args), cmd.Args)}
 		}
 		return ConnectSMB(cmd.Args[1], cmd.Args[2])
+	case "refresh":
+		results.Stdout = peerToPeerService.Refresh()
+		return
 	default:
 		return jobs.Results{
 			Stderr: fmt.Sprintf("Unhandled link type: %s", cmd.Args[0]),
@@ -251,12 +254,12 @@ func Connect(network string, args []string) (results jobs.Results) {
 	}
 
 	// Store LinkedAgent
-	linkedAgent := p2p.NewLink(msg.Agent, conn, linkType, conn.RemoteAddr())
+	linkedAgent := p2p.NewLink(msg.Agent, msg.Listener, conn, linkType, conn.RemoteAddr())
 	peerToPeerService.AddLink(linkedAgent)
 
 	peerToPeerService.AddDelegate(msg)
 
-	results.Stdout = fmt.Sprintf("Successfully connected to %s at %s", msg.Agent, args[0])
+	results.Stdout = fmt.Sprintf("Successfully connected to %s Agent %s at %s", linkedAgent.String(), msg.Agent, args[0])
 
 	// The listen function is in commands/listen.go
 	go listen(conn, linkType)

@@ -182,6 +182,20 @@ func (s *Service) Control(job jobs.Job) {
 			break
 		}
 		cli.Message(cli.NOTE, fmt.Sprintf("Setting agent message maximum padding size to %s", cmd.Args[0]))
+	case "reset":
+		// Reset, or unlink, the client's listener
+		err := s.ClientService.Reset()
+		if err != nil {
+			results.Stderr = fmt.Sprintf("there was an error resetting the client's listener:%s", err)
+			out <- jobs.Job{
+				ID:      job.ID,
+				AgentID: s.Agent,
+				Token:   job.Token,
+				Type:    jobs.RESULT,
+				Payload: results,
+			}
+		}
+		return
 	case "skew":
 		if len(cmd.Args) < 1 {
 			results.Stderr = fmt.Sprintf("the skew control command requires 1 argument but received %d", len(cmd.Args))

@@ -221,8 +221,22 @@ func (s *Service) List() (list string) {
 	return
 }
 
+// Refresh sends an empty delegate message to the server for each peer-to-peer Link in the repository to update the server
+// with this Agent's links
+func (s *Service) Refresh() (list string) {
+	links := s.repo.GetAll()
+	for _, link := range links {
+		s.AddDelegate(messages.Delegate{
+			Agent:    link.ID(),
+			Listener: link.Listener(),
+		})
+	}
+	return fmt.Sprintf("Created upstream delegate messages for:\n%s", s.List())
+}
+
 // Remove closes the peer-to-peer Link's network connection and deletes the peer-to-peer Link from the repository
 func (s *Service) Remove(id uuid.UUID) error {
+	cli.Message(cli.DEBUG, fmt.Sprintf("services/p2p.Remove(): entering into function with id: %s", id))
 	link, err := s.GetLink(id)
 	if err != nil {
 		return fmt.Errorf("services/p2p.Remove(): %s", err)

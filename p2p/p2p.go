@@ -59,10 +59,11 @@ type Link struct {
 	conn     interface{}        // conn the network connection used to communicate with the linked Agent
 	connType int                // connType of the linked Agent (e.g., tcp-bind, SMB, etc.)
 	remote   net.Addr           // remote is the name or address of the remote Agent data is being sent to
+	listener uuid.UUID          // listener is the server-side listener id for this link
 }
 
 // NewLink is a factory to build and return a Link structure
-func NewLink(id uuid.UUID, conn interface{}, linkType int, remote net.Addr) Link {
+func NewLink(id uuid.UUID, listener uuid.UUID, conn interface{}, linkType int, remote net.Addr) Link {
 	return Link{
 		id:       id,
 		in:       make(chan messages.Base, 100),
@@ -70,6 +71,7 @@ func NewLink(id uuid.UUID, conn interface{}, linkType int, remote net.Addr) Link
 		conn:     conn,
 		connType: linkType,
 		remote:   remote,
+		listener: listener,
 	}
 }
 
@@ -103,6 +105,11 @@ func (l *Link) GetOut() messages.Base {
 // ID returns the peer-to-peer Link's id
 func (l *Link) ID() uuid.UUID {
 	return l.id
+}
+
+// Listener returns the peer-to-peer Link's listener id
+func (l *Link) Listener() uuid.UUID {
+	return l.listener
 }
 
 // Type returns what type of peer-to-peer Link this is (e.g., TCP reverse or SMB bind)

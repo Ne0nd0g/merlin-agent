@@ -62,6 +62,10 @@ func (a *Authenticator) Authenticate(in messages.Base) (out messages.Base, authe
 			switch in.Payload.(opaque.Opaque).Type {
 			case opaque.ReRegister:
 				cli.Message(cli.NOTE, "Received OPAQUE re-register request")
+				if !a.registered {
+					cli.Message(cli.INFO, "authenticators/opaque.Authenticate(): OPAQUE registration already in progress, doing nothing")
+					return messages.Base{}, false, nil
+				}
 				a.registered = false
 				a.opaque = nil
 			case opaque.ReAuthenticate:

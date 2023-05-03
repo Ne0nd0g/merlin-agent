@@ -320,7 +320,7 @@ func listen(conn net.Conn, listenerType int) {
 		_, err = peerToPeerService.GetLink(msg.Agent)
 		if err != nil {
 			// Reverse SMB & TCP agents need to be added after initial checkin
-			linkedAgent := p2p.NewLink(msg.Agent, conn, listenerType, conn.RemoteAddr())
+			linkedAgent := p2p.NewLink(msg.Agent, msg.Listener, conn, listenerType, conn.RemoteAddr())
 			peerToPeerService.AddLink(linkedAgent)
 		} else {
 			// Update the Link's connection to the current one
@@ -413,7 +413,7 @@ func listenUDP(listener net.PacketConn) {
 		_, err = peerToPeerService.GetLink(msg.Agent)
 		if err != nil {
 			// Reverse UDP agents need to be added after initial checkin
-			linkedAgent := p2p.NewLink(msg.Agent, listener, p2p.UDPREVERSE, addr)
+			linkedAgent := p2p.NewLink(msg.Agent, msg.Listener, listener, p2p.UDPREVERSE, addr)
 			peerToPeerService.AddLink(linkedAgent)
 		} else {
 			// Update the Link's connection to the current one

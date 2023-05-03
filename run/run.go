@@ -82,6 +82,11 @@ func Run(a agent.Agent, c clients.Client) {
 				a = agentService.Get()
 				cli.Message(cli.WARN, err.Error())
 				cli.Message(cli.NOTE, fmt.Sprintf("%d out of %d total failed checkins", a.Comms().Failed, a.Comms().Retry))
+				if a.Wait() <= 0 {
+					sleep := time.Second * 30
+					cli.Message(cli.NOTE, fmt.Sprintf("Agent's sleep is %s, using error recovery default. Sleeping for %s at %s", a.Wait().String(), sleep.String(), time.Now().UTC().Format(time.RFC3339)))
+					time.Sleep(sleep)
+				}
 			} else {
 				cli.Message(cli.SUCCESS, "Agent authentication successful")
 				agentService.SetAuthenticated(true)
@@ -126,6 +131,7 @@ func Run(a agent.Agent, c clients.Client) {
 // checkIn is the function that agent runs at every sleep/skew interval to check in with the server for jobs
 func checkIn() {
 	cli.Message(cli.DEBUG, "run/run.checkIn(): entering into function...")
+	defer cli.Message(cli.DEBUG, "run/run.checkIn(): leaving function...")
 	a := agentService.Get()
 	c := clientService.Get()
 	var msg messages.Base
@@ -155,11 +161,20 @@ func checkIn() {
 		}
 
 		// Put the jobs back into the queue if there was an error
-		if msg.Type == messages.JOBS {
-			err = messageService.Handle(msg)
-			if err != nil {
-				agentService.IncrementFailed()
+		messageService.Store(msg)
+		/*
+			if msg.Type == messages.JOBS {
+				err = messageService.Handle(msg)
+				if err != nil {
+					agentService.IncrementFailed()
+				}
 			}
+		*/
+
+		if a.Wait() <= 0 {
+			sleep := time.Second * 30
+			cli.Message(cli.NOTE, fmt.Sprintf("Agent's sleep is %s, using error recovery default. Sleeping for %s at %s", a.Wait().String(), sleep.String(), time.Now().UTC().Format(time.RFC3339)))
+			time.Sleep(sleep)
 		}
 		return
 	}
@@ -199,7 +214,7 @@ func listen() {
 		if err != nil {
 			agentService.IncrementFailed()
 			a := agentService.Get()
-			cli.Message(cli.WARN, fmt.Sprintf("run.listen(): %s", err))
+			cli.Message(cli.WARN, fmt.Sprintf("run.listen(): there was an error listening: %s", err))
 			// Determine if the max number of failed checkins has been reached
 			if a.Failed() >= a.MaxRetry() && a.MaxRetry() != 0 {
 				cli.Message(cli.WARN, fmt.Sprintf("maximum number of failed checkin attempts reached: %d, quitting...", a.MaxRetry()))
@@ -213,7 +228,7 @@ func listen() {
 				for _, msg := range msgs {
 					err = messageService.Handle(msg)
 					if err != nil {
-						cli.Message(cli.WARN, fmt.Sprintf("run.listen(): %s", err))
+						cli.Message(cli.WARN, fmt.Sprintf("run.listen(): there was an error handling incoming messages: %s", err))
 						agentService.IncrementFailed()
 						// Determine if the max number of failed checkins has been reached
 						a := agentService.Get()
