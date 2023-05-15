@@ -305,6 +305,9 @@ func (client *Client) Connect() (err error) {
 	cli.Message(cli.DEBUG, "Entering clients/udp.Connect() function")
 	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/upd.Connect(): exiting function with error: %+v", err))
 
+	client.Lock()
+	defer client.Unlock()
+
 	// Ensure the connected channel is empty. If the Agent's sleep is less than 0, the channel might be full from a prior reconnect
 	if len(client.connected) > 0 {
 		<-client.connected
@@ -326,7 +329,7 @@ func (client *Client) Connect() (err error) {
 		cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming connection at %s...", time.Now().UTC().Format(time.RFC3339)))
 		// First connection is junk data to establish a connection but otherwise has no value or meaning and can be discarded
 		n, client.client, err = client.listener.ReadFrom(buffer)
-		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
+		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from UDP connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
 		if err != nil {
 			err = fmt.Errorf("clients/udp.Connect(): there was an error reading data from %s : %s", client.client, err)
 			return
@@ -349,7 +352,7 @@ func (client *Client) Connect() (err error) {
 			return
 		}
 		client.client = client.connection.RemoteAddr()
-		cli.Message(cli.NOTE, fmt.Sprintf("Successfully connected to %s", client.address))
+		cli.Message(cli.SUCCESS, fmt.Sprintf("Successfully connected to %s from %s at %s", client.connection.RemoteAddr(), client.connection.LocalAddr(), time.Now().UTC().Format(time.RFC3339)))
 		client.connected <- true
 		return
 	default:
@@ -419,6 +422,7 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 		// If the connection is empty and this is a REVERSE agent, wait here until the connection is established
 		cli.Message(cli.INFO, fmt.Sprintf("Waiting for a client connection before listening for messages at %s", time.Now().UTC().Format(time.RFC3339)))
 		<-client.connected
+		cli.Message(cli.SUCCESS, fmt.Sprintf("Client connection re-esablished at %s", time.Now().UTC().Format(time.RFC3339)))
 	} else if client.mode == BIND && client.listener == nil {
 		// If the connection is empty and this is a BIND agent, wait for connection from Parent Agent
 		cli.Message(cli.NOTE, fmt.Sprintf("Client connection was empty. Re-establishing connection at %s...", time.Now().UTC().Format(time.RFC3339)))
@@ -429,7 +433,11 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 		}
 	}
 
-	cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming messages from %s at %s...", client.client, time.Now().UTC().Format(time.RFC3339)))
+	if client.mode == BIND {
+		cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming messages from %v on %v at %s...", client.client, client.address, time.Now().UTC().Format(time.RFC3339)))
+	} else {
+		cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming messages from %s on %s at %s...", client.connection.RemoteAddr(), client.connection.LocalAddr(), time.Now().UTC().Format(time.RFC3339)))
+	}
 
 	readTimeout := time.Minute * 5
 	var n int
@@ -490,7 +498,7 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 			cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Listen(): Read %d of %d bytes into the buffer", buff.Len(), length))
 		}
 	}
-	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s at %s", buff.Len(), client.client, time.Now().UTC().Format(time.RFC3339)))
+	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from UDP connection %s at %s", buff.Len(), client.client, time.Now().UTC().Format(time.RFC3339)))
 
 	if err != nil {
 		switch err2 := err.(type) {
@@ -618,10 +626,12 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		case BIND:
 			//fmt.Printf("[*-%d]%d:%d\n", i, start, stop)
 			n, err = client.listener.WriteTo(outData[start:stop], client.client)
+			cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Send(): Wrote %d bytes from %s to connection %s at %s", n, client.listener.LocalAddr(), client.client, time.Now().UTC().Format(time.RFC3339)))
 		case REVERSE:
 			n, err = client.connection.Write(outData[start:stop])
+			cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Send(): Wrote %d bytes from %s to connection %s at %s", n, client.connection.RemoteAddr(), client.client, time.Now().UTC().Format(time.RFC3339)))
 		}
-		cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Send(): Wrote %d bytes to connection %s at %s", n, client.client, time.Now().UTC().Format(time.RFC3339)))
+
 		i++
 		size = size - MaxSize
 		// UDP packets seemed to get dropped if too many are sent too fast
@@ -635,7 +645,11 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		return
 	}
 
-	cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to connection %s at %s", len(outData), client.client, time.Now().UTC().Format(time.RFC3339)))
+	if client.mode == BIND {
+		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to connection %s from %s at %s", len(outData), client.client, client.address, time.Now().UTC().Format(time.RFC3339)))
+	} else {
+		cli.Message(cli.NOTE, fmt.Sprintf("Wrote %d bytes to connection %v from %v at %s", len(outData), client.connection.RemoteAddr(), client.connection.LocalAddr(), time.Now().UTC().Format(time.RFC3339)))
+	}
 
 	return
 }
@@ -657,17 +671,20 @@ func (client *Client) SendAndWait(m messages.Base) (returnMessages []messages.Ba
 }
 
 // Get is a generic function that is used to retrieve the value of a Client's field
-func (client *Client) Get(key string) string {
-	cli.Message(cli.DEBUG, "Entering into clients/udp.Get()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s", key))
+func (client *Client) Get(key string) (value string) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Get(): entering into function with key: %s", key))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Get(): leaving function with value: %s", value))
 	switch strings.ToLower(key) {
+	case "ja3":
+		return ""
 	case "paddingmax":
-		return strconv.Itoa(client.paddingMax)
+		value = strconv.Itoa(client.paddingMax)
 	case "protocol":
-		return client.String()
+		value = client.String()
 	default:
-		return fmt.Sprintf("unknown client configuration setting: %s", key)
+		value = fmt.Sprintf("unknown client configuration setting: %s", key)
 	}
+	return
 }
 
 // ResetListener closes the listener for BIND Agents and sets it and the client to nil to facilitate a new client connection
@@ -692,11 +709,27 @@ func (client *Client) ResetListener() (err error) {
 }
 
 // Set is a generic function that is used to modify a Client's field values
-func (client *Client) Set(key string, value string) error {
-	cli.Message(cli.DEBUG, "Entering into clients/udp.Set()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s, Value: %s", key, value))
-	var err error
+func (client *Client) Set(key string, value string) (err error) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Set(): entering into function with key: %s, value: %s", key, value))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/udp.Set(): exiting function with err: %v", err))
+	client.Lock()
+	defer client.Unlock()
+
 	switch strings.ToLower(key) {
+	case "addr":
+		// Validate address
+		_, err = net.ResolveUDPAddr("udp", value)
+		if err != nil {
+			err = fmt.Errorf("clients/udp.Set(): there was an error parsing the provide address %s : %s", value, err)
+			return
+		}
+		client.address = value
+		if client.mode == BIND {
+			err = client.ResetListener()
+		} else {
+			client.connection = nil
+			client.listener = nil
+		}
 	case "bind":
 		err = client.ResetListener()
 	case "listener":

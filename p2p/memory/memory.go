@@ -21,6 +21,7 @@ package memory
 import (
 	// Standard
 	"fmt"
+	"net"
 	"sync"
 
 	// 3rd Party
@@ -55,21 +56,21 @@ func (r *Repository) Delete(id uuid.UUID) {
 }
 
 // Get finds the peer-to-peer Link by the provided id and returns it
-func (r *Repository) Get(id uuid.UUID) (link p2p.Link, err error) {
+func (r *Repository) Get(id uuid.UUID) (link *p2p.Link, err error) {
 	a, ok := r.links.Load(id)
 	if !ok {
 		err = fmt.Errorf("p2p/memory.Get(): %s is not a known P2P link", id)
 		return
 	}
-	link = a.(p2p.Link)
+	link = a.(*p2p.Link)
 	return
 }
 
 // GetAll returns all peer-to-peer Links in the in-memory datastore
-func (r *Repository) GetAll() (links []p2p.Link) {
+func (r *Repository) GetAll() (links []*p2p.Link) {
 	r.links.Range(
 		func(k, v interface{}) bool {
-			agent := v.(p2p.Link)
+			agent := v.(*p2p.Link)
 			links = append(links, agent)
 			return true
 		},
@@ -78,19 +79,19 @@ func (r *Repository) GetAll() (links []p2p.Link) {
 }
 
 // Store saves the provided peer-to-peer link into the in-memory datastore
-func (r *Repository) Store(link p2p.Link) {
+func (r *Repository) Store(link *p2p.Link) {
 	r.links.Store(link.ID(), link)
 }
 
 // UpdateConn updates the peer-to-peer Link's embedded conn field with the provided network connection
-func (r *Repository) UpdateConn(id uuid.UUID, conn interface{}) error {
+func (r *Repository) UpdateConn(id uuid.UUID, conn interface{}, remote net.Addr) error {
 	r.Lock()
 	defer r.Unlock()
 	link, err := r.Get(id)
 	if err != nil {
 		return fmt.Errorf("p2p/memory.UpdateConn(): %s", err)
 	}
-	link.UpdateConn(conn)
+	link.UpdateConn(conn, remote)
 	r.Store(link)
 	return nil
 }

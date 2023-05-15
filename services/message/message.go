@@ -129,6 +129,7 @@ func (s *Service) GetJobs() {
 // Handle processes incoming Base messages for this Agent
 func (s *Service) Handle(msg messages.Base) (err error) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("services/messages.Handle(): Entering into function with: %+v", msg))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("services/messages.Handle(): Leaving function with error: %+v", err))
 	cli.Message(cli.SUCCESS, fmt.Sprintf("%s message type received!", messages.String(msg.Type)))
 
 	if msg.ID != s.Agent {
@@ -159,8 +160,6 @@ func (s *Service) Handle(msg messages.Base) (err error) {
 		// Use a go routine so that P2P functions don't block the Agent from continuing
 		go s.P2PService.Handle(msg.Delegates)
 	}
-
-	cli.Message(cli.DEBUG, "services/messages.Handle(): Leaving function...")
 	return
 }
 

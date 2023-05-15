@@ -322,7 +322,7 @@ func (client *Client) Connect() (err error) {
 		}
 
 		// Listen for initial connection from upstream agent
-		cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming connection at %s...", time.Now().UTC().Format(time.RFC3339)))
+		cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming connection on %s at %s...", client.address, time.Now().UTC().Format(time.RFC3339)))
 		client.connection, err = client.listener.Accept()
 		if err != nil {
 			return fmt.Errorf("clients/tcp.Connect(): there was an error accepting the connection: %s", err)
@@ -340,7 +340,7 @@ func (client *Client) Connect() (err error) {
 		if err != nil {
 			return fmt.Errorf("clients/tcp.Connect(): there was an error connecting to %s: %s", client.address, err)
 		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Successfully connected to %s", client.address))
+		cli.Message(cli.SUCCESS, fmt.Sprintf("Successfully connected to %s at %s", client.address, time.Now().UTC().Format(time.RFC3339)))
 		client.connected <- true
 		return nil
 	default:
@@ -429,12 +429,13 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 				// If the connection is empty and this is a REVERSE agent, wait here until the connection is established
 				cli.Message(cli.INFO, fmt.Sprintf("Waiting for a client connection before listening for messages at %s", time.Now().UTC().Format(time.RFC3339)))
 				<-client.connected
+				cli.Message(cli.SUCCESS, fmt.Sprintf("Client connection re-esablished at %s", time.Now().UTC().Format(time.RFC3339)))
 			}
 		}
 	}
 
 	// Wait for the response
-	cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming messages from %s at %s...", client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+	cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming messages from %s on %s at %s...", client.connection.RemoteAddr(), client.connection.LocalAddr(), time.Now().UTC().Format(time.RFC3339)))
 
 	var n int
 	var tag uint32
@@ -499,7 +500,7 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 		}
 	}
 
-	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from connection %s at %s", buff.Len(), client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+	cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from TCP connection %s at %s", buff.Len(), client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 	var msg messages.Base
 	// Type/Tag size is 4-bytes, Length size is 8-bytes for a total of 12-bytes for TLV
 	msg, err = client.Deconstruct(buff.Bytes()[12:])
@@ -622,25 +623,54 @@ func (client *Client) SendAndWait(m messages.Base) (returnMessages []messages.Ba
 }
 
 // Get is a generic function that is used to retrieve the value of a Client's field
-func (client *Client) Get(key string) string {
-	cli.Message(cli.DEBUG, "Entering into clients/tcp.Get()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s", key))
+func (client *Client) Get(key string) (value string) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Get(): entering into function with key: %s", key))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Get(): leaving function with value: %s", value))
 	switch strings.ToLower(key) {
+	case "ja3":
+		return ""
 	case "paddingmax":
-		return strconv.Itoa(client.paddingMax)
+		value = strconv.Itoa(client.paddingMax)
 	case "protocol":
-		return client.String()
+		value = client.String()
 	default:
-		return fmt.Sprintf("unknown client configuration setting: %s", key)
+		value = fmt.Sprintf("unknown client configuration setting: %s", key)
 	}
+	return
 }
 
 // Set is a generic function that is used to modify a Client's field values
-func (client *Client) Set(key string, value string) error {
-	cli.Message(cli.DEBUG, "Entering into clients/tcp.Set()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s, Value: %s", key, value))
-	var err error
+func (client *Client) Set(key string, value string) (err error) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Set(): entering into function with key: %s, value: %s", key, value))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/tcp.Set(): exiting function with err: %v", err))
+	client.Lock()
+	defer client.Unlock()
+
 	switch strings.ToLower(key) {
+	case "addr":
+		// Validate the address
+		_, err = net.ResolveTCPAddr("tcp", value)
+		if err != nil {
+			err = fmt.Errorf("clients/tcp.Set(): there was an error parsing the provide address %s : %s", value, err)
+			return
+		}
+		// Close the connection
+		err = client.connection.Close()
+		if err != nil {
+			err = fmt.Errorf("clients/tcp.Set(): there was an error closing the connection: %s", err)
+			return
+		}
+		client.connection = nil
+		if client.mode == BIND {
+			// Close the listener
+			err = client.listener.Close()
+			if err != nil {
+				err = fmt.Errorf("clients/tcp.Set(): there was an error closing the listener: %s", err)
+				return
+			}
+		}
+		client.listener = nil
+		client.address = value
 	case "listener":
 		var id uuid.UUID
 		id, err = uuid.FromString(value)

@@ -17,17 +17,23 @@
 
 package p2p
 
-import uuid "github.com/satori/go.uuid"
+import (
+	// Standard
+	"net"
+
+	// 3rd Party
+	uuid "github.com/satori/go.uuid"
+)
 
 type Repository interface {
 	// Delete removes the peer-to-peer Link from the in-memory datastore
 	Delete(id uuid.UUID)
 	// Get finds the peer-to-peer Link by the provided id and returns it
-	Get(id uuid.UUID) (link Link, err error)
+	Get(id uuid.UUID) (link *Link, err error)
 	// GetAll returns all peer-to-peer Links in the in-memory datastore
-	GetAll() (links []Link)
+	GetAll() (links []*Link)
 	// Store saves the provided peer-to-peer link into the in-memory datastore
-	Store(link Link)
+	Store(link *Link)
 	// UpdateConn updates the peer-to-peer Link's embedded conn field with the provided network connection
-	UpdateConn(id uuid.UUID, conn interface{}) error
+	UpdateConn(id uuid.UUID, conn interface{}, remote net.Addr) error
 }

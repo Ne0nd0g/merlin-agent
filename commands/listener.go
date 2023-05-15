@@ -22,7 +22,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"time"
@@ -76,6 +78,7 @@ var p2pListeners []p2pListener
 // Listener binds to the provided interface and port and begins listening for incoming connections from other peer-to-peer agents
 func Listener(cmd jobs.Command) (results jobs.Results) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("commands/listen.Listener(): entering into function with %+v", cmd))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("commands/listen.Listener(): exiting function with results: %+v", results))
 
 	if len(cmd.Args) < 1 {
 		return jobs.Results{Stderr: fmt.Sprintf("expected 1 arguments with the listener command, received %d: %+v", len(cmd.Args), cmd.Args)}
@@ -256,6 +259,16 @@ func listen(conn net.Conn, listenerType int) {
 			data := make([]byte, 4096)
 			n, err = conn.Read(data)
 			if err != nil {
+				if errors.Is(err, io.EOF) {
+					cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listen(): connection to %s closed, removing the listener connection.", conn.RemoteAddr()))
+					// Delete the listener from the global listeners
+					for i, l := range p2pListeners {
+						if l.Listener.(net.Listener).Addr() == conn.LocalAddr() {
+							p2pListeners = append(p2pListeners[:i], p2pListeners[i+1:]...)
+							return
+						}
+					}
+				}
 				err = fmt.Errorf("commands/listener.listen(): there was an error reading data from linked agent %s: %s", conn.RemoteAddr(), err)
 				break
 			}
@@ -299,7 +312,7 @@ func listen(conn net.Conn, listenerType int) {
 				cli.Message(cli.DEBUG, fmt.Sprintf("commands/listener.listen(): Read %d of %d bytes into the buffer", buff.Len(), length))
 			}
 		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Read %d bytes from linked Agent %s at %s", buff.Len(), conn.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+		cli.Message(cli.NOTE, fmt.Sprintf("listener on %s read %d bytes from linked Agent %s at %s", conn.LocalAddr(), buff.Len(), conn.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
 
 		// Check for errors from the nested FOR loop
 		if err != nil {
@@ -324,7 +337,7 @@ func listen(conn net.Conn, listenerType int) {
 			peerToPeerService.AddLink(linkedAgent)
 		} else {
 			// Update the Link's connection to the current one
-			err = peerToPeerService.UpdateConnection(msg.Agent, conn)
+			err = peerToPeerService.UpdateConnection(msg.Agent, conn, conn.RemoteAddr())
 			if err != nil {
 				cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listen(): %s", err))
 			}
@@ -337,6 +350,9 @@ func listen(conn net.Conn, listenerType int) {
 
 // listenUDP is an infinite loop, used as a go routine, to receive data from incoming connections and subsequently add Delegate messages to the outgoing queue
 func listenUDP(listener net.PacketConn) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("command/listener.listenUDP(): entering into function with listener: %+v", listener))
+	defer cli.Message(cli.DEBUG, "command/listener.listenUDP(): exiting function")
+
 	for {
 		var err error
 		var addr net.Addr
@@ -347,7 +363,7 @@ func listenUDP(listener net.PacketConn) {
 		for {
 			data := make([]byte, MaxSizeUDP)
 			n, addr, err = listener.ReadFrom(data)
-			cli.Message(cli.DEBUG, fmt.Sprintf("UDP listener read %d bytes from %s at %s", n, addr, time.Now().UTC().Format(time.RFC3339)))
+			cli.Message(cli.DEBUG, fmt.Sprintf("UDP listener read %d bytes on %s from %s at %s", n, listener.LocalAddr(), addr, time.Now().UTC().Format(time.RFC3339)))
 			if err != nil {
 				err = fmt.Errorf("commands/listener.listenUDP(): there was an error accepting the UDP connection from %s : %s", addr, err)
 				break
@@ -392,7 +408,7 @@ func listenUDP(listener net.PacketConn) {
 				cli.Message(cli.DEBUG, fmt.Sprintf("commands/listener.listenUDP(): Read %d of %d bytes into the buffer", buff.Len(), length))
 			}
 		}
-		cli.Message(cli.NOTE, fmt.Sprintf("UDP listener read %d bytes from %s at %s", buff.Len(), addr, time.Now().UTC().Format(time.RFC3339)))
+		cli.Message(cli.NOTE, fmt.Sprintf("UDP listener on %s read %d bytes from %s at %s", listener.LocalAddr(), buff.Len(), addr, time.Now().UTC().Format(time.RFC3339)))
 
 		// Check for errors from the nested FOR loop
 		if err != nil {
@@ -417,7 +433,7 @@ func listenUDP(listener net.PacketConn) {
 			peerToPeerService.AddLink(linkedAgent)
 		} else {
 			// Update the Link's connection to the current one
-			err = peerToPeerService.UpdateConnection(msg.Agent, listener)
+			err = peerToPeerService.UpdateConnection(msg.Agent, listener, addr)
 			if err != nil {
 				cli.Message(cli.WARN, fmt.Sprintf("commands/listener.listen(): %s", err))
 			}

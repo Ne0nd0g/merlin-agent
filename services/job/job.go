@@ -122,6 +122,16 @@ func (s *Service) Control(job jobs.Job) {
 	switch strings.ToLower(cmd.Command) {
 	case "agentinfo":
 		// No action required; End of function gets and returns an Agent information structure
+	case "connect":
+		if len(cmd.Args) < 1 {
+			results.Stderr = fmt.Sprintf("the \"connect\" command requires 1 argument, the new address, but received %d", len(cmd.Args))
+			break
+		}
+		// Instruct the Agent to connect to the provided target
+		err := s.ClientService.Connect(cmd.Args[0])
+		if err != nil {
+			results.Stderr = fmt.Sprintf("there was an error changing the client's connection address: %s", err)
+		}
 	case "exit":
 		os.Exit(0)
 	case "initialize":

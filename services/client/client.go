@@ -61,6 +61,13 @@ func (s *Service) Authenticate(msg messages.Base) error {
 	return s.ClientRepo.Get().Authenticate(msg)
 }
 
+// Connect instructs the Client to disconnect from its current server and connect to the new provided target
+func (s *Service) Connect(addr string) (err error) {
+	client := s.ClientRepo.Get()
+	err = client.Set("addr", addr)
+	return
+}
+
 // Get returns the Agent's current communication client from the repository
 func (s *Service) Get() clients.Client {
 	return s.ClientRepo.Get()

@@ -22,6 +22,7 @@ import (
 	// Standard
 	"fmt"
 	"net"
+	"sync"
 
 	// 3rd Party
 	uuid "github.com/satori/go.uuid"
@@ -53,18 +54,19 @@ const (
 
 // Link holds information about peer-to-peer linked agents
 type Link struct {
-	id       uuid.UUID          // id is Agent id for this peer-to-peer connection
-	in       chan messages.Base // in a channel of incoming Base messages coming in from the linked Agent
-	out      chan messages.Base // out a channel of outgoing Base messages to be sent to the linked Agent
-	conn     interface{}        // conn the network connection used to communicate with the linked Agent
-	connType int                // connType of the linked Agent (e.g., tcp-bind, SMB, etc.)
-	remote   net.Addr           // remote is the name or address of the remote Agent data is being sent to
-	listener uuid.UUID          // listener is the server-side listener id for this link
+	id         uuid.UUID          // id is Agent id for this peer-to-peer connection
+	in         chan messages.Base // in a channel of incoming Base messages coming in from the linked Agent
+	out        chan messages.Base // out a channel of outgoing Base messages to be sent to the linked Agent
+	conn       interface{}        // conn the network connection used to communicate with the linked Agent
+	connType   int                // connType of the linked Agent (e.g., tcp-bind, SMB, etc.)
+	remote     net.Addr           // remote is the name or address of the remote Agent data is being sent to
+	listener   uuid.UUID          // listener is the server-side listener id for this link
+	sync.Mutex                    // Mutex is used to lock the Link object for thread safety
 }
 
 // NewLink is a factory to build and return a Link structure
-func NewLink(id uuid.UUID, listener uuid.UUID, conn interface{}, linkType int, remote net.Addr) Link {
-	return Link{
+func NewLink(id uuid.UUID, listener uuid.UUID, conn interface{}, linkType int, remote net.Addr) *Link {
+	return &Link{
 		id:       id,
 		in:       make(chan messages.Base, 100),
 		out:      make(chan messages.Base, 100),
@@ -124,8 +126,9 @@ func (l *Link) Remote() net.Addr {
 
 // UpdateConn updates the peer-to-peer Link's network connection
 // The updated object must be subsequently stored in the repository
-func (l *Link) UpdateConn(conn interface{}) {
+func (l *Link) UpdateConn(conn interface{}, remote net.Addr) {
 	l.conn = conn
+	l.remote = remote
 }
 
 // String returns the peer-to-peer Link's type as a string
