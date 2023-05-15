@@ -30,6 +30,9 @@ import (
 	"strings"
 	"time"
 
+	// 3rd Party
+	uuid "github.com/satori/go.uuid"
+
 	// Merlin
 	"github.com/Ne0nd0g/merlin/pkg/jobs"
 	"github.com/Ne0nd0g/merlin/pkg/messages"
@@ -78,6 +81,23 @@ func Link(cmd jobs.Command) (results jobs.Results) {
 		return ConnectSMB(cmd.Args[1], cmd.Args[2])
 	case "refresh":
 		results.Stdout = peerToPeerService.Refresh()
+		return
+	case "remove":
+		if len(cmd.Args) < 2 {
+			return jobs.Results{Stderr: fmt.Sprintf("expected 2 arguments with the link remove command, received %d: %+v\n Example: link remove 8ee688aa-de70-47ea-9a54-155524b2b1c6", len(cmd.Args), cmd.Args)}
+		}
+		// Validate that the provided ID is a valid UUID
+		id, err := uuid.FromString(cmd.Args[1])
+		if err != nil {
+			results.Stderr = fmt.Sprintf("commands/link.Link(): there was an error converting %s to a valid UUID for the link remove command: %s", cmd.Args[1], err)
+			return
+		}
+		err = peerToPeerService.Remove(id)
+		if err != nil {
+			results.Stderr = fmt.Sprintf("commands/link.Link(): there was an error removing the link: %s", err)
+			return
+		}
+		results.Stdout = fmt.Sprintf("Successfully removed P2P link for %s", id)
 		return
 	default:
 		return jobs.Results{
