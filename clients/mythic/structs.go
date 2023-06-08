@@ -3,7 +3,7 @@
 
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
-// Copyright (C) 2022  Russel Van Tuyl
+// Copyright (C) 2023 Russel Van Tuyl
 
 // Merlin is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -110,16 +110,17 @@ type PostResponse struct {
 	Action    string               `json:"action"`
 	Responses []ClientTaskResponse `json:"responses"` // TODO This needs to be an interface so it can handle both ClientTaskResponse and FileDownloadInitialMessage
 	Padding   string               `json:"padding,omitempty"`
-	SOCKS     []Socks              `json:"socks"`
+	SOCKS     []Socks              `json:"socks,omitempty"`
 }
 
 // ClientTaskResponse is the structure used to return the results of a task to the Mythic server
 // https://docs.mythic-c2.net/customizing/c2-related-development/c2-profile-code/agent-side-coding/action-post_response
 type ClientTaskResponse struct {
-	ID        uuid.UUID `json:"task_id"`
-	Output    string    `json:"user_output"`
-	Status    string    `json:"status"`
-	Completed bool      `json:"completed"`
+	ID        uuid.UUID     `json:"task_id"`
+	Download  *FileDownload `json:"download,omitempty"`
+	Output    string        `json:"user_output,omitempty"`
+	Status    string        `json:"status,omitempty"`
+	Completed bool          `json:"completed,omitempty"`
 }
 
 // ServerTaskResponse is the message Mythic returns to the client after it sent a ClientTaskResponse message
@@ -128,7 +129,7 @@ type ServerTaskResponse struct {
 	ID     string `json:"task_id"`
 	Status string `json:"status"`
 	Error  string `json:"error"`
-	FileID string `json:"file_id"`
+	FileID string `json:"file_id,omitempty"`
 }
 
 // ServerPostResponse structure holds a list of ServerTaskResponse structure
@@ -157,9 +158,9 @@ type RSAResponse struct {
 
 // PostResponseFile is the structure used to send a list of messages from the agent to the server
 type PostResponseFile struct {
-	Action    string                       `json:"action"`
-	Responses []FileDownloadInitialMessage `json:"responses"`
-	Padding   string                       `json:"padding,omitempty"`
+	Action    string         `json:"action"`
+	Responses []FileDownload `json:"responses"`
+	Padding   string         `json:"padding,omitempty"`
 }
 
 // FileDownloadInitialMessage contains the information for the initial step of the file download process
@@ -179,13 +180,15 @@ type PostResponseDownload struct {
 
 // FileDownload sends a chunk of Base64 encoded data from the agent to the server
 type FileDownload struct {
-	Chunk  int    `json:"chunk_num"`
-	FileID string `json:"file_id"` // UUID from FileDownloadResponse
-	TaskID string `json:"task_id"`
-	Data   string `json:"chunk_data"` // Base64 encoded data
+	FileID       string `json:"file_id,omitempty"` // UUID from FileDownloadResponse
+	NumChunks    int    `json:"total_chunks,omitempty"`
+	Chunk        int    `json:"chunk_num,omitempty"`
+	Data         string `json:"chunk_data,omitempty"` // Base64 encoded data
+	FullPath     string `json:"full_path,omitempty"`
+	IsScreenshot bool   `json:"is_screenshot,omitempty"`
 }
 
-// DownloadResponse is the servers response to a FileDownload message
+// DownloadResponse is the server's response to a FileDownload message
 type DownloadResponse struct {
 	Status string `json:"status"`
 	TaskID string `json:"task_id"`

