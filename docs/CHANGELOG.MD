@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 1.6.5 - 2023-06-10
+
+### Changed
+
+- Replaced manual Windows DLL and procedure loads for Golang's Windows package and moved remaining to `os/windows/api` directory
+- Replaced `PAGE_EXECUTE_READWRITE` with `PAGE_READWRITE` for shellcode memory allocation
+- Replaced `PAGE_EXECUTE` with `PAGE_EXECUTE_READ` after shellcode memory allocation
+
+### Fixed
+
+- [Issue 28](https://github.com/Ne0nd0g/merlin-agent/issues/28) - Use Golang's Windows package for API calls where possible
+
 ## 1.6.4 - 2023-06-08
 
 ### Changed

