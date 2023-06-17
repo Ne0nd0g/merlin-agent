@@ -2,6 +2,8 @@ module github.com/Ne0nd0g/merlin-agent
 
 go 1.19
 
+replace github.com/Ne0nd0g/merlin => /home/john/Dev/merlin
+
 require (
 	github.com/C-Sto/BananaPhone v0.0.0-20220220002628-6585e5913761
 	github.com/Ne0nd0g/go-clr v1.0.2
