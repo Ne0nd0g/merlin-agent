@@ -76,5 +76,5 @@ func (r *Repository) SetListener(listener string) error {
 func (r *Repository) SetPadding(padding string) error {
 	r.Lock()
 	defer r.Unlock()
-	return r.client.Set("padding", padding)
+	return r.client.Set("paddingmax", padding)
 }

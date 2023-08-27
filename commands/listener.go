@@ -129,31 +129,51 @@ func Listener(cmd jobs.Command) (results jobs.Results) {
 			return jobs.Results{Stderr: fmt.Sprintf("expected 3 arguments with the listener command, received %d: %+v", len(cmd.Args), cmd.Args)}
 		}
 		switch strings.ToLower(cmd.Args[1]) {
+		case "smb":
+			for i, listener := range p2pListeners {
+				if listener.Type == SMB {
+					if listener.Listener.(net.Listener).Addr().String() == fmt.Sprintf("\\\\.\\pipe\\%s", cmd.Args[2]) {
+						err := listener.Listener.(net.Listener).Close()
+						if err != nil {
+							results.Stderr = err.Error()
+						} else {
+							results.Stdout = fmt.Sprintf("Successfully closed SMB listener on %s", cmd.Args[2])
+						}
+						p2pListeners = append(p2pListeners[:i], p2pListeners[i+1:]...)
+						return
+					}
+				}
+			}
+			results.Stderr = fmt.Sprintf("Unable to find and close SMB listener on %s", cmd.Args[2])
 		case "tcp":
 			for i, listener := range p2pListeners {
-				if listener.Listener.(net.Listener).Addr().String() == cmd.Args[2] {
-					err := listener.Listener.(net.Listener).Close()
-					if err != nil {
-						results.Stderr = err.Error()
-					} else {
-						results.Stdout = fmt.Sprintf("Succesfully closed TCP listener on %s", cmd.Args[2])
+				if listener.Type == TCP {
+					if listener.Listener.(net.Listener).Addr().String() == cmd.Args[2] {
+						err := listener.Listener.(net.Listener).Close()
+						if err != nil {
+							results.Stderr = err.Error()
+						} else {
+							results.Stdout = fmt.Sprintf("Successfully closed TCP listener on %s", cmd.Args[2])
+						}
+						p2pListeners = append(p2pListeners[:i], p2pListeners[i+1:]...)
+						return
 					}
-					p2pListeners = append(p2pListeners[:i], p2pListeners[i+1:]...)
-					return
 				}
 			}
 			results.Stderr = fmt.Sprintf("Unable to find and close TCP listener on %s", cmd.Args[2])
 		case "udp":
 			for i, listener := range p2pListeners {
-				if listener.Listener.(net.PacketConn).LocalAddr().String() == cmd.Args[2] {
-					err := listener.Listener.(net.PacketConn).Close()
-					if err != nil {
-						results.Stderr = err.Error()
-					} else {
-						results.Stdout = fmt.Sprintf("Successfully closed UDP listener on %s", cmd.Args[2])
+				if listener.Type == UDP {
+					if listener.Listener.(net.PacketConn).LocalAddr().String() == cmd.Args[2] {
+						err := listener.Listener.(net.PacketConn).Close()
+						if err != nil {
+							results.Stderr = err.Error()
+						} else {
+							results.Stdout = fmt.Sprintf("Successfully closed UDP listener on %s", cmd.Args[2])
+						}
+						p2pListeners = append(p2pListeners[:i], p2pListeners[i+1:]...)
+						return
 					}
-					p2pListeners = append(p2pListeners[:i], p2pListeners[i+1:]...)
-					return
 				}
 			}
 			results.Stderr = fmt.Sprintf("Unable to find and close UDP listener on %s", cmd.Args[2])
