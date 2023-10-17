@@ -22,7 +22,6 @@ package agent
 import (
 	// Standard
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"os/user"
@@ -52,15 +51,14 @@ type Agent struct {
 // Config is a structure that is used to pass in all necessary information to instantiate a new Agent
 type Config struct {
 	Sleep    string // Sleep is the amount of time the Agent will wait between sending messages to the server
-	Skew     string // Skew is the variance, or jitter, used to vary the sleep time so that it isn't constant
-	KillDate string // KillDate is the date, as a Unix timestamp, that agent will quit running
+	Skew     string // Skew is the variance or jitter, used to vary the sleep time so that it isn't constant
+	KillDate string // KillDate is the date as a Unix timestamp, that agent will quit running
 	MaxRetry string // MaxRetry is the maximum amount of time an agent will fail to check in before it quits running
 }
 
 // New creates a new Agent struct from the provided Config structure and returns the Agent object
 func New(config Config) (agent Agent, err error) {
 	cli.Message(cli.DEBUG, "Entering agent.New() function")
-	rand.Seed(time.Now().UnixNano())
 
 	agent = Agent{
 		id: uuid.NewV4(),

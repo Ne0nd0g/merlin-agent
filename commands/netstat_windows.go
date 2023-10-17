@@ -42,10 +42,8 @@ func Netstat(cmd jobs.Command) jobs.Results {
 	var err string
 	var actualargument string
 
-	if len(cmd.Args) == 1 {
-		actualargument = cmd.Args[0]
-	} else {
-		actualargument = cmd.Args[2]
+	if len(cmd.Args) > 1 {
+		actualargument = cmd.Args[1]
 	}
 
 	out, err := netstat(actualargument)

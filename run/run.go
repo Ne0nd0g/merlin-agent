@@ -44,8 +44,6 @@ var messageService *message.Service
 
 // Run instructs an agent to establish communications with the passed in server using the passed in client
 func Run(a agent.Agent, c clients.Client) {
-	rand.Seed(time.Now().UTC().UnixNano())
-
 	// Set up the Agent service and add the Agent to the repository through the service
 	agentService = as.NewAgentService()
 	agentService.Add(a)

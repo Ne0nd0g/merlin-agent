@@ -424,7 +424,7 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 				client.sending = true
 				client.Unlock()
 				cli.Message(cli.NOTE, fmt.Sprintf("Client connection was empty and sending signal is false, returning gratuitious StatusCheckIn messages at %s", time.Now().UTC().Format(time.RFC3339)))
-				return []messages.Base{messages.Base{ID: client.agentID, Type: messages.CHECKIN}}, nil
+				return []messages.Base{{ID: client.agentID, Type: messages.CHECKIN}}, nil
 			} else {
 				// If the connection is empty and this is a REVERSE agent, wait here until the connection is established
 				cli.Message(cli.INFO, fmt.Sprintf("Waiting for a client connection before listening for messages at %s", time.Now().UTC().Format(time.RFC3339)))

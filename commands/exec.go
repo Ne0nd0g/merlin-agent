@@ -27,12 +27,14 @@ import (
 	"os/exec"
 )
 
-// ExecuteCommand is function used to instruct an agent to execute a command on the host operating system
+// ExecuteCommand is a function used to instruct an agent to execute a command on the host operating system
 func executeCommand(name string, args []string) (stdout string, stderr string) {
 	cmd := exec.Command(name, args...) // #nosec G204
 
 	out, err := cmd.CombinedOutput()
-	stdout = fmt.Sprintf("Created %s process with an ID of %d\n", name, cmd.Process.Pid)
+	if cmd.Process != nil {
+		stdout = fmt.Sprintf("Created %s process with an ID of %d\n", name, cmd.Process.Pid)
+	}
 	stdout += string(out)
 
 	if err != nil {

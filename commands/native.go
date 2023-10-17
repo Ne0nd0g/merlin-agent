@@ -20,8 +20,6 @@ package commands
 import (
 	// Standard
 	"fmt"
-	"io/fs"
-	"io/ioutil"
 	"math"
 	"net"
 	"os"
@@ -98,9 +96,17 @@ func Native(cmd jobs.Command) jobs.Results {
 			results.Stderr = "not enough arguments provided to the 'rm' command"
 		}
 	case "sdelete":
-		results.Stdout, results.Stderr = sdelete(cmd.Args[1])
+		if len(cmd.Args) > 0 {
+			results.Stdout, results.Stderr = sdelete(cmd.Args[0])
+		} else {
+			results.Stderr = "the sdelete command requires one argument but received 0"
+		}
 	case "touch":
-		results.Stdout, results.Stderr = touch(cmd.Args[1], cmd.Args[2])
+		if len(cmd.Args) > 1 {
+			results.Stdout, results.Stderr = touch(cmd.Args[0], cmd.Args[1])
+		} else {
+			results.Stderr = fmt.Sprintf("the touch command requires two arguments but received %d", len(cmd.Args))
+		}
 	default:
 		results.Stderr = fmt.Sprintf("%s is not a valid NativeCMD type", cmd.Command)
 	}
@@ -139,15 +145,19 @@ func list(path string) (details string, err error) {
 	}
 	defer TearDown()
 
-	var files []fs.FileInfo
-	files, err = ioutil.ReadDir(aPath)
+	directories, err := os.ReadDir(aPath)
 	if err != nil {
 		return
 	}
 
 	details += fmt.Sprintf("Directory listing for: %s\r\n\r\n", aPath)
 
-	for _, f := range files {
+	for _, dir := range directories {
+		var f os.FileInfo
+		f, err = dir.Info()
+		if err != nil {
+			details += fmt.Sprintf("\nthere was an error getting file info for directory '%s'\n", dir)
+		}
 		perms := f.Mode().String()
 		size := strconv.FormatInt(f.Size(), 10)
 		modTime := f.ModTime().String()[0:19]
@@ -279,7 +289,7 @@ func sdelete(targetfile string) (resp string, stderr string) {
 
 	// calculate the new slice size
 	// based on how large our target file is
-	var fileSize int64 = fileInfo.Size()
+	var fileSize = fileInfo.Size()
 	const fileChunk = 1 * (1 << 20) //1MB Chunks
 
 	// calculate total number of parts the file will be chunked into

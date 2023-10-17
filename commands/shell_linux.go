@@ -21,6 +21,7 @@
 package commands
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 )
@@ -30,7 +31,10 @@ func shell(args []string) (stdout string, stderr string) {
 	cmd := exec.Command("/bin/sh", append([]string{"-c"}, strings.Join(args, " "))...) // #nosec G204
 
 	out, err := cmd.CombinedOutput()
-	stdout = string(out)
+	if cmd.Process != nil {
+		stdout = fmt.Sprintf("Created /bin/sh process with an ID of %d\n", cmd.Process.Pid)
+	}
+	stdout += string(out)
 	stderr = ""
 
 	if err != nil {

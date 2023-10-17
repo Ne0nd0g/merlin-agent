@@ -24,7 +24,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 
 	// Merlin Main
 	"github.com/Ne0nd0g/merlin/pkg/jobs"
@@ -46,7 +46,7 @@ func Upload(transfer jobs.FileTransfer) (jobs.FileTransfer, error) {
 	}
 	defer TearDown()
 
-	fileData, fileDataErr := ioutil.ReadFile(transfer.FileLocation)
+	fileData, fileDataErr := os.ReadFile(transfer.FileLocation)
 	if fileDataErr != nil {
 		cli.Message(cli.WARN, fmt.Sprintf("There was an error reading %s", transfer.FileLocation))
 		cli.Message(cli.WARN, fileDataErr.Error())

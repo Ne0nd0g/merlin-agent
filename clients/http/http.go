@@ -25,6 +25,7 @@ package http
 import (
 	// Standard
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"fmt"
@@ -304,7 +305,7 @@ func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, erro
 	case "h2c":
 		transport = &http2.Transport{
 			AllowHTTP: true,
-			DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
+			DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
 				return net.Dial(network, addr)
 			},
 		}

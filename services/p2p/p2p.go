@@ -129,7 +129,7 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 		link, err := s.repo.Get(delegate.Agent)
 		if err != nil {
 			cli.Message(cli.WARN, err.Error())
-			break
+			continue
 		}
 		// Lock the link so other go routines don't try to write to it at the same time causing the child to receive packets out of order
 		link.Lock()
@@ -229,7 +229,7 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 			} else {
 				cli.Message(cli.WARN, fmt.Sprintf("services/p2p.Handle(): there was an error writing a message to the linked agent %s: %s\n", link.Conn().(net.Conn).RemoteAddr(), err))
 			}
-			cli.Message(cli.WARN, fmt.Sprintf("services/p2p.Handle(): removing the linked agent %s from the repository", link.Conn().(net.Conn).RemoteAddr()))
+			cli.Message(cli.WARN, fmt.Sprintf("services/p2p.Handle(): removing the linked agent %s at %s from the repository", link.ID(), link.Conn().(net.Conn).RemoteAddr()))
 			link.Unlock()
 			s.Delete(link.ID())
 			break

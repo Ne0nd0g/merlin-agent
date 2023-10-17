@@ -21,7 +21,6 @@ import (
 	// Standard
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -59,7 +58,7 @@ func Download(transfer jobs.FileTransfer) (result jobs.Results) {
 		if downloadFileErr != nil {
 			result.Stderr = downloadFileErr.Error()
 		} else {
-			errF := ioutil.WriteFile(transfer.FileLocation, downloadFile, 0600)
+			errF := os.WriteFile(transfer.FileLocation, downloadFile, 0600)
 			if errF != nil {
 				result.Stderr = errF.Error()
 			} else {
