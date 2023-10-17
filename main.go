@@ -30,7 +30,7 @@ import (
 	// 3rd Party
 	"github.com/fatih/color"
 	"github.com/google/shlex"
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/agent"
@@ -199,7 +199,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "tcp-bind", "tcp-reverse":
-		listenerID, err := uuid.FromString(listener)
+		listenerID, err := uuid.Parse(listener)
 		if err != nil {
 			if *verbose {
 				color.Red(err.Error())
@@ -225,7 +225,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "udp-bind", "udp-reverse":
-		listenerID, err := uuid.FromString(listener)
+		listenerID, err := uuid.Parse(listener)
 		if err != nil {
 			if *verbose {
 				color.Red(err.Error())
@@ -251,7 +251,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "smb-bind", "smb-reverse":
-		listenerID, err := uuid.FromString(listener)
+		listenerID, err := uuid.Parse(listener)
 		if err != nil {
 			if *verbose {
 				color.Red(err.Error())

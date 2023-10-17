@@ -40,12 +40,10 @@ import (
 	// X Package
 	"golang.org/x/sys/windows"
 
-	// 3rd Party
-	"github.com/Ne0nd0g/npipe"
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/authenticators"
@@ -644,7 +642,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	delegateBytes := new(bytes.Buffer)
 	err = gob.NewEncoder(delegateBytes).Encode(delegate)
 	if err != nil {
-		err = fmt.Errorf("there was an error encoding the %s message to a gob:\r\n%s", messages.String(m.Type), err)
+		err = fmt.Errorf("there was an error encoding the %s message to a gob:\r\n%s", m.Type, err)
 		return
 	}
 
@@ -659,7 +657,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	outData = append(outData, delegateBytes.Bytes()...)
 	cli.Message(cli.DEBUG, fmt.Sprintf("clients/smb.Send(): Added Tag: %d and Length: %d to data size of %d\n", tag, uint64(delegateBytes.Len()), len(outData)))
 
-	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s from %s at %s", messages.String(m.Type), client.connection.RemoteAddr(), client.connection.LocalAddr(), time.Now().UTC().Format(time.RFC3339)))
+	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s from %s at %s", m.Type, client.connection.RemoteAddr(), client.connection.LocalAddr(), time.Now().UTC().Format(time.RFC3339)))
 
 	// Write the message
 	cli.Message(cli.DEBUG, fmt.Sprintf("Writing message size: %d to: %s", delegateBytes.Len(), client.connection.RemoteAddr()))
@@ -771,7 +769,7 @@ func (client *Client) Set(key string, value string) (err error) {
 		client.address = value
 	case "listener":
 		var id uuid.UUID
-		id, err = uuid.FromString(value)
+		id, err = uuid.Parse(value)
 		if err != nil {
 			return fmt.Errorf("clients/smb.Set(): %s", err)
 		}

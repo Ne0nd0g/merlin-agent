@@ -23,7 +23,7 @@ import (
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/clients"
 	"github.com/Ne0nd0g/merlin-agent/clients/memory"
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
 	"strings"
 )
 

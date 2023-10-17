@@ -27,11 +27,11 @@ import (
 
 	// 3rd Party
 	"github.com/armon/go-socks5"
-	"github.com/satori/go.uuid"
+	"github.com/google/uuid"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
+	"github.com/Ne0nd0g/merlin-message/jobs"
 )
 
 var server *socks5.Server

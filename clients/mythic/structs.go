@@ -21,7 +21,7 @@
 package mythic
 
 import (
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 )
 
 const (

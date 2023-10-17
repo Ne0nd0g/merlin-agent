@@ -30,7 +30,7 @@ import (
 
 	// Merlin
 	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
+	"github.com/Ne0nd0g/merlin-message/jobs"
 )
 
 // Uptime uses the Windows API to get the host's uptime

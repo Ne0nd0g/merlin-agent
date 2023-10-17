@@ -25,10 +25,10 @@ import (
 	"sync"
 
 	// 3rd Party
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
 )
 
 // Types of peer-to-peer links/connections

@@ -23,11 +23,11 @@ import (
 	"fmt"
 
 	// 3rd Party
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
+	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
@@ -130,7 +130,7 @@ func (s *Service) GetJobs() {
 func (s *Service) Handle(msg messages.Base) (err error) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("services/messages.Handle(): Entering into function with: %+v", msg))
 	defer cli.Message(cli.DEBUG, fmt.Sprintf("services/messages.Handle(): Leaving function with error: %+v", err))
-	cli.Message(cli.SUCCESS, fmt.Sprintf("%s message type received!", messages.String(msg.Type)))
+	cli.Message(cli.SUCCESS, fmt.Sprintf("%s message type received!", msg.Type))
 
 	if msg.ID != s.Agent {
 		cli.Message(cli.WARN, fmt.Sprintf("Input message was not for this agent (%s):\n%+v", s.Agent, msg))
@@ -151,7 +151,7 @@ func (s *Service) Handle(msg messages.Base) (err error) {
 		// Used when the Agent needs to force a checkin with the server by creating and sending a Checkin message
 		out <- msg
 	default:
-		stdErr := fmt.Sprintf("%s is not a valid message type", messages.String(msg.Type))
+		stdErr := fmt.Sprintf("%s is not a valid message type", msg.Type)
 		s.JobService.AddResult(s.Agent, "", stdErr)
 	}
 

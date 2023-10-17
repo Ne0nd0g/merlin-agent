@@ -20,10 +20,10 @@ package none
 
 import (
 	// 3rd Party
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
 )
 
 // Authenticator is a structure used for "none" authentication

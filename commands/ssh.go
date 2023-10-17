@@ -30,7 +30,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
+	"github.com/Ne0nd0g/merlin-message/jobs"
 )
 
 // SSH executes a command on a remote host using the SSH protocol and does not provide an interactive session

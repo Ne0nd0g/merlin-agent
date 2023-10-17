@@ -41,15 +41,15 @@ import (
 
 	// 3rd Party
 	"github.com/Ne0nd0g/ja3transport"
+	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
-	uuid "github.com/satori/go.uuid"
 	"golang.org/x/net/http2"
 	"gopkg.in/square/go-jose.v2"
 	"gopkg.in/square/go-jose.v2/jwt"
 
-	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	// Merlin Message
+	"github.com/Ne0nd0g/merlin-message"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/authenticators"
@@ -388,7 +388,7 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 // This is where the client's logic is for communicating with the server.
 func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err error) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Send(): Entering into function with message: %+v", m))
-	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", messages.String(m.Type), client.URL[client.currentURL]))
+	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s", m.Type, client.URL[client.currentURL]))
 
 	// Set the message padding
 	if client.PaddingMax > 0 {

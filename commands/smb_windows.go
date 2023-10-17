@@ -17,12 +17,9 @@ import (
 	// X Packages
 	"golang.org/x/sys/windows"
 
-	// 3rd Party
-	"github.com/Ne0nd0g/npipe"
-
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
+	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"

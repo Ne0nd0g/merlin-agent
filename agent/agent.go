@@ -30,7 +30,7 @@ import (
 	"time"
 
 	// 3rd Party
-	"github.com/satori/go.uuid"
+	"github.com/google/uuid"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
@@ -61,7 +61,7 @@ func New(config Config) (agent Agent, err error) {
 	cli.Message(cli.DEBUG, "Entering agent.New() function")
 
 	agent = Agent{
-		id: uuid.NewV4(),
+		id: uuid.New(),
 	}
 
 	agent.host = Host{

@@ -26,7 +26,7 @@ import (
 	"runtime"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
+	"github.com/Ne0nd0g/merlin-message/jobs"
 )
 
 // This smb.go file is part of the "link" command and is not a standalone command

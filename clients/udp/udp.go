@@ -35,10 +35,10 @@ import (
 	"time"
 
 	// 3rd Party
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/authenticators"
 	"github.com/Ne0nd0g/merlin-agent/authenticators/none"
@@ -565,7 +565,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		cli.Message(cli.INFO, fmt.Sprintf("Authentication completed, continuing with sending held message at %s", time.Now().UTC().Format(time.RFC3339)))
 	}
 
-	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s at %s", messages.String(m.Type), client.client, time.Now().UTC().Format(time.RFC3339)))
+	cli.Message(cli.NOTE, fmt.Sprintf("Sending %s message to %s at %s", m.Type, client.client, time.Now().UTC().Format(time.RFC3339)))
 
 	// Set the message padding
 	if client.paddingMax > 0 {
@@ -590,7 +590,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	delegateBytes := new(bytes.Buffer)
 	err = gob.NewEncoder(delegateBytes).Encode(delegate)
 	if err != nil {
-		err = fmt.Errorf("clients/udp.Send(): there was an error encoding the %s message to a gob:\r\n%s", messages.String(m.Type), err)
+		err = fmt.Errorf("clients/udp.Send(): there was an error encoding the %s message to a gob:\r\n%s", m.Type, err)
 		return
 	}
 
@@ -734,7 +734,7 @@ func (client *Client) Set(key string, value string) (err error) {
 		err = client.ResetListener()
 	case "listener":
 		var id uuid.UUID
-		id, err = uuid.FromString(value)
+		id, err = uuid.Parse(value)
 		if err != nil {
 			return fmt.Errorf("clients/udp.Set(): %s", err)
 		}

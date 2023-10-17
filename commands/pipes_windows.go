@@ -29,7 +29,7 @@ import (
 
 	// Merlin
 	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
+	"github.com/Ne0nd0g/merlin-message/jobs"
 )
 
 // Pipes enumerates and returns a list of named pipes for Windows hosts only

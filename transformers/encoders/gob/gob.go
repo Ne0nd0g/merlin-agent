@@ -25,7 +25,7 @@ import (
 	"fmt"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
 )
 
 const (

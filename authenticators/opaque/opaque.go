@@ -26,11 +26,11 @@ import (
 
 	// 3rd Party
 	"github.com/cretz/gopaque/gopaque"
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/pbkdf2"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
 	"github.com/Ne0nd0g/merlin/pkg/opaque"
 
 	// Internal
@@ -180,10 +180,16 @@ func UserRegisterInit(AgentID uuid.UUID, user *User) (opaque.Opaque, *User, erro
 		var newUser User
 		// Generate a random password and run it through 5000 iterations of PBKDF2; Used with OPAQUE
 		x := core.RandStringBytesMaskImprSrc(30)
-		newUser.pwdU = pbkdf2.Key([]byte(x), AgentID.Bytes(), 5000, 32, sha256.New)
+
+		agentIDBytes, err := AgentID.MarshalBinary()
+		if err != nil {
+			return opaque.Opaque{}, nil, fmt.Errorf("there was an error marshalling the AgentID to bytes: %s", err)
+		}
+
+		newUser.pwdU = pbkdf2.Key([]byte(x), agentIDBytes, 5000, 32, sha256.New)
 
 		// Build OPAQUE User Registration Initialization
-		newUser.reg = gopaque.NewUserRegister(gopaque.CryptoDefault, AgentID.Bytes(), nil)
+		newUser.reg = gopaque.NewUserRegister(gopaque.CryptoDefault, agentIDBytes, nil)
 		user = &newUser
 	}
 
@@ -253,9 +259,14 @@ func UserRegisterComplete(regInitResp opaque.Opaque, user *User) (opaque.Opaque,
 func UserAuthenticateInit(AgentID uuid.UUID, user *User) (opaque.Opaque, error) {
 	cli.Message(cli.DEBUG, "Entering into opaque.UserAuthenticateInit...")
 
+	agentIDBytes, err := AgentID.MarshalBinary()
+	if err != nil {
+		return opaque.Opaque{}, fmt.Errorf("there was an error marshalling the AgentID to bytes: %s", err)
+	}
+
 	// 1 - Create a NewUserAuth with an embedded key exchange
 	user.Kex = gopaque.NewKeyExchangeSigma(gopaque.CryptoDefault)
-	user.auth = gopaque.NewUserAuth(gopaque.CryptoDefault, AgentID.Bytes(), user.Kex)
+	user.auth = gopaque.NewUserAuth(gopaque.CryptoDefault, agentIDBytes, user.Kex)
 
 	// 2 - Call Init with the password and send the resulting UserAuthInit to the server
 	userAuthInit, err := user.auth.Init(user.pwdU)

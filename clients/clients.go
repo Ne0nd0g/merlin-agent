@@ -20,7 +20,7 @@ package clients
 
 import (
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
 )
 
 // Client is an interface definition a client must implement to interact with a remote server

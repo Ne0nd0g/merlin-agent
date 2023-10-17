@@ -22,7 +22,7 @@ import (
 	"net"
 
 	// 3rd Party
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 )
 
 type Repository interface {

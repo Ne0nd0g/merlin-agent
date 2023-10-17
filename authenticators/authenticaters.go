@@ -21,7 +21,7 @@ package authenticators
 
 import (
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
 )
 
 // Authenticator is an interface used by various authentication methods

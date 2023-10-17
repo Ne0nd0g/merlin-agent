@@ -7,11 +7,11 @@ import (
 	"time"
 
 	// 3rd Party
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
+	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
@@ -26,7 +26,7 @@ func Unlink(cmd jobs.Command) (results jobs.Results) {
 	}
 
 	// Convert Agent ID to UUID
-	agentID, err := uuid.FromString(cmd.Args[0])
+	agentID, err := uuid.Parse(cmd.Args[0])
 	if err != nil {
 		results.Stderr = fmt.Sprintf("commands/unlink.Unlink(): there was an error converting Agent ID %s to a valid UUID: %s", cmd.Args[0], err)
 		return

@@ -26,7 +26,7 @@ import (
 	"time"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/agent"
@@ -183,7 +183,7 @@ func checkIn() {
 	// Handle return messages from the Merlin server or the parent Agent
 	for _, base := range bases {
 		cli.Message(cli.DEBUG, fmt.Sprintf("Agent ID: %s", base.ID))
-		cli.Message(cli.DEBUG, fmt.Sprintf("Message Type: %s", messages.String(base.Type)))
+		cli.Message(cli.DEBUG, fmt.Sprintf("Message Type: %s", base.Type))
 		cli.Message(cli.DEBUG, fmt.Sprintf("Message Payload: %+v", base.Payload))
 
 		// Handle message

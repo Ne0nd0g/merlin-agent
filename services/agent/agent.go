@@ -29,7 +29,7 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/clients"
 	clientMemory "github.com/Ne0nd0g/merlin-agent/clients/memory"
 	"github.com/Ne0nd0g/merlin-agent/core"
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	"github.com/Ne0nd0g/merlin-message"
 )
 
 // Service is the structure used to interact with Agent objects

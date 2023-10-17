@@ -24,7 +24,7 @@ import (
 
 	// Merlin
 	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
+	"github.com/Ne0nd0g/merlin-message/jobs"
 )
 
 // Pipes is only a valid function on Windows agents...for now
