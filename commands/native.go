@@ -1,19 +1,22 @@
-// Merlin is a post-exploitation command and control framework.
-// This file is part of Merlin.
-// Copyright (C) 2023  Russel Van Tuyl
+/*
+Merlin is a post-exploitation command and control framework.
 
-// Merlin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// any later version.
+This file is part of Merlin.
+Copyright (C) 2023 Russel Van Tuyl
 
-// Merlin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+Merlin is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+any later version.
 
-// You should have received a copy of the GNU General Public License
-// along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+Merlin is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 package commands
 
@@ -51,7 +54,13 @@ func Native(cmd jobs.Command) jobs.Results {
 			results.Stderr = err.Error()
 			break
 		}
-		defer TearDown()
+		// Defer TearDown and return any errors
+		defer func() {
+			err = TearDown()
+			if err != nil {
+				results.Stderr += fmt.Sprintf("there was an error tearing down the OS environment when executing the 'cd' command: %s", err)
+			}
+		}()
 		err = os.Chdir(cmd.Args[0])
 		if err != nil {
 			results.Stderr = fmt.Sprintf("there was an error changing directories when executing the 'cd' command:\r\n%s", err.Error())
@@ -131,7 +140,7 @@ func list(path string) (details string, err error) {
 	if strings.HasPrefix(path, "\\\\") {
 		aPath = path
 	} else {
-		// Resolve relative path to absolute
+		// Resolve a relative path to absolute
 		aPath, err = filepath.Abs(path)
 		if err != nil {
 			return "", err
@@ -143,7 +152,17 @@ func list(path string) (details string, err error) {
 	if err != nil {
 		return
 	}
-	defer TearDown()
+	// Defer TearDown and return any errors
+	defer func() {
+		err2 := TearDown()
+		if err2 != nil {
+			if err != nil {
+				err = fmt.Errorf("there were multiple errors. 1. %s 2. %s", err, err2)
+			} else {
+				err = err2
+			}
+		}
+	}()
 
 	directories, err := os.ReadDir(aPath)
 	if err != nil {
@@ -210,7 +229,13 @@ func killProcess(pid string) (stdout string, stderr string) {
 		stderr = err.Error()
 		return
 	}
-	defer TearDown()
+	// Defer TearDown and return any errors
+	defer func() {
+		err = TearDown()
+		if err != nil {
+			stderr += fmt.Sprintf("there was an error tearing down the OS environment when executing the 'killprocess' command: %s", err)
+		}
+	}()
 
 	proc, err := os.FindProcess(targetpid)
 	if err != nil { // On linux, always returns a process. Don't worry, the Kill() will fail
@@ -238,7 +263,13 @@ func rm(path string) (stdout, stderr string) {
 		stderr = err.Error()
 		return
 	}
-	defer TearDown()
+	// Defer TearDown and return any errors
+	defer func() {
+		err = TearDown()
+		if err != nil {
+			stderr += fmt.Sprintf("there was an error tearing down the OS environment when executing the 'rm' command: %s", err)
+		}
+	}()
 
 	// Verify that file exists
 	_, err = os.Stat(path)
@@ -266,7 +297,13 @@ func sdelete(targetfile string) (resp string, stderr string) {
 		stderr = err.Error()
 		return
 	}
-	defer TearDown()
+	// Defer TearDown and return any errors
+	defer func() {
+		err = TearDown()
+		if err != nil {
+			stderr += fmt.Sprintf("there was an error tearing down the OS environment when executing the 'sdelete' command: %s", err)
+		}
+	}()
 
 	// make sure we open the file with correct permission
 	// otherwise we will get the bad file descriptor error
@@ -305,7 +342,7 @@ func sdelete(targetfile string) (resp string, stderr string) {
 		copy(partZeroBytes[:], "0")
 
 		// overwrite every byte in the chunk with 0
-		n, err := file.WriteAt([]byte(partZeroBytes), int64(lastPosition))
+		n, err := file.WriteAt(partZeroBytes, int64(lastPosition))
 
 		if err != nil {
 			stderr = fmt.Sprintf("Error over writing file: %s\r\n%s", targetfile, err.Error())
@@ -337,10 +374,7 @@ func sdelete(targetfile string) (resp string, stderr string) {
 }
 
 // touch matches the destination file's timestamps with source file
-func touch(inputsourcefile string, inputdestinationfile string) (string, string) {
-	var resp string
-	var stderr string
-
+func touch(inputsourcefile string, inputdestinationfile string) (resp string, stderr string) {
 	sourcefilename := inputsourcefile
 	destinationfilename := inputdestinationfile
 
@@ -349,7 +383,13 @@ func touch(inputsourcefile string, inputdestinationfile string) (string, string)
 	if err != nil {
 		return "", err.Error()
 	}
-	defer TearDown()
+	// Defer TearDown and return any errors
+	defer func() {
+		err = TearDown()
+		if err != nil {
+			stderr += fmt.Sprintf("there was an error tearing down the OS environment when executing the 'touch' command: %s", err)
+		}
+	}()
 
 	// get last modified time of source file
 	sourcefile, err1 := os.Stat(sourcefilename)

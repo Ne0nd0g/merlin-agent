@@ -1,19 +1,22 @@
-// Merlin is a post-exploitation command and control framework.
-// This file is part of Merlin.
-// Copyright (C) 2023  Russel Van Tuyl
+/*
+Merlin is a post-exploitation command and control framework.
 
-// Merlin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// any later version.
+This file is part of Merlin.
+Copyright (C) 2023 Russel Van Tuyl
 
-// Merlin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+Merlin is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+any later version.
 
-// You should have received a copy of the GNU General Public License
-// along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+Merlin is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 // Package udp contains a configurable client used for UDP-based peer-to-peer Agent communications
 package udp
@@ -520,8 +523,8 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 		err = fmt.Errorf("clients/udp.Listen(): there was an error deconstructing the data: %s", err)
 		cli.Message(cli.DEBUG, err.Error())
 		// See if the data was from initial link command from another agent
-		b64 := make([]byte, base64.StdEncoding.EncodedLen(n))
-		_, errBase64 := base64.StdEncoding.Decode(b64, buff.Bytes()[12:])
+		b64Data := make([]byte, base64.StdEncoding.EncodedLen(n))
+		_, errBase64 := base64.StdEncoding.Decode(b64Data, buff.Bytes()[12:])
 		if errBase64 == nil {
 			cli.Message(cli.INFO, fmt.Sprintf("Received Base64 encoded string from %s. Treating as a new connection...", client.client))
 			// Send gratuitous checkin to provide parent Agent with linked agent data
@@ -532,7 +535,6 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 		}
 		return
 	}
-
 	returnMessages = append(returnMessages, msg)
 	return
 }

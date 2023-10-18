@@ -1,22 +1,24 @@
 //go:build !mythic
-// +build !mythic
 
-// Merlin is a post-exploitation command and control framework.
-// This file is part of Merlin.
-// Copyright (C) 2023  Russel Van Tuyl
+/*
+Merlin is a post-exploitation command and control framework.
 
-// Merlin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// any later version.
+This file is part of Merlin.
+Copyright (C) 2023 Russel Van Tuyl
 
-// Merlin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+Merlin is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+any later version.
 
-// You should have received a copy of the GNU General Public License
-// along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+Merlin is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 // Package http implements the Client interface and contains the structures and functions to communicate to the Merlin
 // server over the HTTP protocol
@@ -233,8 +235,6 @@ func New(config Config) (*Client, error) {
 func getClient(protocol string, proxyURL string, ja3 string) (*http.Client, error) {
 	cli.Message(cli.DEBUG, "Entering into clients.http.getClient()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Protocol: %s, Proxy: %s, JA3 String: %s", protocol, proxyURL, ja3))
-	/* #nosec G402 */
-	// G402: TLS InsecureSkipVerify set true. (Confidence: HIGH, Severity: HIGH) Allowed for testing
 	// Setup TLS configuration
 	TLSConfig := &tls.Config{
 		MinVersion:         tls.VersionTLS12,
@@ -434,7 +434,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		// Don't do anything
 	} else if len(client.URL) > 1 {
 		// Randomly rotate URL for the NEXT request
-		client.currentURL = rand.Intn(len(client.URL))
+		client.currentURL = rand.Intn(len(client.URL)) // #nosec G404 random number is not used for secrets
 
 		// Sequentially rotate URL for the NEXT request
 		//if client.currentURL < (len(client.URL) - 1) {

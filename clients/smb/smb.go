@@ -1,21 +1,24 @@
 //go:build !windows
 
-// Merlin is a post-exploitation command and control framework.
-// This file is part of Merlin.
-// Copyright (C) 2023  Russel Van Tuyl
+/*
+Merlin is a post-exploitation command and control framework.
 
-// Merlin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// any later version.
+This file is part of Merlin.
+Copyright (C) 2023 Russel Van Tuyl
 
-// Merlin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+Merlin is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+any later version.
 
-// You should have received a copy of the GNU General Public License
-// along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+Merlin is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 // Package smb contains a configurable client used for Windows-based SMB peer-to-peer Agent communications
 package smb
@@ -55,7 +58,7 @@ type Client struct {
 	sync.Mutex                                 // used to lock the Client when changes are being made by one function or routine
 }
 
-// Config is a structure that is used to pass in all necessary information to instantiate a new Client
+// Config is a structure used to pass in all necessary information to instantiate a new Client
 type Config struct {
 	Address      []string  // Address the interface and port the agent will bind to
 	AgentID      uuid.UUID // AgentID the Agent's UUID
@@ -68,18 +71,18 @@ type Config struct {
 }
 
 // New instantiates and returns a Client that is constructed from the passed in Config
-func New(config Config) (*Client, error) {
+func New(Config) (*Client, error) {
 	return nil, fmt.Errorf("clients/smb.New(): this function is not supported by the %s operating system", runtime.GOOS)
 }
 
 // Authenticate is the top-level function used to authenticate an agent to server using a specific authentication protocol
 // The function must take in a Base message for when the C2 server requests re-authentication through a message
-func (client *Client) Authenticate(msg messages.Base) (err error) {
+func (client *Client) Authenticate(messages.Base) (err error) {
 	return fmt.Errorf("clients/smb.Authenticate(): the smb client is not supported for the %s operating system", runtime.GOOS)
 }
 
-// Get is a generic function that is used to retrieve the value of a Client's field
-func (client *Client) Get(key string) string {
+// Get is a generic function used to retrieve the value of a Client's field
+func (client *Client) Get(string) string {
 	return fmt.Sprintf("clients/smb.Get(): the smb client is not supported for the %s operating system", runtime.GOOS)
 }
 
@@ -96,7 +99,7 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 
 // Send takes in a Merlin message structure, performs any encoding or encryption, converts it to a delegate and writes it to the output stream.
 // This function DOES not wait or listen for response messages.
-func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err error) {
+func (client *Client) Send(messages.Base) (returnMessages []messages.Base, err error) {
 	err = fmt.Errorf("clients/smb.Send(): the smb client is not supported for the %s operating system", runtime.GOOS)
 	return
 }
