@@ -53,7 +53,7 @@ import (
 
 	// Merlin Main
 	"github.com/Ne0nd0g/merlin-message"
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
+	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
@@ -61,7 +61,7 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/core"
 )
 
-// Files is global map used to track Mythic's multistep file transfers. It holds data between requests
+// Files is a global map used to track Mythic's multistep file transfers. It holds data between requests
 var Files = make(map[string]*jobs.FileTransfer)
 
 // socksConnection is used to map the Mythic incremental integer used for tracking connections to a UUID leveraged by the agent

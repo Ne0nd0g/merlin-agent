@@ -31,7 +31,7 @@ import (
 
 	// Merlin
 	"github.com/Ne0nd0g/merlin-message"
-	"github.com/Ne0nd0g/merlin/pkg/opaque"
+	"github.com/Ne0nd0g/merlin-message/opaque"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
