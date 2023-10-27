@@ -43,12 +43,12 @@ import (
 
 	// 3rd Party
 	"github.com/Ne0nd0g/ja3transport"
+	"github.com/go-jose/go-jose/v3"
+	"github.com/go-jose/go-jose/v3/jwt"
 	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
-	"gopkg.in/square/go-jose.v2"
-	"gopkg.in/square/go-jose.v2/jwt"
 
 	// Merlin Message
 	"github.com/Ne0nd0g/merlin-message"
