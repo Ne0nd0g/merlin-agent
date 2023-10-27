@@ -43,6 +43,8 @@ import (
 	// X Package
 	"golang.org/x/sys/windows"
 
+	// 3rd Party
+	"github.com/Ne0nd0g/npipe"
 	"github.com/google/uuid"
 
 	// Merlin

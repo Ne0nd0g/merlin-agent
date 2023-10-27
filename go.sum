@@ -11,6 +11,7 @@ github.com/Ne0nd0g/ja3transport v0.0.0-20200203013218-e81e31892d84 h1:CxXYecCuU2
 github.com/Ne0nd0g/ja3transport v0.0.0-20200203013218-e81e31892d84/go.mod h1:wxn6ch+dbwLI8e+ndsotd9vb+Txzk5JM0OTdzMNq1K0=
 github.com/Ne0nd0g/merlin-message v1.1.0 h1:rvuWjVq2prKdc7RBJ9U0PVNdIVNOvSvRJow+0j5k/wk=
 github.com/Ne0nd0g/merlin-message v1.1.0/go.mod h1:bsG0LyW9KR9oA/kxylMVdo8jq6vgJDdaPkYaBJABMmc=
+github.com/Ne0nd0g/npipe v1.1.0 h1:oTDJfD8yrr2BLGZpKEllCmeGpcbmx6LW1uuS2bxIBoM=
 github.com/Ne0nd0g/npipe v1.1.0/go.mod h1:GKyLKRkYambQuI9VIfMrz1Mf5hOGlEvZkhw1chph/IQ=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
