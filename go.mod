@@ -13,7 +13,7 @@ require (
 	github.com/fatih/color v1.15.0
 	github.com/go-jose/go-jose/v3 v3.0.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
-	github.com/google/uuid v1.3.1
+	github.com/google/uuid v1.4.0
 	github.com/quic-go/quic-go v0.39.1
 	golang.org/x/crypto v0.14.0
 	golang.org/x/net v0.17.0
