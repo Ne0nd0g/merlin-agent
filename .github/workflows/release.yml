@@ -1,0 +1,42 @@
+name: "Merlin Agent Release"
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    name: 'Release Job'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        id: setup_go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install 7zip
+        id: install_7zip
+        run: apt-get install p7zip-full
+
+      - name: Make Distribution
+        id: make_distro
+        run: make distro
+
+      - name: Create Draft Release
+        id: create_draft_release
+        uses: ncipollo/release-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: true
+          prerelease: false
+          artifactErrorsFailBuild: true
+          artifacts: '*.7z'

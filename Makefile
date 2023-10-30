@@ -143,10 +143,13 @@ package-freebsd:
 	${PACKAGE} ${DIR}/${MAGENT}-${B}.7z ${F}
 	cd ${DIR};${PACKAGE} ${MAGENT}-${B}.7z ${MAGENT}-${D}
 
+package-move:
+	cp ${DIR}/${MAGENT}*.7z .
+
 clean:
 	rm -rf ${DIR}*
 
 package-all: package-windows package-linux package-darwin
 
 #Build all files for release distribution
-distro: clean all package-all
+distro: clean all package-all package-move
