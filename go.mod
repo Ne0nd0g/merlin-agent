@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/C-Sto/BananaPhone v0.0.0-20220220002628-6585e5913761
 	github.com/Ne0nd0g/go-clr v1.0.3
-	github.com/Ne0nd0g/ja3transport v0.0.0-20200203013218-e81e31892d84
+	github.com/Ne0nd0g/ja3transport v1.1.0
 	github.com/Ne0nd0g/merlin-message v1.2.0
 	github.com/Ne0nd0g/npipe v1.1.0
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
@@ -14,7 +14,7 @@ require (
 	github.com/go-jose/go-jose/v3 v3.0.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.4.0
-	github.com/quic-go/quic-go v0.39.3
+	github.com/quic-go/quic-go v0.40.0
 	golang.org/x/crypto v0.14.0
 	golang.org/x/net v0.17.0
 	golang.org/x/sys v0.13.0
@@ -22,16 +22,19 @@ require (
 
 require (
 	github.com/Binject/debug v0.0.0-20211007083345-9605c99179ee // indirect
-	github.com/CUCyber/ja3transport v0.0.0-20201031204932-8a22ac8ab5d7 // indirect
+	github.com/andybalholm/brotli v1.0.6 // indirect
 	github.com/awgh/rawreader v0.0.0-20200626064944-56820a9c6da4 // indirect
+	github.com/cloudflare/circl v1.3.6 // indirect
+	github.com/gaukas/godicttls v0.0.4 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/google/pprof v0.0.0-20231023181126-ff6d637d2a7b // indirect
+	github.com/klauspost/compress v1.17.2 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/onsi/ginkgo/v2 v2.13.0 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/quic-go/qtls-go1-20 v0.4.1 // indirect
-	github.com/refraction-networking/utls v0.0.0-20200820030103-33a29038e742 // indirect
+	github.com/refraction-networking/utls v1.5.4 // indirect
 	go.dedis.ch/fixbuf v1.0.3 // indirect
 	go.dedis.ch/kyber/v3 v3.1.0 // indirect
 	go.uber.org/mock v0.3.0 // indirect

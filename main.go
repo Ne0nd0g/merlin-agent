@@ -173,6 +173,7 @@ func main() {
 
 	// Get the client
 	var client clients.Client
+	var listenerID uuid.UUID
 	switch protocol {
 	case "http", "https", "h2", "h2c", "http3":
 		clientConfig := http.Config{
@@ -202,11 +203,12 @@ func main() {
 			os.Exit(1)
 		}
 	case "tcp-bind", "tcp-reverse":
-		listenerID, err := uuid.Parse(listener)
+		listenerID, err = uuid.Parse(listener)
 		if err != nil {
 			if *verbose {
 				color.Red(err.Error())
 			}
+			os.Exit(1)
 		}
 		config := tcp.Config{
 			AgentID:      a.ID(),
@@ -228,11 +230,12 @@ func main() {
 			os.Exit(1)
 		}
 	case "udp-bind", "udp-reverse":
-		listenerID, err := uuid.Parse(listener)
+		listenerID, err = uuid.Parse(listener)
 		if err != nil {
 			if *verbose {
 				color.Red(err.Error())
 			}
+			os.Exit(1)
 		}
 		config := udp.Config{
 			AgentID:      a.ID(),
@@ -254,11 +257,12 @@ func main() {
 			os.Exit(1)
 		}
 	case "smb-bind", "smb-reverse":
-		listenerID, err := uuid.Parse(listener)
+		listenerID, err = uuid.Parse(listener)
 		if err != nil {
 			if *verbose {
 				color.Red(err.Error())
 			}
+			os.Exit(1)
 		}
 		config := smb.Config{
 			Address:      []string{addr},
