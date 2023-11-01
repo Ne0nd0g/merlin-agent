@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.0.0 - 2023-11-01
+
+### Added
+
+- Peer-to-Peer Agent communication methods: smb-bind, smb-reverse, tcp-bind, tcp-reverse, udp-bind, udp-reverse
+  - An associated Listener UUID must be provided with `-listener` command line argument or `LISTENER` Make file variable
+  - An associated network interface and port must be provided with the `-addr` command line argument or `ADDR` Make file variable
+  - `Delegate` message type and associated handling
+- Configurable Agent authentication methods: OPAQUE & none
+  - Added `auth` variable to main.go
+  - Added `AUTH` variable to Make file (e.g., `make windows AUTH=OPAQUE`)
+  - Added `-auth` command line argument
+- Configurable Agent transforms: gob-base, gob-string, base64-byte, base64-string, hex,-byte, hex-string, aes, jwe, rc4, and xor
+  - Added `transforms` variable to main.go
+  - Added `TRANSFORMS` variable to Make file (e.g., `make windows TRANSFORMS=aes,gob-base)
+  - Added `-transforms` command line argument
+- `link` command for the Agent to initiate a peer-to-peer connection with a listening bind agent
+  - Example: `link tcp 192.168.1.72:4444`
+- `listener` command for the Agent to start a listener to receive a connection from a reverse peer-to-peer connection
+  - `list` to return a list of instantiated on the Agent (e.g., `listener list`)
+  - `start` to start a listener based on the passed in type and interface
+    - Example: `listener start tcp 0.0.0.0:4444`
+  - `stop` to stop an already created listener
+    - Example: `listener stop tcp [::]:4444`
+- `unlink` command to disconnect a chile peer-to-peer agent from its parent
+  - Example: `unlink childAgentID`
+- GitHub Actions for building and testing the Merlin Agent
+- Implemented "services" and "repositories"
+  - Services are: agent, client, job, message, and p2p
+
+### Changed
+
+- Moved from `Initial` to `Authenticated` for Agent struct
+- Removed tests
+- Upgraded [quic-go](https://github.com/quic-go/quic-go) to v0.40.0
+- The Minimum supported Go version is now 1.20
+- HTTP URL rotation strategy is now random instead of round-robin
+- Replaced `github.com/satori/go.uuid` with `github.com/google/uuid`
+- Replaced `github.com/square/go-jose` with `github.com/go-jose/go-jose`
+- Replaced `github.com/Ne0nd0g/merlin/pkg/messages` with `github.com/Ne0nd0g/merlin-message`
+  - Removes the need to depend on or import the Merlin Server package 
+
 ## 1.6.5 - 2023-06-10
 
 ### Changed

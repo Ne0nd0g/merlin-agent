@@ -17,7 +17,7 @@ BUILD=$(shell git rev-parse HEAD)
 DIR=bin/v${VERSION}/${BUILD}
 
 # Merlin Agent Variables
-XBUILD=-X "main.build=${BUILD}" -X "github.com/Ne0nd0g/merlin-agent/agent.build=${BUILD}"
+XBUILD=-X "github.com/Ne0nd0g/merlin-agent/core.Build=${BUILD}"
 URL ?= https://127.0.0.1:443
 XURL=-X "main.url=${URL}"
 PSK ?= merlin
@@ -46,10 +46,18 @@ RETRY ?= 7
 XRETRY=-X "main.maxretry=${RETRY}"
 PARROT ?=
 XPARROT=-X "main.parrot=${PARROT}"
+AUTH ?= opaque
+XAUTH=-X "main.auth=${AUTH}"
+ADDR ?= 127.0.0.1:4444
+XADDR=-X "main.addr=${ADDR}"
+TRANSFORMS ?= jwe,gob-base
+XTRANSFORMS=-X "main.transforms=${TRANSFORMS}"
+LISTENER ?=
+XLISTENER=-X "main.listener=${LISTENER}"
 
 # Compile Flags
-LDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} ${XPARROT} -buildid='
-WINAGENTLDFLAGS=-ldflags '-s -w ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} ${XPARROT} -H=windowsgui -buildid='
+LDFLAGS=-ldflags '-s -w ${XADDR} ${XAUTH} ${XTRANSFORMS} ${XLISTENER} ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} ${XPARROT} -buildid='
+WINAGENTLDFLAGS=-ldflags '-s -w ${XAUTH} ${XADDR} ${XTRANSFORMS} ${XLISTENER} ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} ${XPARROT} -H=windowsgui -buildid='
 GCFLAGS=-gcflags=all=-trimpath=$(GOPATH)
 ASMFLAGS=-asmflags=all=-trimpath=$(GOPATH)# -asmflags=-trimpath=$(GOPATH)
 
@@ -137,10 +145,13 @@ package-freebsd:
 	${PACKAGE} ${DIR}/${MAGENT}-${B}.7z ${F}
 	cd ${DIR};${PACKAGE} ${MAGENT}-${B}.7z ${MAGENT}-${D}
 
+package-move:
+	cp ${DIR}/${MAGENT}*.7z .
+
 clean:
 	rm -rf ${DIR}*
 
 package-all: package-windows package-linux package-darwin
 
 #Build all files for release distribution
-distro: clean all package-all
+distro: clean all package-all package-move

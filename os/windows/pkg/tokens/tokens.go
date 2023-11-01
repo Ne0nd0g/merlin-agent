@@ -1,22 +1,24 @@
 //go:build windows
-// +build windows
 
-// Merlin is a post-exploitation command and control framework.
-// This file is part of Merlin.
-// Copyright (C) 2022  Russel Van Tuyl
+/*
+Merlin is a post-exploitation command and control framework.
 
-// Merlin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// any later version.
+This file is part of Merlin.
+Copyright (C) 2023 Russel Van Tuyl
 
-// Merlin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+Merlin is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+any later version.
 
-// You should have received a copy of the GNU General Public License
-// along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+Merlin is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 package tokens
 
@@ -755,18 +757,19 @@ func TokenTypeToString(tokenType uint32) string {
 
 // TOKEN_STATISTICS contains information about an access token
 // https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-token_statistics
-// typedef struct _TOKEN_STATISTICS {
-//  LUID                         TokenId;
-//  LUID                         AuthenticationId;
-//  LARGE_INTEGER                ExpirationTime;
-//  TOKEN_TYPE                   TokenType;
-//  SECURITY_IMPERSONATION_LEVEL ImpersonationLevel;
-//  DWORD                        DynamicCharged;
-//  DWORD                        DynamicAvailable;
-//  DWORD                        GroupCount;
-//  DWORD                        PrivilegeCount;
-//  LUID                         ModifiedId;
-//} TOKEN_STATISTICS, *PTOKEN_STATISTICS;
+//
+//	typedef struct _TOKEN_STATISTICS {
+//	 LUID                         TokenId;
+//	 LUID                         AuthenticationId;
+//	 LARGE_INTEGER                ExpirationTime;
+//	 TOKEN_TYPE                   TokenType;
+//	 SECURITY_IMPERSONATION_LEVEL ImpersonationLevel;
+//	 DWORD                        DynamicCharged;
+//	 DWORD                        DynamicAvailable;
+//	 DWORD                        GroupCount;
+//	 DWORD                        PrivilegeCount;
+//	 LUID                         ModifiedId;
+//	} TOKEN_STATISTICS, *PTOKEN_STATISTICS;
 type TOKEN_STATISTICS struct {
 	TokenId            windows.LUID
 	AuthenticationId   windows.LUID

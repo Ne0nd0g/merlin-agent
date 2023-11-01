@@ -1,19 +1,22 @@
-// Merlin is a post-exploitation command and control framework.
-// This file is part of Merlin.
-// Copyright (C) 2022  Russel Van Tuyl
+/*
+Merlin is a post-exploitation command and control framework.
 
-// Merlin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// any later version.
+This file is part of Merlin.
+Copyright (C) 2023 Russel Van Tuyl
 
-// Merlin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+Merlin is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+any later version.
 
-// You should have received a copy of the GNU General Public License
-// along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+Merlin is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 package cli
 
@@ -40,32 +43,45 @@ const (
 
 // Message is used to print text to Standard Out
 func Message(level int, message string) {
-	core.Mutex.Lock()
-	defer core.Mutex.Unlock()
+	if core.Verbose == false && core.Debug == false {
+		return
+	}
 	switch level {
 	case INFO:
 		if core.Verbose {
+			core.Mutex.Lock()
 			color.Cyan("[i]" + message)
+			core.Mutex.Unlock()
 		}
 	case NOTE:
 		if core.Verbose {
+			core.Mutex.Lock()
 			color.Yellow("[-]" + message)
+			core.Mutex.Unlock()
 		}
 	case WARN:
 		if core.Verbose {
+			core.Mutex.Lock()
 			color.Red("[!]" + message)
+			core.Mutex.Unlock()
 		}
 	case DEBUG:
 		if core.Debug {
+			core.Mutex.Lock()
 			color.Red("[DEBUG]" + message)
+			core.Mutex.Unlock()
 		}
 	case SUCCESS:
 		if core.Verbose {
+			core.Mutex.Lock()
 			color.Green("[+]" + message)
+			core.Mutex.Unlock()
 		}
 	default:
 		if core.Verbose {
+			core.Mutex.Lock()
 			color.Red("[_-_]Invalid message level: " + message)
+			core.Mutex.Unlock()
 		}
 	}
 }

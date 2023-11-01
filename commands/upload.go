@@ -1,19 +1,22 @@
-// Merlin is a post-exploitation command and control framework.
-// This file is part of Merlin.
-// Copyright (C) 2022  Russel Van Tuyl
+/*
+Merlin is a post-exploitation command and control framework.
 
-// Merlin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// any later version.
+This file is part of Merlin.
+Copyright (C) 2023 Russel Van Tuyl
 
-// Merlin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+Merlin is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+any later version.
 
-// You should have received a copy of the GNU General Public License
-// along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+Merlin is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 package commands
 
@@ -24,29 +27,38 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 
 	// Merlin Main
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
+	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
 )
 
 // Upload receives a job from the server to upload a file from the host to the Merlin server
-func Upload(transfer jobs.FileTransfer) (jobs.FileTransfer, error) {
+func Upload(transfer jobs.FileTransfer) (ft jobs.FileTransfer, err error) {
 	cli.Message(cli.DEBUG, "Entering into commands.Upload() function")
 	// Agent will be uploading a file to the server
 	cli.Message(cli.NOTE, "FileTransfer type: Upload")
 
 	// Setup OS environment, if any
-	err := Setup()
+	err = Setup()
 	if err != nil {
 		return jobs.FileTransfer{}, err
 	}
-	defer TearDown()
+	defer func() {
+		err2 := TearDown()
+		if err2 != nil {
+			if err != nil {
+				err = fmt.Errorf("there were multiple errors. 1. %s 2. %s", err, err2)
+			} else {
+				err = err2
+			}
+		}
+	}()
 
-	fileData, fileDataErr := ioutil.ReadFile(transfer.FileLocation)
+	fileData, fileDataErr := os.ReadFile(transfer.FileLocation)
 	if fileDataErr != nil {
 		cli.Message(cli.WARN, fmt.Sprintf("There was an error reading %s", transfer.FileLocation))
 		cli.Message(cli.WARN, fileDataErr.Error())
@@ -64,9 +76,9 @@ func Upload(transfer jobs.FileTransfer) (jobs.FileTransfer, error) {
 		len(fileData),
 		fileHash.Sum(nil)))
 
-	ft := jobs.FileTransfer{
+	ft = jobs.FileTransfer{
 		FileLocation: transfer.FileLocation,
-		FileBlob:     base64.StdEncoding.EncodeToString([]byte(fileData)),
+		FileBlob:     base64.StdEncoding.EncodeToString(fileData),
 		IsDownload:   true,
 	}
 	return ft, nil

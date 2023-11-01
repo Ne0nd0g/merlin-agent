@@ -1,22 +1,24 @@
 //go:build mythic
-// +build mythic
 
-// Merlin is a post-exploitation command and control framework.
-// This file is part of Merlin.
-// Copyright (C) 2023 Russel Van Tuyl
+/*
+Merlin is a post-exploitation command and control framework.
 
-// Merlin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// any later version.
+This file is part of Merlin.
+Copyright (C) 2023 Russel Van Tuyl
 
-// Merlin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+Merlin is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+any later version.
 
-// You should have received a copy of the GNU General Public License
-// along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+Merlin is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 package mythic
 
@@ -46,21 +48,20 @@ import (
 	"sync"
 	"time"
 
+	// 3rd Party
+	"github.com/google/uuid"
+
 	// X-Packages
 	"golang.org/x/net/http2"
 
-	// 3rd Party
-	uuid "github.com/satori/go.uuid"
-
-	// Merlin Main
-	"github.com/Ne0nd0g/merlin/pkg/core"
-	"github.com/Ne0nd0g/merlin/pkg/jobs"
-	"github.com/Ne0nd0g/merlin/pkg/messages"
+	// Merlin Message
+	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/cli"
 	"github.com/Ne0nd0g/merlin-agent/clients"
 	"github.com/Ne0nd0g/merlin-agent/clients/utls"
+	"github.com/Ne0nd0g/merlin-agent/core"
 )
 
 // socksConnection is used to map the Mythic incremental integer used for tracking connections to a UUID leveraged by the agent
@@ -121,7 +122,7 @@ func New(config Config) (*Client, error) {
 
 	// Mythic: Add payload ID
 	var err error
-	client.MythicID, err = uuid.FromString(config.PayloadID)
+	client.MythicID, err = uuid.Parse(config.PayloadID)
 	if err != nil {
 		return &client, err
 	}
@@ -259,7 +260,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	// Verify UUID matches
 	if !strings.HasPrefix(string(decodedPayload), client.MythicID.String()) {
 		err = fmt.Errorf("response message agent ID %s does not match current ID %s",
-			uuid.FromStringOrNil(string(decodedPayload[:len(client.MythicID)])), client.MythicID.String())
+			uuid.MustParse(string(decodedPayload[:len(client.MythicID)])), client.MythicID.String())
 		return
 	}
 
@@ -281,7 +282,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 func (client *Client) Initial(agent messages.AgentInfo) (messages.Base, error) {
 	cli.Message(cli.DEBUG, "Entering into clients.mythic.Initial()...")
 
-	// Build initial checkin message
+	// Build an initial checkin message
 	checkIn := CheckIn{
 		Action:        "checkin",
 		IP:            selectIP(agent.SysInfo.Ips),
@@ -479,7 +480,7 @@ func getClient(protocol, proxyURL, ja3, parrot string) (*http.Client, error) {
 // then it is subsequently converted into a Merlin messages.Base structure
 func (client *Client) convertToMerlinMessage(data []byte) (returnMessages []messages.Base, err error) {
 	cli.Message(cli.DEBUG, "Entering into clients.mythic.convertToMerlinMessage()...")
-	// Determine the action so we know what structure to unmarshal to
+	// Determine the action, so we know what structure to unmarshal to
 	var action string
 	if bytes.Contains(data, []byte("\"action\":\"checkin\"")) {
 		action = CHECKIN
@@ -514,7 +515,7 @@ func (client *Client) convertToMerlinMessage(data []byte) (returnMessages []mess
 		}
 		if msg.Status == "success" {
 			cli.Message(cli.SUCCESS, "initial checkin successful")
-			client.MythicID = uuid.FromStringOrNil(msg.ID)
+			client.MythicID = uuid.MustParse(msg.ID)
 			return
 		}
 		err = fmt.Errorf("unknown checkin action status:\r\n%+v", msg)
@@ -542,7 +543,7 @@ func (client *Client) convertToMerlinMessage(data []byte) (returnMessages []mess
 			return
 		}
 		// Update to use new Temp UUID
-		client.MythicID = uuid.FromStringOrNil(msg.ID)
+		client.MythicID = uuid.MustParse(msg.ID)
 		cli.Message(cli.SUCCESS, "RSA key exchange completed")
 		return
 	case TASKING:
@@ -656,7 +657,7 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 		// Convert Merlin jobs to mythic response
 		for _, job := range m.Payload.([]jobs.Job) {
 			var response ClientTaskResponse
-			response.ID = uuid.FromStringOrNil(job.ID)
+			response.ID = uuid.MustParse(job.ID)
 			response.Completed = true
 			cli.Message(cli.DEBUG, fmt.Sprintf("Converting Merlin job type: %d to Mythic response", job.Type))
 			switch job.Type {
@@ -772,7 +773,7 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 					mythicSocksConnection.Delete(sockMsg.ID)
 				}
 			default:
-				return "", fmt.Errorf("unhandled job type in convertToMythicMessage: %s", jobs.String(job.Type))
+				return "", fmt.Errorf("unhandled job type in convertToMythicMessage: %s", job.Type)
 			}
 		}
 		// Marshal the structure to a JSON object
@@ -866,7 +867,7 @@ func (client *Client) convertSocksToJobs(socks []Socks) (base messages.Base, err
 		id, ok := socksConnection.Load(sock.ServerId)
 		if !ok {
 			// This is for a new, first time, SOCKS connection
-			id = uuid.NewV4()
+			id = uuid.New()
 			socksConnection.Store(sock.ServerId, id)
 			mythicSocksConnection.Store(id, sock.ServerId)
 
@@ -914,7 +915,7 @@ func (client *Client) convertTasksToJobs(tasks []Task) (messages.Base, error) {
 		}
 		job.AgentID = client.AgentID
 		job.ID = task.ID
-		job.Token = uuid.FromStringOrNil(task.ID)
+		job.Token = uuid.MustParse(task.ID)
 		job.Type = mythicJob.Type
 
 		cli.Message(cli.DEBUG, fmt.Sprintf("Switching on mythic.Job type %d", mythicJob.Type))
