@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - GitHub Actions for building and testing the Merlin Agent
 - Implemented "services" and "repositories"
   - Services are: agent, client, job, message, and p2p
+- Configurable TLS x.509 certificate validation
+  - Default is `false`, TLS certificates are not validated
+  - Added `-secure` command line argument to require TLS X.509 certificate validation
+  - Added `SECURE` variable to Make file (e.g., `make windows SECURE=true`)
 
 ### Changed
 

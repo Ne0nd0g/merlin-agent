@@ -36,6 +36,8 @@ USERAGENT = Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, 
 XUSERAGENT =-X "main.useragent=$(USERAGENT)"
 HEADERS =
 XHEADERS =-X "main.headers=$(HEADERS)"
+SECURE ?= true
+XSECURE =-X "main.secure=${SECURE}"
 SKEW ?= 3000
 XSKEW=-X "main.skew=${SKEW}"
 PAD ?= 4096
@@ -56,8 +58,8 @@ LISTENER ?=
 XLISTENER=-X "main.listener=${LISTENER}"
 
 # Compile Flags
-LDFLAGS=-ldflags '-s -w ${XADDR} ${XAUTH} ${XTRANSFORMS} ${XLISTENER} ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} ${XPARROT} -buildid='
-WINAGENTLDFLAGS=-ldflags '-s -w ${XAUTH} ${XADDR} ${XTRANSFORMS} ${XLISTENER} ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} ${XPARROT} -H=windowsgui -buildid='
+LDFLAGS=-ldflags '-s -w ${XADDR} ${XAUTH} ${XTRANSFORMS} ${XLISTENER} ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSECURE} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} ${XPARROT} -buildid='
+WINAGENTLDFLAGS=-ldflags '-s -w ${XAUTH} ${XADDR} ${XTRANSFORMS} ${XLISTENER} ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XPSK} ${XSECURE} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} ${XPARROT} -H=windowsgui -buildid='
 GCFLAGS=-gcflags=all=-trimpath=$(GOPATH)
 ASMFLAGS=-asmflags=all=-trimpath=$(GOPATH)# -asmflags=-trimpath=$(GOPATH)
 

