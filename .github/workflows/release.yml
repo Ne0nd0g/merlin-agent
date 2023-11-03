@@ -22,7 +22,7 @@ jobs:
 
       - name: Install 7zip
         id: install_7zip
-        run: apt-get install p7zip-full
+        run: sudo apt-get install p7zip-full
 
       - name: Make Distribution
         id: make_distro
