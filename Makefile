@@ -81,7 +81,7 @@ $(shell mkdir -p ${DIR})
 default:
 	go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT} ./main.go
 
-all: windows linux darwin
+all: windows windows-debug linux darwin
 
 # Compile Agent - Windows x64
 windows:
@@ -89,7 +89,7 @@ windows:
 
 # Compile Agent - Windows x64 Debug (Can view STDOUT)
 windows-debug:
-	export GOOS=windows GOARCH=amd64;go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-Debug-${W}.exe ./main.go
+	export GOOS=windows GOARCH=amd64;go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${W}-Debug.exe ./main.go
 
 # Compile  Agent - Windows x64 with Garble - The SEED must be the exact same that was used when compiling the server
 # Garble version 0.5.2 or later must be installed and accessible in the PATH environment variable
@@ -135,6 +135,10 @@ package-windows:
 	${PACKAGE} ${DIR}/${MAGENT}-${W}.7z ${F}
 	cd ${DIR};${PACKAGE} ${MAGENT}-${W}.7z ${MAGENT}-${W}.exe
 
+package-windows-debug:
+	${PACKAGE} ${DIR}/${MAGENT}-${W}-Debug.7z ${F}
+	cd ${DIR};${PACKAGE} ${MAGENT}-${W}-Debug.7z ${MAGENT}-${W}-Debug.exe
+
 package-linux:
 	${PACKAGE} ${DIR}/${MAGENT}-${L}.7z ${F}
 	cd ${DIR};${PACKAGE} ${MAGENT}-${L}.7z ${MAGENT}-${L}
@@ -153,7 +157,7 @@ package-move:
 clean:
 	rm -rf ${DIR}*
 
-package-all: package-windows package-linux package-darwin
+package-all: package-windows package-windows-debug package-linux package-darwin
 
 #Build all files for release distribution
 distro: clean all package-all package-move
