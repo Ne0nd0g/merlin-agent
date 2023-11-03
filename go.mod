@@ -1,4 +1,4 @@
-module github.com/Ne0nd0g/merlin-agent
+module github.com/Ne0nd0g/merlin-agent/v2
 
 go 1.20
 

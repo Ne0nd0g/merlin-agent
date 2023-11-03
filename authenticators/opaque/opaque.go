@@ -37,8 +37,8 @@ import (
 	"github.com/Ne0nd0g/merlin-message/opaque"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin-agent/core"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/core"
 )
 
 // Authenticator is a structure used for OPAQUE authentication

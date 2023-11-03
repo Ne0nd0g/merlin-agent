@@ -36,15 +36,14 @@ import (
 	"github.com/google/shlex"
 	"github.com/google/uuid"
 
-	// Internal
-	"github.com/Ne0nd0g/merlin-agent/agent"
-	"github.com/Ne0nd0g/merlin-agent/clients"
-	"github.com/Ne0nd0g/merlin-agent/clients/http"
-	"github.com/Ne0nd0g/merlin-agent/clients/smb"
-	"github.com/Ne0nd0g/merlin-agent/clients/tcp"
-	"github.com/Ne0nd0g/merlin-agent/clients/udp"
-	"github.com/Ne0nd0g/merlin-agent/core"
-	"github.com/Ne0nd0g/merlin-agent/run"
+	"github.com/Ne0nd0g/merlin-agent/v2/agent"
+	"github.com/Ne0nd0g/merlin-agent/v2/clients"
+	"github.com/Ne0nd0g/merlin-agent/v2/clients/http"
+	"github.com/Ne0nd0g/merlin-agent/v2/clients/smb"
+	"github.com/Ne0nd0g/merlin-agent/v2/clients/tcp"
+	"github.com/Ne0nd0g/merlin-agent/v2/clients/udp"
+	"github.com/Ne0nd0g/merlin-agent/v2/core"
+	"github.com/Ne0nd0g/merlin-agent/v2/run"
 )
 
 // GLOBAL VARIABLES

@@ -27,7 +27,7 @@ import (
 	"golang.org/x/sys/windows"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/tokens"
+	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/pkg/tokens"
 )
 
 // GetIntegrityLevel returns the agent's current Windows Access Token integrity level

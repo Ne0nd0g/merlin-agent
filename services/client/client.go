@@ -24,8 +24,8 @@ package client
 import (
 	"fmt"
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/clients"
-	"github.com/Ne0nd0g/merlin-agent/clients/memory"
+	"github.com/Ne0nd0g/merlin-agent/v2/clients"
+	"github.com/Ne0nd0g/merlin-agent/v2/clients/memory"
 	"github.com/Ne0nd0g/merlin-message"
 	"strings"
 )

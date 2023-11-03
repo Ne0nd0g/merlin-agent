@@ -35,9 +35,9 @@ import (
 	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/processes"
-	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/tokens"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/pkg/processes"
+	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/pkg/tokens"
 )
 
 // RunAs creates a new process as the provided user

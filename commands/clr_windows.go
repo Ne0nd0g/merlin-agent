@@ -35,9 +35,9 @@ import (
 	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin-agent/core"
-	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/evasion"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/core"
+	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/pkg/evasion"
 )
 
 // runtimeHost is the main object used to interact with the CLR to load and invoke assemblies

@@ -38,10 +38,10 @@ import (
 	"golang.org/x/sys/windows"
 
 	// Sub Repositories
-	"github.com/Ne0nd0g/merlin-agent/os/windows/api/kernel32"
-	"github.com/Ne0nd0g/merlin-agent/os/windows/api/ntdll"
-	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/pipes"
-	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/tokens"
+	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/api/kernel32"
+	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/api/ntdll"
+	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/pkg/pipes"
+	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/pkg/tokens"
 )
 
 // executeCommand instruct an agent to execute a program on the host operating system

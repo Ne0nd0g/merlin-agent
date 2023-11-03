@@ -33,7 +33,7 @@ import (
 	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
 )
 
 // Upload receives a job from the server to upload a file from the host to the Merlin server

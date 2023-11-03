@@ -32,7 +32,7 @@ import (
 	"golang.org/x/sys/windows"
 
 	// Merlin
-	"github.com/Ne0nd0g/merlin-agent/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
 	"github.com/Ne0nd0g/merlin-message/jobs"
 )
 

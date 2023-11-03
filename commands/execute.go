@@ -28,7 +28,7 @@ import (
 	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
 )
 
 // ExecuteCommand runs the provided input program and arguments, returning results in a message base

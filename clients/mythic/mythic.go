@@ -58,10 +58,10 @@ import (
 	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin-agent/clients"
-	"github.com/Ne0nd0g/merlin-agent/clients/utls"
-	"github.com/Ne0nd0g/merlin-agent/core"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/clients"
+	"github.com/Ne0nd0g/merlin-agent/v2/clients/utls"
+	"github.com/Ne0nd0g/merlin-agent/v2/core"
 )
 
 // socksConnection is used to map the Mythic incremental integer used for tracking connections to a UUID leveraged by the agent

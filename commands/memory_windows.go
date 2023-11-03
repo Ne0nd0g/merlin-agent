@@ -33,8 +33,8 @@ import (
 	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/evasion"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/pkg/evasion"
 )
 
 // Memory is a handler for working with virtual memory on the host operating system

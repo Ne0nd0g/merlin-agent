@@ -43,19 +43,19 @@ import (
 	// Merlin
 	"github.com/Ne0nd0g/merlin-message"
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/authenticators"
-	"github.com/Ne0nd0g/merlin-agent/authenticators/none"
-	"github.com/Ne0nd0g/merlin-agent/authenticators/opaque"
-	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin-agent/core"
-	transformer "github.com/Ne0nd0g/merlin-agent/transformers"
-	b64 "github.com/Ne0nd0g/merlin-agent/transformers/encoders/base64"
-	gob2 "github.com/Ne0nd0g/merlin-agent/transformers/encoders/gob"
-	"github.com/Ne0nd0g/merlin-agent/transformers/encoders/hex"
-	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/aes"
-	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/jwe"
-	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/rc4"
-	"github.com/Ne0nd0g/merlin-agent/transformers/encrypters/xor"
+	"github.com/Ne0nd0g/merlin-agent/v2/authenticators"
+	"github.com/Ne0nd0g/merlin-agent/v2/authenticators/none"
+	"github.com/Ne0nd0g/merlin-agent/v2/authenticators/opaque"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/core"
+	transformer "github.com/Ne0nd0g/merlin-agent/v2/transformers"
+	b64 "github.com/Ne0nd0g/merlin-agent/v2/transformers/encoders/base64"
+	gob2 "github.com/Ne0nd0g/merlin-agent/v2/transformers/encoders/gob"
+	"github.com/Ne0nd0g/merlin-agent/v2/transformers/encoders/hex"
+	"github.com/Ne0nd0g/merlin-agent/v2/transformers/encrypters/aes"
+	"github.com/Ne0nd0g/merlin-agent/v2/transformers/encrypters/jwe"
+	"github.com/Ne0nd0g/merlin-agent/v2/transformers/encrypters/rc4"
+	"github.com/Ne0nd0g/merlin-agent/v2/transformers/encrypters/xor"
 )
 
 const (

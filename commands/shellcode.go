@@ -29,7 +29,7 @@ import (
 	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
 )
 
 // ExecuteShellcode instructs the agent to load and run shellcode according to the input job

@@ -14,7 +14,7 @@ import (
 	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
 )
 
 // Unlink terminates a peer-to-peer Agent connection

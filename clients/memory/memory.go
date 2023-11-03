@@ -27,7 +27,7 @@ import (
 	"sync"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/clients"
+	"github.com/Ne0nd0g/merlin-agent/v2/clients"
 )
 
 // Repository is the structure that implements the in-memory repository for interacting with the Agent's C2 client

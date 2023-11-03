@@ -22,7 +22,7 @@ along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
 
 package commands
 
-import "github.com/Ne0nd0g/merlin-agent/cli"
+import "github.com/Ne0nd0g/merlin-agent/v2/cli"
 
 // Setup is used to prepare the environment or context for subsequent commands and is specific to each operating system
 func Setup() error {

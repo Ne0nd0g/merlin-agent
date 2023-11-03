@@ -27,11 +27,11 @@ import (
 	"time"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/agent"
-	"github.com/Ne0nd0g/merlin-agent/agent/memory"
-	"github.com/Ne0nd0g/merlin-agent/clients"
-	clientMemory "github.com/Ne0nd0g/merlin-agent/clients/memory"
-	"github.com/Ne0nd0g/merlin-agent/core"
+	"github.com/Ne0nd0g/merlin-agent/v2/agent"
+	"github.com/Ne0nd0g/merlin-agent/v2/agent/memory"
+	"github.com/Ne0nd0g/merlin-agent/v2/clients"
+	clientMemory "github.com/Ne0nd0g/merlin-agent/v2/clients/memory"
+	"github.com/Ne0nd0g/merlin-agent/v2/core"
 	"github.com/Ne0nd0g/merlin-message"
 )
 

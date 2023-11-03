@@ -37,8 +37,8 @@ import (
 	"github.com/Ne0nd0g/merlin-message"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/authenticators"
-	transformer "github.com/Ne0nd0g/merlin-agent/transformers"
+	"github.com/Ne0nd0g/merlin-agent/v2/authenticators"
+	transformer "github.com/Ne0nd0g/merlin-agent/v2/transformers"
 )
 
 // Client is a type of MerlinClient that is used to send and receive Merlin messages from the Merlin server

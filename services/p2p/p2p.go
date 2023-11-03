@@ -39,9 +39,9 @@ import (
 	"github.com/Ne0nd0g/merlin-message"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin-agent/p2p"
-	"github.com/Ne0nd0g/merlin-agent/p2p/memory"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/p2p"
+	"github.com/Ne0nd0g/merlin-agent/v2/p2p/memory"
 )
 
 // Service is the structure used to interact with Link and Delegate objects

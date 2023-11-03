@@ -34,8 +34,8 @@ import (
 	"github.com/google/uuid"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
-	merlinOS "github.com/Ne0nd0g/merlin-agent/os"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
+	merlinOS "github.com/Ne0nd0g/merlin-agent/v2/os"
 )
 
 // Agent is an aggregate structure that represents a Merlin Agent

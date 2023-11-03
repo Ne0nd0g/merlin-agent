@@ -28,7 +28,7 @@ import (
 	"time"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/agent"
+	"github.com/Ne0nd0g/merlin-agent/v2/agent"
 )
 
 // Repository is the structure that implements the in-memory repository for interacting with the Agent's C2 client

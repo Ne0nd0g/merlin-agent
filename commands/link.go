@@ -41,10 +41,10 @@ import (
 	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin-agent/core"
-	"github.com/Ne0nd0g/merlin-agent/p2p"
-	p2pService "github.com/Ne0nd0g/merlin-agent/services/p2p"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/core"
+	"github.com/Ne0nd0g/merlin-agent/v2/p2p"
+	p2pService "github.com/Ne0nd0g/merlin-agent/v2/services/p2p"
 )
 
 // peerToPeerService is used to work with peer-to-peer Agent connections/link to include handling or getting Delegate messages

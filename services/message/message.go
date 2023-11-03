@@ -33,10 +33,10 @@ import (
 	"github.com/Ne0nd0g/merlin-message/jobs"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/cli"
-	"github.com/Ne0nd0g/merlin-agent/services/client"
-	"github.com/Ne0nd0g/merlin-agent/services/job"
-	"github.com/Ne0nd0g/merlin-agent/services/p2p"
+	"github.com/Ne0nd0g/merlin-agent/v2/cli"
+	"github.com/Ne0nd0g/merlin-agent/v2/services/client"
+	"github.com/Ne0nd0g/merlin-agent/v2/services/job"
+	"github.com/Ne0nd0g/merlin-agent/v2/services/p2p"
 )
 
 // Service is the structure used to interact with message objects

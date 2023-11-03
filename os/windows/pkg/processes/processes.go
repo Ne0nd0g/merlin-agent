@@ -33,8 +33,8 @@ import (
 	"golang.org/x/sys/windows"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/os/windows/api/advapi32"
-	"github.com/Ne0nd0g/merlin-agent/os/windows/pkg/pipes"
+	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/api/advapi32"
+	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/pkg/pipes"
 )
 
 // LOGON_ The logon option

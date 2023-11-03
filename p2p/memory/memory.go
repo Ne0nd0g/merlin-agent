@@ -31,7 +31,7 @@ import (
 	"github.com/google/uuid"
 
 	// Internal
-	"github.com/Ne0nd0g/merlin-agent/p2p"
+	"github.com/Ne0nd0g/merlin-agent/v2/p2p"
 )
 
 // Repository holds database of existing peer-to-peer Links in a map
