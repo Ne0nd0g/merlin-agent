@@ -126,7 +126,7 @@ func main() {
 	flag.StringVar(&proxy, "proxy", proxy, "Hardcoded proxy to use for http/1.1 traffic only that will override host configuration")
 	flag.StringVar(&host, "host", host, "HTTP Host header")
 	flag.StringVar(&ja3, "ja3", ja3, "JA3 signature string (not the MD5 hash). Overrides -proto & -parrot flags")
-	flag.StringVar(&parrot, "parrot", ja3, "parrot or mimic a specific browser from github.com/refraction-networking/utls (e.g., HelloChrome_Auto")
+	flag.StringVar(&parrot, "parrot", ja3, "parrot or mimic a specific browser from github.com/refraction-networking/utls (e.g., HelloChrome_Auto)")
 	flag.StringVar(&secure, "secure", secure, "Require TLS certificate validation for HTTP communications")
 	flag.StringVar(&sleep, "sleep", sleep, "Time for agent to sleep")
 	flag.StringVar(&skew, "skew", skew, "Amount of skew, or variance, between agent checkins")
