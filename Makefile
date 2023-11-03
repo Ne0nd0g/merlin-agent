@@ -36,7 +36,7 @@ USERAGENT = Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, 
 XUSERAGENT =-X "main.useragent=$(USERAGENT)"
 HEADERS =
 XHEADERS =-X "main.headers=$(HEADERS)"
-SECURE ?= true
+SECURE ?= false
 XSECURE =-X "main.secure=${SECURE}"
 SKEW ?= 3000
 XSKEW=-X "main.skew=${SKEW}"
