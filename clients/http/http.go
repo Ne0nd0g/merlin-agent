@@ -270,7 +270,7 @@ func getClient(protocol string, proxyURL string, ja3 string, parrot string, inse
 
 	// JA3
 	if ja3 != "" {
-		transport, err := utls.NewTransportFromJA3Insecure(ja3)
+		transport, err := utls.NewTransportFromJA3(ja3, insecure)
 		if err != nil {
 			return nil, err
 		}
@@ -285,7 +285,7 @@ func getClient(protocol string, proxyURL string, ja3 string, parrot string, inse
 	// Parrot - If a JA3 string was set, it will be used, and the parroting will be ignored
 	if parrot != "" {
 		// Build the transport
-		transport, err := utls.NewTransportFromParrotInsecure(parrot)
+		transport, err := utls.NewTransportFromParrot(parrot, insecure)
 		if err != nil {
 			return nil, err
 		}

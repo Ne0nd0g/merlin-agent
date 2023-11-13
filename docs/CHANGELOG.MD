@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.1.0 - 2023-11-17
+
+### Changed
+
+- Allow the TLS X509 certificate validation setting to be passed through to JA3 and Parrot clients
+
 ## 2.0.0 - 2023-11-03
 
 ### Added

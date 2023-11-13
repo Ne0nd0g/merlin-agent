@@ -93,7 +93,7 @@ var tlsExtensions = map[string]tls.TLSExtension{
 	//"21": &tls.UtlsPaddingExtension{GetPaddingLen: tls.BoringPaddingStyle},
 	"21": &tls.UtlsPaddingExtension{GetPaddingLen: CustomPaddingStyle},
 	"22": &tls.GenericExtension{Id: 22},
-	"23": &tls.UtlsExtendedMasterSecretExtension{},
+	"23": &tls.ExtendedMasterSecretExtension{},
 	"24": &tls.FakeTokenBindingExtension{},
 	"27": &tls.UtlsCompressCertExtension{},
 	"28": &tls.FakeRecordSizeLimitExtension{},
@@ -119,47 +119,35 @@ var tlsExtensions = map[string]tls.TLSExtension{
 	},
 }
 
-// NewTransportFromJA3Insecure creates a http.Transport which mocks the given JA3 signature when HTTPS is used
-// The transport allows an insecure TLS connection by setting InsecureSkipVerify to true
-func NewTransportFromJA3Insecure(ja3 string) (*Transport, error) {
-	return NewTransportFromJA3WithConfig(ja3, &tls.Config{InsecureSkipVerify: true})
-}
-
-// NewTransportFromJA3WithConfig creates a http.Transport object given an utls.Config
-func NewTransportFromJA3WithConfig(ja3 string, config *tls.Config) (*Transport, error) {
+// NewTransportFromJA3 creates a new http.Transport object given an utls.Config
+func NewTransportFromJA3(ja3 string, InsecureSkipVerify bool) (*Transport, error) {
 	spec, err := JA3toClientHello(ja3)
 	if err != nil {
 		return nil, err
 	}
 
 	transport := Transport{
-		clientHello:     tls.HelloCustom,
-		clientHelloSpec: spec,
-		tr1:             http.Transport{MaxIdleConns: 10, IdleConnTimeout: 1 * time.Nanosecond},
+		clientHello:        tls.HelloCustom,
+		clientHelloSpec:    spec,
+		tr1:                http.Transport{MaxIdleConns: 10, IdleConnTimeout: 1 * time.Nanosecond},
+		insecureSkipVerify: InsecureSkipVerify,
 	}
 	return &transport, nil
 }
 
-// NewTransportFromParrotInsecure takes in a string that represents a ClientHelloID to parrot a TLS connection that
-// looks like associated browser and returns a http transport
-// The InsecureSkipVerify configuration is set to true so that the client WILL accept untrusted SSL/TLS certificates
-// This function exists so that other tools do not need to import the uTLS library to build a config to pass in
-func NewTransportFromParrotInsecure(parrot string) (*Transport, error) {
-	return NewTransportFromParrotWithConfig(parrot, &tls.Config{InsecureSkipVerify: true})
-}
-
-// NewTransportFromParrotWithConfig takes in a string that represents a ClientHelloID to parrot a TLS connection that
-// looks like associated browser and returns a http transport
-func NewTransportFromParrotWithConfig(parrot string, config *tls.Config) (*Transport, error) {
+// NewTransportFromParrot takes in a string that represents a ClientHelloID to parrot a TLS connection that
+// looks like an associated browser and returns a http transport structure
+func NewTransportFromParrot(parrot string, InsecureSkipVerify bool) (*Transport, error) {
 	clientHello, err := ParrotStringToClientHelloID(parrot)
 	if err != nil {
 		return nil, err
 	}
 
 	transport := Transport{
-		clientHello: clientHello,
-		tr1:         http.Transport{MaxIdleConns: 10, IdleConnTimeout: 1 * time.Nanosecond},
-		tr2:         http2.Transport{},
+		clientHello:        clientHello,
+		tr1:                http.Transport{MaxIdleConns: 10, IdleConnTimeout: 1 * time.Nanosecond},
+		tr2:                http2.Transport{},
+		insecureSkipVerify: InsecureSkipVerify,
 	}
 
 	return &transport, nil
@@ -244,7 +232,6 @@ func JA3toClientHello(ja3 string) (*tls.ClientHelloSpec, error) {
 	// Needs to happen AFTER elliptic curve data is added to the global extension map
 	for _, e := range extensions {
 		extension, ok := tlsExtensions[e]
-		fmt.Printf("Extension: %s\n", extension)
 		if !ok {
 			return nil, fmt.Errorf("ja3transport: TLS extension %s does not exist in package extension map", e)
 		}
@@ -347,13 +334,15 @@ func ParrotStringToClientHelloID(parrot string) (clientHello tls.ClientHelloID, 
 }
 
 // Transport is custom http.Transport that switches clients between HTTP/1.1 and HTTP2 depending on which protocol
-// was negotiated during the TLS handshake. It is also used to create a http.Transport from a JA3 or parrot string
+// was negotiated during the TLS handshake.
+// It is also used to create a http.Transport structure from a JA3 or parrot string
 type Transport struct {
-	tr1             http.Transport
-	tr2             http2.Transport
-	mu              sync.RWMutex
-	clientHello     tls.ClientHelloID
-	clientHelloSpec *tls.ClientHelloSpec
+	tr1                http.Transport
+	tr2                http2.Transport
+	mu                 sync.RWMutex
+	clientHello        tls.ClientHelloID
+	clientHelloSpec    *tls.ClientHelloSpec
+	insecureSkipVerify bool
 }
 
 // Copied from @ox1234 via https://github.com/refraction-networking/utls/issues/16
@@ -421,7 +410,7 @@ func (t *Transport) tlsConnect(conn net.Conn, req *http.Request) (*tls.UConn, er
 func (t *Transport) getTLSConfig(req *http.Request) *tls.Config {
 	return &tls.Config{
 		ServerName:         req.URL.Host,
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: t.insecureSkipVerify,
 	}
 }
 
