@@ -4,11 +4,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## 2.1.0 - 2023-11-13
+## 2.1.0 - 2023-11-27
 
 ### Changed
 
 - Allow the TLS X509 certificate validation setting to be passed through to JA3 and Parrot clients
+- JA3 & Parrot HTTP transports use agent's `-secure` command line argument to determine if TLS X.509 certificate validation should be performed
+- Upgraded the following modules
+  - `golang.org/x/sys v0.13.0 => v0.14.0`
+  - `golang.org/x/net v0.17.0 => v0.18.0`
+  - `github.com/go-jose/go-jose/v3 v3.0.0 => v3.0.1`
+  - `github.com/fatih/color v1.15.0 => v1.16.0`
+  
+### Fixed
+
+- [Issue 26](https://github.com/Ne0nd0g/merlin-agent/issues/26) - uTLS package uses HTTP proxy if provided or from environment variables
+  - Implemented a custom dialer to connect to the proxy first and then the destination
+- uTLS package for correctly set the TLS version from the provided JA3 string
+
 
 ## 2.0.0 - 2023-11-03
 

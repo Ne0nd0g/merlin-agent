@@ -36,6 +36,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -255,29 +256,16 @@ func getClient(protocol string, proxyURL string, ja3 string, parrot string, inse
 	}
 
 	// Proxy
-	var proxy func(*http.Request) (*url.URL, error)
-	if proxyURL != "" {
-		rawURL, errProxy := url.Parse(proxyURL)
-		if errProxy != nil {
-			return nil, fmt.Errorf("there was an error parsing the proxy string:\r\n%s", errProxy.Error())
-		}
-		cli.Message(cli.DEBUG, fmt.Sprintf("Parsed Proxy URL: %+v", rawURL))
-		proxy = http.ProxyURL(rawURL)
-	} else {
-		// Check for, and use, HTTP_PROXY, HTTPS_PROXY and NO_PROXY environment variables
-		proxy = http.ProxyFromEnvironment
+	proxyFunc, errProxy := getProxy(protocol, proxyURL)
+	if errProxy != nil {
+		return nil, errProxy
 	}
 
 	// JA3
 	if ja3 != "" {
-		transport, err := utls.NewTransportFromJA3(ja3, insecure)
+		transport, err := utls.NewTransportFromJA3(ja3, insecure, proxyFunc)
 		if err != nil {
 			return nil, err
-		}
-
-		// Set proxy
-		if proxyURL != "" {
-			transport.Proxy(proxy)
 		}
 		return &http.Client{Transport: transport}, nil
 	}
@@ -285,14 +273,9 @@ func getClient(protocol string, proxyURL string, ja3 string, parrot string, inse
 	// Parrot - If a JA3 string was set, it will be used, and the parroting will be ignored
 	if parrot != "" {
 		// Build the transport
-		transport, err := utls.NewTransportFromParrot(parrot, insecure)
+		transport, err := utls.NewTransportFromParrot(parrot, insecure, proxyFunc)
 		if err != nil {
 			return nil, err
-		}
-
-		// Set proxy
-		if proxyURL != "" {
-			transport.Proxy(proxy)
 		}
 		return &http.Client{Transport: transport}, nil
 	}
@@ -331,19 +314,63 @@ func getClient(protocol string, proxyURL string, ja3 string, parrot string, inse
 		transport = &http.Transport{
 			TLSClientConfig: TLSConfig,
 			MaxIdleConns:    10,
-			Proxy:           proxy,
+			Proxy:           proxyFunc,
 			IdleConnTimeout: 1 * time.Nanosecond,
 		}
 	case "http":
 		transport = &http.Transport{
 			MaxIdleConns:    10,
-			Proxy:           proxy,
+			Proxy:           proxyFunc,
 			IdleConnTimeout: 1 * time.Nanosecond,
 		}
 	default:
 		return nil, fmt.Errorf("%s is not a valid client protocol", protocol)
 	}
 	return &http.Client{Transport: transport}, nil
+}
+
+// getProxy returns a proxy function for the passed in protocol and proxy URL if any
+// Reads the HTTP_PROXY and HTTPS_PROXY environment variables if no proxy URL was passed in
+func getProxy(protocol string, proxyURL string) (func(*http.Request) (*url.URL, error), error) {
+	cli.Message(cli.DEBUG, "Entering into clients.http.getProxy()...")
+	cli.Message(cli.DEBUG, fmt.Sprintf("Protocol: %s, Proxy: %s", protocol, proxyURL))
+
+	// The HTTP/2 protocol does not support proxies
+	if strings.ToLower(protocol) != "http" && strings.ToLower(protocol) != "https" {
+		if proxyURL != "" {
+			return nil, fmt.Errorf("clients/http.getProxy(): %s protocol does not support proxies; use http or https protocol", protocol)
+		}
+		cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.getProxy(): %s protocol does not support proxies, continuing without proxy (if any)", protocol))
+		return nil, nil
+	}
+
+	var proxy func(*http.Request) (*url.URL, error)
+
+	if proxyURL != "" {
+		rawURL, errProxy := url.Parse(proxyURL)
+		if errProxy != nil {
+			return nil, fmt.Errorf("there was an error parsing the proxy string:\n%s", errProxy.Error())
+		}
+		cli.Message(cli.DEBUG, fmt.Sprintf("Parsed Proxy URL: %+v", rawURL))
+		proxy = http.ProxyURL(rawURL)
+		return proxy, nil
+	}
+
+	// Check for, and use, HTTP_PROXY, HTTPS_PROXY and NO_PROXY environment variables
+	var p string
+	switch strings.ToLower(protocol) {
+	case "http":
+		p = os.Getenv("HTTP_PROXY")
+	case "https":
+		p = os.Getenv("HTTPS_PROXY")
+	}
+
+	if p != "" {
+		cli.Message(cli.NOTE,
+			fmt.Sprintf("Using proxy from environment variables for protocol %s: %s", protocol, p))
+		proxy = http.ProxyFromEnvironment
+	}
+	return proxy, nil
 }
 
 // getJWT is used to generate unauthenticated JWTs before the Agent successfully authenticates to the server

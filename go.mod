@@ -9,15 +9,15 @@ require (
 	github.com/Ne0nd0g/npipe v1.1.0
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 	github.com/cretz/gopaque v0.1.0
-	github.com/fatih/color v1.15.0
-	github.com/go-jose/go-jose/v3 v3.0.0
+	github.com/fatih/color v1.16.0
+	github.com/go-jose/go-jose/v3 v3.0.1
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.4.0
 	github.com/quic-go/quic-go v0.40.0
 	github.com/refraction-networking/utls v1.5.4
-	golang.org/x/crypto v0.14.0
-	golang.org/x/net v0.17.0
-	golang.org/x/sys v0.13.0
+	golang.org/x/crypto v0.15.0
+	golang.org/x/net v0.18.0
+	golang.org/x/sys v0.14.0
 )
 
 require (
@@ -39,6 +39,6 @@ require (
 	go.uber.org/mock v0.3.0 // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/mod v0.13.0 // indirect
-	golang.org/x/text v0.13.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.14.0 // indirect
 )

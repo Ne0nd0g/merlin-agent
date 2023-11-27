@@ -1,19 +1,22 @@
-// Merlin is a post-exploitation command and control framework.
-// This file is part of Merlin.
-// Copyright (C) 2022  Russel Van Tuyl
+/*
+Merlin is a post-exploitation command and control framework.
 
-// Merlin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// any later version.
+This file is part of Merlin.
+Copyright (C) 2023 Russel Van Tuyl
 
-// Merlin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+Merlin is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+any later version.
 
-// You should have received a copy of the GNU General Public License
-// along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+Merlin is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 /*
 https://github.com/CUCyber/ja3transport/
@@ -46,7 +49,9 @@ package utls
 import (
 	// Standard
 	"bufio"
+	"context"
 	"crypto/sha256"
+	t "crypto/tls"
 	"fmt"
 	"math/rand"
 	"net"
@@ -120,36 +125,44 @@ var tlsExtensions = map[string]tls.TLSExtension{
 }
 
 // NewTransportFromJA3 creates a new http.Transport object given an utls.Config
-func NewTransportFromJA3(ja3 string, InsecureSkipVerify bool) (*Transport, error) {
+func NewTransportFromJA3(ja3 string, InsecureSkipVerify bool, proxy func(*http.Request) (*url.URL, error)) (*Transport, error) {
 	spec, err := JA3toClientHello(ja3)
 	if err != nil {
 		return nil, err
 	}
 
+	tlsConfig := &t.Config{
+		InsecureSkipVerify: InsecureSkipVerify,
+	}
+
 	transport := Transport{
-		clientHello:        tls.HelloCustom,
-		clientHelloSpec:    spec,
-		tr1:                http.Transport{MaxIdleConns: 10, IdleConnTimeout: 1 * time.Nanosecond},
-		insecureSkipVerify: InsecureSkipVerify,
+		clientHello:     tls.HelloCustom,
+		clientHelloSpec: spec,
+		tr1:             http.Transport{MaxIdleConns: 10, IdleConnTimeout: 1 * time.Nanosecond, TLSClientConfig: tlsConfig},
+		tr2:             http2.Transport{TLSClientConfig: tlsConfig},
+		proxy:           proxy,
 	}
 	return &transport, nil
 }
 
 // NewTransportFromParrot takes in a string that represents a ClientHelloID to parrot a TLS connection that
 // looks like an associated browser and returns a http transport structure
-func NewTransportFromParrot(parrot string, InsecureSkipVerify bool) (*Transport, error) {
+func NewTransportFromParrot(parrot string, InsecureSkipVerify bool, proxy func(*http.Request) (*url.URL, error)) (*Transport, error) {
 	clientHello, err := ParrotStringToClientHelloID(parrot)
 	if err != nil {
 		return nil, err
 	}
 
-	transport := Transport{
-		clientHello:        clientHello,
-		tr1:                http.Transport{MaxIdleConns: 10, IdleConnTimeout: 1 * time.Nanosecond},
-		tr2:                http2.Transport{},
-		insecureSkipVerify: InsecureSkipVerify,
+	tlsConfig := &t.Config{
+		InsecureSkipVerify: InsecureSkipVerify,
 	}
 
+	transport := Transport{
+		clientHello: clientHello,
+		tr1:         http.Transport{MaxIdleConns: 10, IdleConnTimeout: 1 * time.Nanosecond, TLSClientConfig: tlsConfig},
+		tr2:         http2.Transport{TLSClientConfig: tlsConfig},
+		proxy:       proxy,
+	}
 	return &transport, nil
 }
 
@@ -183,7 +196,10 @@ func JA3toClientHello(ja3 string) (*tls.ClientHelloSpec, error) {
 		return nil, fmt.Errorf("ja3transport: unable to convert SSLVersion %s to an integer: %s", version, err)
 	}
 	// Add SSLVersion to ClientHelloSpec structure
-	var clientHello tls.ClientHelloSpec
+	clientHello := tls.ClientHelloSpec{
+		TLSVersMin: uint16(vid64),
+		TLSVersMax: uint16(vid64),
+	}
 	tlsExtensions["43"] = &tls.SupportedVersionsExtension{
 		Versions: []uint16{uint16(vid64)},
 	}
@@ -333,37 +349,116 @@ func ParrotStringToClientHelloID(parrot string) (clientHello tls.ClientHelloID, 
 	return
 }
 
-// Transport is custom http.Transport that switches clients between HTTP/1.1 and HTTP2 depending on which protocol
-// was negotiated during the TLS handshake.
-// It is also used to create a http.Transport structure from a JA3 or parrot string
-type Transport struct {
-	tr1                http.Transport
-	tr2                http2.Transport
-	mu                 sync.RWMutex
-	clientHello        tls.ClientHelloID
-	clientHelloSpec    *tls.ClientHelloSpec
-	insecureSkipVerify bool
+// dialer is a custom Dialer that facilitates the use of a proxy
+type dialer struct {
+	address string   // Address to establish the network connection to
+	conn    net.Conn // conn is TCP connection to the proxy
+	network string   // Network is the network type to use when dialing the proxy, typically "tcp"
+}
+
+// DialContext establishes a TCP connection to the provided Address
+// This package uses this function to establish a TCP connection to a proxy
+// The function must implement the net.Dialer interface
+// The input network and address parameters are ignored because they are for the source HTTP request, not the proxy request
+func (d *dialer) DialContext(ctx context.Context, network, address string) (conn net.Conn, err error) {
+	utlsDialer := net.Dialer{
+		Timeout: 30 * time.Second,
+	}
+
+	conn, err = utlsDialer.DialContext(ctx, d.network, d.address)
+	if err != nil {
+		err = fmt.Errorf("clients/utls/utls.go: there was an error dialing '%s:%s' for the request to '%s:%s': %s", d.network, d.address, network, address, err)
+		return
+	}
+	d.conn = conn
+	return
 }
 
 // Copied from @ox1234 via https://github.com/refraction-networking/utls/issues/16
 
+// Transport is custom http.Transport that switches clients between HTTP/1.1 and HTTP2 depending on which protocol
+// was negotiated during the TLS handshake.
+// It is also used to create a http.Transport structure from a JA3 or parrot string
+type Transport struct {
+	tr1             http.Transport
+	tr2             http2.Transport
+	mu              sync.RWMutex
+	clientHello     tls.ClientHelloID
+	clientHelloSpec *tls.ClientHelloSpec
+	proxy           func(*http.Request) (*url.URL, error)
+}
+
 // RoundTrip completes the TLS handshake and creates a http client depending on the negotiated http version during the
 // TLS handshake (e.g., http/1.1 or h2). After the handshake, the HTTP request is sent to the destination.
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
-	address := req.URL.Host
-	if req.URL.Port() == "" {
-		if req.URL.Scheme == "http" {
-			address = fmt.Sprintf("%s:80", req.URL.Host)
-		} else {
-			address = fmt.Sprintf("%s:443", req.URL.Host)
+	var conn net.Conn
+	var err error
+
+	// If there is no proxy, establish the TCP connection
+	if t.proxy == nil {
+		// Identify what port to connect to for manually establishing the TCP connection
+		address := req.URL.Host
+		if req.URL.Port() == "" {
+			if req.URL.Scheme == "http" {
+				address = fmt.Sprintf("%s:80", req.URL.Host)
+			} else {
+				address = fmt.Sprintf("%s:443", req.URL.Host)
+			}
+		}
+		conn, err = net.Dial("tcp", address)
+		if err != nil {
+			return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): %w", err)
+		}
+	} else {
+		// If there is a proxy, sent the HTTP CONNECT method request before establishing the TLS connection
+
+		// Get the proxy URL
+		var proxyURL *url.URL
+		proxyURL, err = t.proxy(req)
+		if err != nil {
+			return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): there was an error getting the proxy URL: %s", err)
+		}
+
+		// If the proxy URL is nil, then this request does not use the proxy
+		// Send CONNECT request to proxy
+		if proxyURL != nil {
+			// Set up the custom dialer
+			u := dialer{
+				network: "tcp",
+				address: proxyURL.Host,
+			}
+
+			// Set up the custom transport
+			trans := &http.Transport{
+				DisableCompression: true,
+				DialContext:        u.DialContext,
+			}
+
+			// Build the CONNECT request for the proxy
+			var proxyReq *http.Request
+			// The protocol should match the protocol the proxy is expecting and host:port should be the destination
+			connectURL := fmt.Sprintf("%s://%s", proxyURL.Scheme, req.URL.Host)
+			proxyReq, err = http.NewRequest(http.MethodConnect, connectURL, nil)
+			if err != nil {
+				return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): there was an error creating the CONNECT request: %w", err)
+			}
+			proxyReq.Header.Set("User-Agent", req.UserAgent())
+
+			// Send the CONNECT request to the proxy
+			var resp *http.Response
+			resp, err = trans.RoundTrip(proxyReq)
+			if err != nil {
+				return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): there was an error sending the CONNECT request: %w", err)
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): there was an error sending the CONNECT request: %w", resp.Status)
+			}
+			conn = u.conn
 		}
 	}
 
-	conn, err := net.Dial("tcp", address)
-	if err != nil {
-		return nil, fmt.Errorf("tcp net dial fail: %w", err)
-	}
-
+	// Complete the TLS handshake
 	uConn, err := t.tlsConnect(conn, req)
 	if err != nil {
 		return nil, fmt.Errorf("tls connect fail: %w", err)
@@ -371,9 +466,10 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	switch uConn.ConnectionState().NegotiatedProtocol {
 	case "h2":
-		h2Conn, err := t.tr2.NewClientConn(uConn)
+		var h2Conn *http2.ClientConn
+		h2Conn, err = t.tr2.NewClientConn(uConn)
 		if err != nil {
-			return nil, fmt.Errorf("create http2 client with connection fail: %w", err)
+			return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): there was an error creating a new HTTP/2 client connection: %w", err)
 		}
 		return h2Conn.RoundTrip(req)
 	case "http/1.1", "":
@@ -383,14 +479,20 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		return http.ReadResponse(bufio.NewReader(uConn), req)
 	default:
-		return nil, fmt.Errorf("unsuported http version: %s", uConn.ConnectionState().NegotiatedProtocol)
+		return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): unsuported http version: %s", uConn.ConnectionState().NegotiatedProtocol)
 	}
 }
 
 // tlsConnect gets a uTLS client from the transports JA3 or parrot string and executes just the TLS handshake
 func (t *Transport) tlsConnect(conn net.Conn, req *http.Request) (*tls.UConn, error) {
 	t.mu.RLock()
-	tlsConn := tls.UClient(conn, t.getTLSConfig(req), t.clientHello)
+	config := &tls.Config{
+		ServerName:         req.URL.Host,
+		InsecureSkipVerify: t.tr1.TLSClientConfig.InsecureSkipVerify,
+	}
+
+	tlsConn := tls.UClient(conn, config, t.clientHello)
+	// Apply the custom TLS configuration to the connection if it exists
 	if t.clientHelloSpec != nil {
 		err := tlsConn.ApplyPreset(t.clientHelloSpec)
 		if err != nil {
@@ -404,21 +506,6 @@ func (t *Transport) tlsConnect(conn net.Conn, req *http.Request) (*tls.UConn, er
 		return nil, fmt.Errorf("tls handshake fail: %w", err)
 	}
 	return tlsConn, nil
-}
-
-// getTLSConfig returns a TLS configuration that allows untrusted server certificates and sets the ServerName field
-func (t *Transport) getTLSConfig(req *http.Request) *tls.Config {
-	return &tls.Config{
-		ServerName:         req.URL.Host,
-		InsecureSkipVerify: t.insecureSkipVerify,
-	}
-}
-
-// Proxy adds a Proxy function to the http/1.1 client. HTTP/2 does not support a proxy
-func (t *Transport) Proxy(proxy func(*http.Request) (*url.URL, error)) {
-	t.mu.Lock()
-	t.tr1.Proxy = proxy
-	t.mu.Unlock()
 }
 
 // CustomPaddingStyle is a function to use with TLS extension ID 21, padding.
