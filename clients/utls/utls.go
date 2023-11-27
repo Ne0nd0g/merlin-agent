@@ -132,7 +132,7 @@ func NewTransportFromJA3(ja3 string, InsecureSkipVerify bool, proxy func(*http.R
 	}
 
 	tlsConfig := &t.Config{
-		InsecureSkipVerify: InsecureSkipVerify,
+		InsecureSkipVerify: InsecureSkipVerify, // #nosec G402 - intentionally configurable to allow self-signed certificates
 	}
 
 	transport := Transport{
@@ -154,7 +154,7 @@ func NewTransportFromParrot(parrot string, InsecureSkipVerify bool, proxy func(*
 	}
 
 	tlsConfig := &t.Config{
-		InsecureSkipVerify: InsecureSkipVerify,
+		InsecureSkipVerify: InsecureSkipVerify, // #nosec G402 - intentionally configurable to allow self-signed certificates
 	}
 
 	transport := Transport{
