@@ -407,7 +407,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		conn, err = net.Dial("tcp", address)
 		if err != nil {
-			return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): %w", err)
+			return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): %s", err)
 		}
 	} else {
 		// If there is a proxy, sent the HTTP CONNECT method request before establishing the TLS connection
