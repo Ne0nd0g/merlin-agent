@@ -407,7 +407,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		conn, err = net.Dial("tcp", address)
 		if err != nil {
-			return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): %s", err)
+			return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): %w", err)
 		}
 	} else {
 		// If there is a proxy, sent the HTTP CONNECT method request before establishing the TLS connection
@@ -452,7 +452,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			}
 
 			if resp.StatusCode != http.StatusOK {
-				return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): there was an error sending the CONNECT request: %w", resp.Status)
+				return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): there was an error sending the CONNECT request: %s", resp.Status)
 			}
 			conn = u.conn
 		}
