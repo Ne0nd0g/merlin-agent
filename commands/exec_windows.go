@@ -32,6 +32,7 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"unicode/utf8"
 	"unsafe"
 
 	// X Packages
@@ -41,6 +42,7 @@ import (
 	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/api/kernel32"
 	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/api/ntdll"
 	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/pkg/pipes"
+	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/pkg/text"
 	"github.com/Ne0nd0g/merlin-agent/v2/os/windows/pkg/tokens"
 )
 
@@ -71,10 +73,20 @@ func executeCommandWithAttributes(name string, args []string, attr *syscall.SysP
 		stdout = fmt.Sprintf("Created %s process with an ID of %d\n", application, cmd.Process.Pid)
 	}
 
-	stdout += string(out)
+	// Convert the output to a string
+	if utf8.Valid(out) {
+		stdout += string(out)
+	} else {
+		s, e := text.DecodeString(out)
+		if e != nil {
+			stderr = fmt.Sprintf("%s\n", e)
+		} else {
+			stdout += s
+		}
+	}
 
 	if err != nil {
-		stderr = err.Error()
+		stderr += err.Error()
 	}
 
 	return stdout, stderr

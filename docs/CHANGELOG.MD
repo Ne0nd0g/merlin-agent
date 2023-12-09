@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.2.0 - 2023-12-09
+
+### Added
+
+- New `os/windows/pkg/text` package to detect and handle non UTF-8 encoding
+  - Only handles ShiftJIS at this moment
+  - Will replace non UTF-8 characters with a � character
+
+### Fixed
+
+- [Issue 33](https://github.com/Ne0nd0g/merlin-agent/issues/33) - Added handling for ShiftJIS encoding
+
 ## 2.1.0 - 2023-11-27
 
 ### Changed
