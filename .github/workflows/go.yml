@@ -21,6 +21,7 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
+          check-latest: true
 
       - name: 'Build Merlin Agent'
         id: build

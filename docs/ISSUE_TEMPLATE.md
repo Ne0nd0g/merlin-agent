@@ -5,16 +5,18 @@
 
 ### Environment Data
 
-* Merlin Version:
-* Merlin Build:
+* Merlin Agent Version:
+* Merlin Agent Build:
+* Operating System:
+
+If you're building from source, please provide the following information:
 * Go Version:
 * GOPATH Environment Variable:
 * GOROOT Environment Variable:
-* Operating System:
-
-### Expected Behavior
 
 ### Actual Behavior
+
+### Expected Behavior
 
 ### Steps to Reproduce Behavior
 

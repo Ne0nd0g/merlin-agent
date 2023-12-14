@@ -668,7 +668,7 @@ func getProcess(name string, pid uint32) (string, uint32, error) {
 	}
 
 	snapshotHandle, err := syscall.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
-	if snapshotHandle < 0 || err != nil {
+	if int(snapshotHandle) < 0 || err != nil {
 		return "", 0, fmt.Errorf("there was an error creating the snapshot:\r\n%s", err)
 	}
 	defer syscall.CloseHandle(snapshotHandle)
