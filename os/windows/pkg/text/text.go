@@ -31,6 +31,9 @@ import (
 	// X Packages
 	"golang.org/x/sys/windows"
 	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/encoding/korean"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/traditionalchinese"
 	"golang.org/x/text/transform"
 )
 
@@ -48,6 +51,30 @@ func DecodeString(encoded []byte) (decoded string, err error) {
 		t, e := io.ReadAll(transform.NewReader(bytes.NewReader(encoded), japanese.ShiftJIS.NewDecoder()))
 		if e != nil {
 			err = fmt.Errorf("os/windows/pkg/text.DecodeString(): there was an error decoding the string to ShiftJIS: %s", e)
+			return
+		}
+		decoded = string(t)
+	// 936 is the default code page for Simplified Chinese
+	case 936:
+		t, e := io.ReadAll(transform.NewReader(bytes.NewReader(encoded), simplifiedchinese.GBK.NewDecoder()))
+		if e != nil {
+			err = fmt.Errorf("os/windows/pkg/text.DecodeString(): there was an error decoding the string to Simplified Chinese GBK: %s", e)
+			return
+		}
+		decoded = string(t)
+	// 949 is the default code page for Korean
+	case 949:
+		t, e := io.ReadAll(transform.NewReader(bytes.NewReader(encoded), korean.EUCKR.NewDecoder()))
+		if e != nil {
+			err = fmt.Errorf("os/windows/pkg/text.DecodeString(): there was an error decoding the string to Korean EUCKR: %s", e)
+			return
+		}
+		decoded = string(t)
+	// 950 is the default code page for Traditional Chinese
+	case 950:
+		t, e := io.ReadAll(transform.NewReader(bytes.NewReader(encoded), traditionalchinese.Big5.NewDecoder()))
+		if e != nil {
+			err = fmt.Errorf("os/windows/pkg/text.DecodeString(): there was an error decoding the string to Traditional Chinese Big5: %s", e)
 			return
 		}
 		decoded = string(t)
