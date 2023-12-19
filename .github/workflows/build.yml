@@ -4,6 +4,7 @@
 name: "Merlin Agent Build & Test"
 
 on:
+  workflow_dispatch:
   push:
     paths-ignore:
       - '.github/**'
