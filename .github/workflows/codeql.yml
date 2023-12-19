@@ -9,19 +9,11 @@
 # the `language` matrix defined below to confirm you have the correct set of
 # supported CodeQL languages.
 #
-name: "CodeQL"
+name: "CodeQL Advanced"
 
 on:
   push:
     branches: [ "main", "dev" ]
-    paths-ignore:
-      - '.github/**'
-      - 'docs/**'
-      - '.gitattributes'
-      - '.gitignore'
-      - 'LICENSE'
-      - 'Makefile'
-      - 'README.MD'
   pull_request:
     branches: [ "main", "dev" ]
     paths-ignore:
