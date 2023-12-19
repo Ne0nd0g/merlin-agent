@@ -1,0 +1,45 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: "Merlin Agent Build & Test"
+
+on:
+  push:
+    paths-ignore:
+      - '.github/**'
+      - 'docs/**'
+      - '.gitattributes'
+      - '.gitignore'
+      - 'LICENSE'
+      - 'README.MD'
+  pull_request:
+    paths-ignore:
+      - '.github/**'
+      - 'docs/**'
+      - '.gitattributes'
+      - '.gitignore'
+      - 'LICENSE'
+      - 'README.MD'
+
+jobs:
+  build:
+    name: 'Build Job'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          check-latest: true
+
+      - name: 'Test Merlin Agent'
+        id: test
+        run: 'go test ./...'
+
+      - name: 'Build Merlin Agent'
+        id: build
+        run: 'make all'
