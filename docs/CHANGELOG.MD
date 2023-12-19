@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.X.X - 202X-XX-XX
+
+### Added
+
+- Support to decode Simplified Chinese (Code Page 936) encoding to UTF-8
+- Support to decode Traditional Chinese (Code Page 950) encoding to UTF-8
+- Support to decode Korean (Code Page 949) encoding to UTF-8
+
 ## 2.2.0 - 2023-12-14
 
 ### Added
