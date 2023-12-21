@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Support to decode Simplified Chinese (Code Page 936) encoding to UTF-8
 - Support to decode Traditional Chinese (Code Page 950) encoding to UTF-8
 - Support to decode Korean (Code Page 949) encoding to UTF-8
+- Added 'RSA' as a valid authentication method for Mythic EKE
+- Added 'mythic' encoder to transform messages in the format Mythic expects them in
+
+### Changed
+
+- Refactored clients/mythic to correctly implement the Client interface from merlin-agent/v2 package
+  - Moved encryption out of the client and into the transforms
+  - Accepts authenticator, transforms, and secure TLS configuration items
+- Upgraded:
+  - `github.com/Ne0nd0g/merlin-message` to v1.3.0
+  - `golang.org/x/net` to v0.19.0
+  - `github.com/quic-go/quic-go` to v0.40.1
+  - `github.com/refraction-networking/utls` to v1.6.0
 
 ## 2.2.0 - 2023-12-14
 

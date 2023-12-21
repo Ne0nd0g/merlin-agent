@@ -63,6 +63,7 @@ type CheckIn struct {
 	ExternalIP    string `json:"external_ip,omitempty"`     // "external_ip": "8.8.8.8", // external ip if known - optional
 	EncryptionKey string `json:"encryption_key,omitempty"`  // "encryption_key": "base64 of key", // encryption key - optional
 	DecryptionKey string `json:"decryption_key,omitempty"`  //  "decryption_key": "base64 of key", // decryption key - optional
+	Process       string `json:"process_name,omitempty"`    // "process": "process name", // name of the process - optional
 	Padding       string `json:"padding,omitempty"`
 }
 
@@ -138,24 +139,6 @@ type ServerTaskResponse struct {
 type ServerPostResponse struct {
 	Action    string               `json:"action"`
 	Responses []ServerTaskResponse `json:"responses"`
-}
-
-// RSARequest is used by the client to send the server it's RSA public key
-// https://docs.mythic-c2.net/customizing/c2-related-development/c2-profile-code/agent-side-coding/initial-checkin#eke-by-generating-client-side-rsa-keys
-type RSARequest struct {
-	Action    string `json:"action"`     // staging_rsa
-	PubKey    string `json:"pub_key"`    // base64 of public RSA key
-	SessionID string `json:"session_id"` // 20 character string; unique session ID for this callback
-	Padding   string `json:"padding,omitempty"`
-}
-
-// RSAResponse contains the derived session key that is encrypted with the agent's RSA key
-// https://docs.mythic-c2.net/customizing/c2-related-development/c2-profile-code/agent-side-coding/initial-checkin#eke-by-generating-client-side-rsa-keys
-type RSAResponse struct {
-	Action     string `json:"action"`      // staging_rsa
-	ID         string `json:"uuid"`        // new UUID for the next message
-	SessionKey string `json:"session_key"` // Base64( RSAPub( new aes session key ) )
-	SessionID  string `json:"session_id"`  // same 20 char string back
 }
 
 // PostResponseFile is the structure used to send a list of messages from the agent to the server
