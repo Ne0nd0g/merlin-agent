@@ -663,7 +663,7 @@ func (client *Client) Deconstruct(data []byte) (returnMessages []messages.Base, 
 			err = fmt.Errorf("there was an error unmarshalling the JSON object to a mythic.ServerTaskResponse structure in the message handler:\n%s", err)
 			return
 		}
-		cli.Message(cli.NOTE, fmt.Sprintf("post_response results from the server: %+v", msg))
+		cli.Message(cli.DEBUG, fmt.Sprintf("post_response results from the server: %+v", msg))
 		for _, response := range msg.Responses {
 			if response.Error != "" {
 				cli.Message(cli.WARN, fmt.Sprintf("There was an error sending a task to the Mythic server:\n%+v", response))

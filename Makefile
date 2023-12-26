@@ -68,8 +68,6 @@ PACKAGE=7za a -p${PASSWORD} -mhe -mx=9
 F=LICENSE
 
 # Misc
-# GOGARBLE contains a list of all the packages to obfuscate
-GOGARBLE=golang.org,gopkg.in,github.com
 # The Merlin server and agent MUST be built with the same seed value
 # Set during build with "make linux-garble SEED=<insert seed>
 SEED=d0d03a0ae4722535a0e1d5d0c8385ce42015511e68d960fadef4b4eaf5942feb
@@ -111,7 +109,7 @@ linux:
 # Compile  Agent - Linux x64 with Garble - The SEED must be the exact same that was used when compiling the server
 # Garble version 0.5.2 or later must be installed and accessible in the PATH environment variable
 linux-garble:
-	export GOGARBLE=${GOGARBLE};export GOOS=linux GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${L} ./main.go
+	export GOOS=linux GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${L} ./main.go
 
 # Compile Agent - FreeBSD x64
 freebsd:
@@ -120,7 +118,7 @@ freebsd:
 # Compile  Agent - FreeBSD x64 with Garble - The SEED must be the exact same that was used when compiling the server
 # Garble version 0.5.2 or later must be installed and accessible in the PATH environment variable
 freebsd-garble:
-	export GOGARBLE=${GOGARBLE};export GOOS=freebsd GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${B} ./main.go
+	export GOOS=freebsd GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${B} ./main.go
 
 # Compile Agent - Darwin x64
 darwin:
@@ -129,7 +127,7 @@ darwin:
 # Compile  Agent - macOS (Darwin) x64 with Garble - The SEED must be the exact same that was used when compiling the server
 # Garble version 0.5.2 or later must be installed and accessible in the PATH environment variable
 darwin-garble:
-	export GOGARBLE=${GOGARBLE};export GOOS=darwin GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${D} ./main.go
+	export GOOS=darwin GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${D} ./main.go
 
 package-windows:
 	${PACKAGE} ${DIR}/${MAGENT}-${W}.7z ${F}
