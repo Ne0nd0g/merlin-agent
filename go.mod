@@ -25,7 +25,7 @@ require (
 	github.com/Binject/debug v0.0.0-20211007083345-9605c99179ee // indirect
 	github.com/andybalholm/brotli v1.0.6 // indirect
 	github.com/awgh/rawreader v0.0.0-20200626064944-56820a9c6da4 // indirect
-	github.com/cloudflare/circl v1.3.6 // indirect
+	github.com/cloudflare/circl v1.3.7 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/google/pprof v0.0.0-20231212022811-ec68065c825e // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
