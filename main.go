@@ -61,6 +61,9 @@ var headers = ""
 // host a specific HTTP header used with HTTP communications; notably used for domain fronting
 var host = ""
 
+// httpClient is string that represents what type of HTTP client the Agent should use (e.g., winhttp, go)
+var httpClient = "go"
+
 // ja3 a string that represents how the Agent should configure it TLS client
 var ja3 = ""
 
@@ -87,6 +90,12 @@ var protocol = "h2"
 
 // proxy the address of HTTP proxy to send HTTP traffic through
 var proxy = ""
+
+// proxyUser the username for proxy authentication
+var proxyUser = ""
+
+// proxyPass the password for proxy authentication
+var proxyPass = ""
 
 // psk is the Pre-Shared Key, the secret used to encrypt messages communications with the server
 var psk = "merlin"
@@ -123,6 +132,8 @@ func main() {
 	flag.StringVar(&psk, "psk", psk, "Pre-Shared Key used to encrypt initial communications")
 	flag.StringVar(&protocol, "proto", protocol, "Protocol for the agent to connect with [https (HTTP/1.1), http (HTTP/1.1 Clear-Text), h2 (HTTP/2), h2c (HTTP/2 Clear-Text), http3 (QUIC or HTTP/3.0), tcp-bind, tcp-reverse, udp-bind, udp-reverse, smb-bind, smb-reverse]")
 	flag.StringVar(&proxy, "proxy", proxy, "Hardcoded proxy to use for http/1.1 traffic only that will override host configuration")
+	flag.StringVar(&proxyUser, "proxy-user", proxyUser, "Username for proxy authentication")
+	flag.StringVar(&proxyPass, "proxy-pass", proxyPass, "Password for proxy authentication")
 	flag.StringVar(&host, "host", host, "HTTP Host header")
 	flag.StringVar(&ja3, "ja3", ja3, "JA3 signature string (not the MD5 hash). Overrides -proto & -parrot flags")
 	flag.StringVar(&parrot, "parrot", ja3, "parrot or mimic a specific browser from github.com/refraction-networking/utls (e.g., HelloChrome_Auto)")
@@ -135,6 +146,7 @@ func main() {
 	flag.StringVar(&padding, "padding", padding, "The maximum amount of data that will be randomly selected and appended to every message")
 	flag.StringVar(&useragent, "useragent", useragent, "The HTTP User-Agent header string that the Agent will use while sending traffic")
 	flag.StringVar(&headers, "headers", headers, "A new line separated (e.g., \\n) list of additional HTTP headers to use")
+	flag.StringVar(&httpClient, "http-client", httpClient, "The HTTP client to use for communication [go, winhttp]")
 
 	flag.Usage = usage
 
@@ -199,9 +211,12 @@ func main() {
 		clientConfig := http.Config{
 			AgentID:      a.ID(),
 			Protocol:     protocol,
+			ClientType:   httpClient,
 			Host:         host,
 			Headers:      headers,
 			Proxy:        proxy,
+			ProxyUser:    proxyUser,
+			ProxyPass:    proxyPass,
 			UserAgent:    useragent,
 			PSK:          psk,
 			JA3:          ja3,

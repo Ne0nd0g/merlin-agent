@@ -15,6 +15,12 @@ MAGENT=merlinAgent
 PASSWORD=merlin
 BUILD=$(shell git rev-parse HEAD)
 DIR=bin/v${VERSION}/${BUILD}
+# httpall - Include all HTTP clients HTTP/2, HTTP/3, and winhttp
+# Go's net/http for HTTP/1.1 communications is always included
+# http2 - Include only HTTP/2 client
+# http3 - Include only HTTP/3 client
+# winhttp - Include only Windows HTTP client
+TAGS=httpall
 
 # Merlin Agent Variables
 XBUILD=-X "github.com/Ne0nd0g/merlin-agent/v2/core.Build=${BUILD}"
@@ -83,51 +89,51 @@ all: windows windows-debug linux darwin
 
 # Compile Agent - Windows x64
 windows:
-	export GOOS=windows GOARCH=amd64;go build -trimpath ${WINAGENTLDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${W}.exe ./main.go
+	export GOOS=windows GOARCH=amd64;go build -tags ${TAGS} -trimpath ${WINAGENTLDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${W}.exe ./main.go
 
 # Compile Agent - Windows x64 Debug (Can view STDOUT)
 windows-debug:
-	export GOOS=windows GOARCH=amd64;go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${W}-Debug.exe ./main.go
+	export GOOS=windows GOARCH=amd64;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${W}-Debug.exe ./main.go
 
 # Compile  Agent - Windows x64 with Garble - The SEED must be the exact same that was used when compiling the server
 # Garble version 0.5.2 or later must be installed and accessible in the PATH environment variable
 windows-garble:
-	export GOGARBLE=${GOGARBLE};export GOOS=windows GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -trimpath ${WINAGENTLDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${W}.exe ./main.go
+	export GOGARBLE=${GOGARBLE};export GOOS=windows GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -tags ${TAGS} -trimpath ${WINAGENTLDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${W}.exe ./main.go
 
 # Compile Agent - Linux mips
 mips:
-	export GOOS=linux;export GOARCH=mips;go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${M} ./main.go
+	export GOOS=linux;export GOARCH=mips;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${M} ./main.go
 
 # Compile Agent - Linux arm
 arm:
-	export GOOS=linux;export GOARCH=arm;export GOARM=7;go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${A} ./main.go
+	export GOOS=linux;export GOARCH=arm;export GOARM=7;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${A} ./main.go
 
 # Compile Agent - Linux x64
 linux:
-	export GOOS=linux;export GOARCH=amd64;go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${L} ./main.go
+	export GOOS=linux;export GOARCH=amd64;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${L} ./main.go
 
 # Compile  Agent - Linux x64 with Garble - The SEED must be the exact same that was used when compiling the server
 # Garble version 0.5.2 or later must be installed and accessible in the PATH environment variable
 linux-garble:
-	export GOOS=linux GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${L} ./main.go
+	export GOOS=linux GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${L} ./main.go
 
 # Compile Agent - FreeBSD x64
 freebsd:
-	export GOOS=freebsd;export GOARCH=amd64;go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${B} ./main.go
+	export GOOS=freebsd;export GOARCH=amd64;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${B} ./main.go
 
 # Compile  Agent - FreeBSD x64 with Garble - The SEED must be the exact same that was used when compiling the server
 # Garble version 0.5.2 or later must be installed and accessible in the PATH environment variable
 freebsd-garble:
-	export GOOS=freebsd GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${B} ./main.go
+	export GOOS=freebsd GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${B} ./main.go
 
 # Compile Agent - Darwin x64
 darwin:
-	export GOOS=darwin;export GOARCH=amd64;go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${D} ./main.go
+	export GOOS=darwin;export GOARCH=amd64;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${D} ./main.go
 
 # Compile  Agent - macOS (Darwin) x64 with Garble - The SEED must be the exact same that was used when compiling the server
 # Garble version 0.5.2 or later must be installed and accessible in the PATH environment variable
 darwin-garble:
-	export GOOS=darwin GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${D} ./main.go
+	export GOOS=darwin GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${D} ./main.go
 
 package-windows:
 	${PACKAGE} ${DIR}/${MAGENT}-${W}.7z ${F}
