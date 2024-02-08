@@ -11,6 +11,8 @@ github.com/Ne0nd0g/npipe v1.1.0 h1:oTDJfD8yrr2BLGZpKEllCmeGpcbmx6LW1uuS2bxIBoM=
 github.com/Ne0nd0g/npipe v1.1.0/go.mod h1:GKyLKRkYambQuI9VIfMrz1Mf5hOGlEvZkhw1chph/IQ=
 github.com/Ne0nd0g/winhttp v0.0.0-20240207122154-86f4949ec8b9 h1:0re9C3E45w/YG8kHcEFdgdsPzjFqEejlA56VUrjLGfw=
 github.com/Ne0nd0g/winhttp v0.0.0-20240207122154-86f4949ec8b9/go.mod h1:my3DIMTLpC1ZNlGR5jQ9yV995XR1dukH7gZSofTM/Z8=
+github.com/Ne0nd0g/winhttp v1.0.0 h1:udvGuikkm04aW527YBlYT01hLDtGaYrL60Xq2yv3vU8=
+github.com/Ne0nd0g/winhttp v1.0.0/go.mod h1:zWg/r3XLzjPGuTBR4p9Ke2u3SlGxVaYNRPtYxmnkr8Q=
 github.com/andybalholm/brotli v1.0.6 h1:Yf9fFpf49Zrxb9NlQaluyE92/+X7UVHlhMNJN2sxfOI=
 github.com/andybalholm/brotli v1.0.6/go.mod h1:fO7iG3H7G2nSZ7m0zPUDn85XEX2GTukHGRSepvi9Eig=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
@@ -104,6 +106,8 @@ golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.6.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.16.0 h1:xWw16ngr6ZMtmxDyKyIgsE93KNKz5HKmMa3b8ALHidU=
 golang.org/x/sys v0.16.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
+golang.org/x/sys v0.17.0 h1:25cE3gD+tdBA7lp7QfhuV+rJiE9YXTcS3VG1SqssI/Y=
+golang.org/x/sys v0.17.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
 golang.org/x/term v0.16.0 h1:m+B6fahuftsE9qjo0VWp2FW0mB3MTJvR0BaMQrq0pmE=
 golang.org/x/term v0.16.0/go.mod h1:yn7UURbUtPyrVJPGPq404EukNFxcm/foM+bV/bfcDsY=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=

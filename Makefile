@@ -100,6 +100,9 @@ windows-debug:
 windows-garble:
 	export GOGARBLE=${GOGARBLE};export GOOS=windows GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -tags ${TAGS} -trimpath ${WINAGENTLDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${W}.exe ./main.go
 
+windows-garble-debug:
+	export GOOS=windows GOARCH=amd64;garble -tiny -literals -seed ${SEED} build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${W}-Debug.exe ./main.go
+
 # Compile Agent - Linux mips
 mips:
 	export GOOS=linux;export GOARCH=mips;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${M} ./main.go

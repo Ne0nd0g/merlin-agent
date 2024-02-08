@@ -7,7 +7,7 @@ require (
 	github.com/Ne0nd0g/go-clr v1.0.3
 	github.com/Ne0nd0g/merlin-message v1.3.0
 	github.com/Ne0nd0g/npipe v1.1.0
-	github.com/Ne0nd0g/winhttp v0.0.0-20240207122154-86f4949ec8b9
+	github.com/Ne0nd0g/winhttp v1.0.0
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 	github.com/cretz/gopaque v0.1.0
 	github.com/fatih/color v1.16.0
@@ -18,7 +18,7 @@ require (
 	github.com/refraction-networking/utls v1.6.0
 	golang.org/x/crypto v0.18.0
 	golang.org/x/net v0.19.0
-	golang.org/x/sys v0.16.0
+	golang.org/x/sys v0.17.0
 	golang.org/x/text v0.14.0
 )
 

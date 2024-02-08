@@ -61,7 +61,7 @@ var headers = ""
 // host a specific HTTP header used with HTTP communications; notably used for domain fronting
 var host = ""
 
-// httpClient is string that represents what type of HTTP client the Agent should use (e.g., winhttp, go)
+// httpClient is a string that represents what type of HTTP client the Agent should use (e.g., winhttp, go)
 var httpClient = "go"
 
 // ja3 a string that represents how the Agent should configure it TLS client
