@@ -252,8 +252,6 @@ func New(config Config) (*Client, error) {
 		Parrot:     client.Parrot,
 		Protocol:   client.Protocol,
 		ProxyURL:   client.Proxy,
-		ProxyUser:  client.ProxyUser,
-		ProxyPass:  client.ProxyPass,
 	}
 
 	// Get the HTTP client
