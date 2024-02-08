@@ -1,6 +1,6 @@
 module github.com/Ne0nd0g/merlin-agent/v2
 
-go 1.21.5
+go 1.21
 
 require (
 	github.com/C-Sto/BananaPhone v0.0.0-20220220002628-6585e5913761
@@ -14,22 +14,22 @@ require (
 	github.com/go-jose/go-jose/v3 v3.0.1
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.5.0
-	github.com/quic-go/quic-go v0.40.1
-	github.com/refraction-networking/utls v1.6.0
-	golang.org/x/crypto v0.18.0
-	golang.org/x/net v0.19.0
+	github.com/quic-go/quic-go v0.41.0
+	github.com/refraction-networking/utls v1.6.2
+	golang.org/x/crypto v0.19.0
+	golang.org/x/net v0.20.0
 	golang.org/x/sys v0.17.0
 	golang.org/x/text v0.14.0
 )
 
 require (
 	github.com/Binject/debug v0.0.0-20211007083345-9605c99179ee // indirect
-	github.com/andybalholm/brotli v1.0.6 // indirect
+	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/awgh/rawreader v0.0.0-20200626064944-56820a9c6da4 // indirect
-	github.com/cloudflare/circl v1.3.6 // indirect
+	github.com/cloudflare/circl v1.3.7 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/google/pprof v0.0.0-20231212022811-ec68065c825e // indirect
-	github.com/klauspost/compress v1.17.4 // indirect
+	github.com/klauspost/compress v1.17.6 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/onsi/ginkgo/v2 v2.13.2 // indirect
