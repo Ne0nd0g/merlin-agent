@@ -1,4 +1,4 @@
-//go:build windows && httpall
+//go:build httpall || winhttp
 
 /*
 Merlin is a post-exploitation command and control framework.
