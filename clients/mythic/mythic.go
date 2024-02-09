@@ -106,6 +106,7 @@ type Config struct {
 	AuthPackage  string    // AuthPackage is the type of authentication the agent should use when communicating with the server
 	PayloadID    string    // The UUID used with the Mythic framework
 	Protocol     string    // Proto contains the transportation protocol the agent is using (i.e., http2 or http3)
+	Headers      string    // Headers is a new-line separated string of additional HTTP headers to add to client requests
 	Host         string    // Host is used with the HTTP Host header for Domain Fronting activities
 	URL          string    // URL is the protocol, domain, and page that the agent will communicate with (e.g., https://google.com/test.aspx)
 	Proxy        string    // Proxy is the URL of the proxy that all traffic needs to go through, if applicable
@@ -213,6 +214,27 @@ func New(config Config) (*Client, error) {
 		cli.Message(cli.WARN, fmt.Sprintf("there was an error converting Padding string \"%s\" to an integer: %s", config.Padding, err))
 	}
 
+	// Parse additional HTTP Headers
+	if config.Headers != "" {
+		client.Headers = make(map[string]string)
+		for _, header := range strings.Split(config.Headers, "\\n") {
+			h := strings.Split(header, ":")
+			// Remove leading or trailing spaces
+			headerKey := strings.TrimSuffix(strings.TrimPrefix(h[0], " "), " ")
+			headerValue := strings.TrimSuffix(strings.TrimPrefix(h[1], " "), " ")
+			cli.Message(
+				cli.DEBUG,
+				fmt.Sprintf("HTTP Header (%d): %s, Value (%d): %s\n",
+					len(headerKey),
+					headerKey,
+					len(headerValue),
+					headerValue,
+				),
+			)
+			client.Headers[headerKey] = headerValue
+		}
+	}
+
 	cli.Message(cli.INFO, "Client information:")
 	cli.Message(cli.INFO, fmt.Sprintf("\tMythic Payload ID: %s", client.MythicID))
 	cli.Message(cli.INFO, fmt.Sprintf("\tProtocol: %s", client.Protocol))
@@ -221,6 +243,7 @@ func New(config Config) (*Client, error) {
 	cli.Message(cli.INFO, fmt.Sprintf("\tURL: %s", client.URL))
 	cli.Message(cli.INFO, fmt.Sprintf("\tUser-Agent: %s", client.UserAgent))
 	cli.Message(cli.INFO, fmt.Sprintf("\tHTTP Host Header: %s", client.Host))
+	cli.Message(cli.INFO, fmt.Sprintf("\tHTTP Headers: %s", client.Headers))
 	cli.Message(cli.INFO, fmt.Sprintf("\tProxy: %s", client.Proxy))
 	cli.Message(cli.INFO, fmt.Sprintf("\tPayload Padding Max: %d", client.PaddingMax))
 	cli.Message(cli.INFO, fmt.Sprintf("\tJA3 String: %s", client.JA3))
@@ -350,6 +373,9 @@ func (client *Client) Send(m messages.Base) (returnMessages []messages.Base, err
 		if client.Host != "" {
 			req.Host = client.Host
 		}
+	}
+	for header, value := range client.Headers {
+		req.Header.Set(header, value)
 	}
 
 	// Send the request
