@@ -198,8 +198,12 @@ func New(config Config) (*Client, error) {
 	// Parse additional HTTP Headers
 	if config.Headers != "" {
 		client.Headers = make(map[string]string)
-		for _, header := range strings.Split(config.Headers, "\\n") {
+		for _, header := range strings.Split(config.Headers, "\n") {
 			h := strings.Split(header, ":")
+			if len(h) < 2 {
+				cli.Message(cli.DEBUG, fmt.Sprintf("unable to parse HTTP header: '%s'", header))
+				continue
+			}
 			// Remove leading or trailing spaces
 			headerKey := strings.TrimSuffix(strings.TrimPrefix(h[0], " "), " ")
 			headerValue := strings.TrimSuffix(strings.TrimPrefix(h[1], " "), " ")
