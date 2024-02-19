@@ -15,12 +15,15 @@ MAGENT=merlinAgent
 PASSWORD=merlin
 BUILD=$(shell git rev-parse HEAD)
 DIR=bin/v${VERSION}/${BUILD}
-# httpall - Include all HTTP clients HTTP/2, HTTP/3, and winhttp
-# Go's net/http for HTTP/1.1 communications is always included
-# http2 - Include only HTTP/2 client
-# http3 - Include only HTTP/3 client
-# winhttp - Include only Windows HTTP client
-TAGS=httpall
+# http - Include the HTTP client (including HTTP/1.1, HTTP/2, and HTTP/3)
+# http1 - Include the HTTP/1.1 client from Go's standard library
+# http2 - Include the HTTP/2 client
+# http3 - Include the HTTP/3 client
+# smb - Include the peer-to-peer SMB client
+# tcp - Include the peer-to-peer TCP client
+# udp - Include the peer-to-peer UDP client
+# winhttp - Include the Windows HTTP client
+TAGS ?=
 
 # Merlin Agent Variables
 XBUILD=-X "github.com/Ne0nd0g/merlin-agent/v2/core.Build=${BUILD}"

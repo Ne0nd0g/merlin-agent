@@ -228,6 +228,10 @@ func main() {
 			InsecureTLS:  !verify,
 		}
 
+		if strings.ToLower(httpClient) == "winhttp" && strings.ToLower(protocol) == "h2" {
+			clientConfig.Protocol = "https"
+		}
+
 		if url != "" {
 			clientConfig.URL = strings.Split(strings.ReplaceAll(url, " ", ""), ",")
 		}
@@ -243,7 +247,7 @@ func main() {
 		listenerID, err = uuid.Parse(listener)
 		if err != nil {
 			if *verbose {
-				color.Red(err.Error())
+				color.Red(fmt.Sprintf("there was an error parsing the listener's UUID: %s", err))
 			}
 			os.Exit(1)
 		}
@@ -270,7 +274,7 @@ func main() {
 		listenerID, err = uuid.Parse(listener)
 		if err != nil {
 			if *verbose {
-				color.Red(err.Error())
+				color.Red(fmt.Sprintf("there was an error parsing the listener's UUID: %s", err))
 			}
 			os.Exit(1)
 		}
@@ -297,7 +301,7 @@ func main() {
 		listenerID, err = uuid.Parse(listener)
 		if err != nil {
 			if *verbose {
-				color.Red(err.Error())
+				color.Red(fmt.Sprintf("there was an error parsing the listener's UUID: %s", err))
 			}
 			os.Exit(1)
 		}
