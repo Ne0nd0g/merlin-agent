@@ -1,4 +1,4 @@
-//go:build !smb && (http || http1 || http2 || http3 || mythic || winhttp || tcp || udp || !windows)
+//go:build !udp && (http || http1 || http2 || http3 || mythic || winhttp || smb || tcp)
 
 /*
 Merlin is a post-exploitation command and control framework.
@@ -20,18 +20,18 @@ You should have received a copy of the GNU General Public License
 along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Package smb contains a configurable client used for Windows-based SMB peer-to-peer Agent communications
-package smb
+// Package udp contains a configurable client used for UDP-based peer-to-peer Agent communications
+package udp
 
 import (
 	// Standard
 	"fmt"
-	"runtime"
+
 	// 3rd Party
 	"github.com/google/uuid"
 
-	// Merlin
-	"github.com/Ne0nd0g/merlin-message"
+	// Internal
+	messages "github.com/Ne0nd0g/merlin-message"
 )
 
 // Client is a type of MerlinClient that is used to send and receive Merlin messages from the Merlin server
@@ -52,44 +52,41 @@ type Config struct {
 
 // New instantiates and returns a Client that is constructed from the passed in Config
 func New(Config) (*Client, error) {
-	if runtime.GOOS == "windows" {
-		return nil, fmt.Errorf("clients/smb.New(): SMB client not compiled into this program")
-	}
-	return nil, fmt.Errorf("clients/smb.New(): this function is not supported by the %s operating system", runtime.GOOS)
+	return nil, fmt.Errorf("clients/udp.New(): UDP client not compiled into this program")
 }
 
 // Authenticate is the top-level function used to authenticate an agent to server using a specific authentication protocol
 // The function must take in a Base message for when the C2 server requests re-authentication through a message
 func (client *Client) Authenticate(messages.Base) (err error) {
-	return fmt.Errorf("clients/smb.Authenticate(): SMB client not compiled into this program")
+	return fmt.Errorf("clients/udp.Authenticate(): UDP client not compiled into this program")
 }
 
 // Get is a generic function used to retrieve the value of a Client's field
 func (client *Client) Get(string) string {
-	return fmt.Sprintf("clients/smb.Get(): SMB client not compiled into this program")
+	return fmt.Sprintf("clients/udp.Get(): UDP client not compiled into this program")
 }
 
 // Initial executes the specific steps required to establish a connection with the C2 server and checkin or register an agent
 func (client *Client) Initial() error {
-	return fmt.Errorf("clients/smb.Initial(): SMB client not compiled into this program")
+	return fmt.Errorf("clients/udp.Initial(): UDP client not compiled into this program")
 }
 
 // Listen waits for incoming data on an established TCP connection, deconstructs the data into a Base messages, and returns them
 func (client *Client) Listen() (returnMessages []messages.Base, err error) {
-	err = fmt.Errorf("clients/smb.LIsten(): SMB client not compiled into this program")
+	err = fmt.Errorf("clients/udp.LIsten(): UDP client not compiled into this program")
 	return
 }
 
 // Send takes in a Merlin message structure, performs any encoding or encryption, converts it to a delegate and writes it to the output stream.
 // This function DOES not wait or listen for response messages.
 func (client *Client) Send(messages.Base) (returnMessages []messages.Base, err error) {
-	err = fmt.Errorf("clients/smb.Send(): SMB client not compiled into this program")
+	err = fmt.Errorf("clients/udp.Send(): UDP client not compiled into this program")
 	return
 }
 
 // Set is a generic function that is used to modify a Client's field values
 func (client *Client) Set(key string, value string) error {
-	return fmt.Errorf("clients/smb.Set(): SMB client not compiled into this program")
+	return fmt.Errorf("clients/udp.Set(): UDP client not compiled into this program")
 }
 
 // Synchronous identifies if the client connection is synchronous or asynchronous, used to determine how and when messages

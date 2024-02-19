@@ -1,4 +1,4 @@
-//go:build !httpall && !winhttp
+//go:build !http1 && (http2 || http3 || mythic || winhttp || smb || tcp || udp)
 
 /*
 Merlin is a post-exploitation command and control framework.
@@ -20,23 +20,15 @@ You should have received a copy of the GNU General Public License
 along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-package winhttp
+// Package http1 provides an HTTP/1.1 client using the Go standard library
+package http1
 
 import (
 	"fmt"
 	"net/http"
-
-	// Internal
-	"github.com/Ne0nd0g/merlin-agent/v2/cli"
-	"github.com/Ne0nd0g/merlin-agent/v2/http/http1"
 )
 
-// NewHTTPClient returns an HTTP/1.1 client using the Windows WinHTTP API
-// A http.DefaultClient is returned if the platform is not Windows
+// NewHTTPClient returns an HTTP/1.1 client using the Go standard library
 func NewHTTPClient(protocol, proxyURL string, insecure bool) (*http.Client, error) {
-	cli.Message(cli.DEBUG, "http/winhttp/winhttp.go/NewHTTPClient(): Entering into function...")
-	cli.Message(cli.DEBUG, fmt.Sprintf("Protocol: %s, Proxy: %s, insecure: %t", protocol, proxyURL, insecure))
-	cli.Message(cli.WARN, "winhttp was not compiled into this binary, using http.DefaultClient")
-
-	return http1.NewHTTPClient(protocol, proxyURL, insecure)
+	return nil, fmt.Errorf("http/http1/http1_exclude.go/NewHTTPClient(): HTTP/1 client not compiled into this program")
 }

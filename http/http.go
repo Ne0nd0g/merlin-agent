@@ -24,6 +24,7 @@ package http
 import (
 	// Standard
 	"fmt"
+	"github.com/Ne0nd0g/merlin-agent/v2/http/http3"
 	"net/http"
 
 	// Internal
@@ -85,6 +86,8 @@ func NewHTTPClient(config Config) (client Client, err error) {
 		return http1.NewHTTPClient(config.Protocol, config.ProxyURL, config.Insecure)
 	case HTTP2, H2C:
 		return http2.NewHTTPClient(config.Protocol, config.Insecure)
+	case HTTP3:
+		return http3.NewHTTPClient(config.Insecure)
 	case WINHTTP:
 		return winhttp.NewHTTPClient(config.Protocol, config.ProxyURL, config.Insecure)
 	case JA3:
@@ -116,7 +119,7 @@ func NewHTTPClient(config Config) (client Client, err error) {
 	case UNDEFINED:
 		return nil, fmt.Errorf("http/http.go/NewHTTPClient(): client type was not set")
 	default:
-		return nil, fmt.Errorf("http/http.go/NewHTTPClient(): client type '%d' is un handled", config.ClientType)
+		return nil, fmt.Errorf("http/http.go/NewHTTPClient(): client type '%s:%d' is un handled", config.ClientType, config.ClientType)
 	}
 }
 
