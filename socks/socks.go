@@ -43,8 +43,9 @@ var done = sync.Map{}
 
 // Handler is the entry point for SOCKS connections.
 // This function starts a SOCKS server and processes incoming SOCKS connections
-func Handler(msg jobs.Job, jobsOut *chan jobs.Job) {
-	//fmt.Printf("Received SOCKS job: %+v\n", msg)
+func Handler(msg jobs.Job, jobsOut *chan jobs.Job, jobsIn *chan jobs.Job) {
+	//fmt.Printf("socks.Handler(): Received SOCKS job ID: %s, Index: %d, Close: %t, Data Length: %d\n", msg.Payload.(jobs.Socks).ID, msg.Payload.(jobs.Socks).Index, msg.Payload.(jobs.Socks).Close, len(msg.Payload.(jobs.Socks).Data))
+	//defer fmt.Printf("\tsocks.Handler(): Exiting ID: %s, Index: %d, Close: %t, Data Length: %d\n", msg.Payload.(jobs.Socks).ID, msg.Payload.(jobs.Socks).Index, msg.Payload.(jobs.Socks).Close, len(msg.Payload.(jobs.Socks).Data))
 	job := msg.Payload.(jobs.Socks)
 
 	// See if the SOCKS server has already been created
@@ -58,7 +59,7 @@ func Handler(msg jobs.Job, jobsOut *chan jobs.Job) {
 
 	// See if this connection is new
 	_, ok := connections.Load(job.ID)
-	if !ok {
+	if !ok && !job.Close {
 		client, target := net.Pipe()
 		connection := Connection{
 			Job:     msg,
@@ -80,8 +81,43 @@ func Handler(msg jobs.Job, jobsOut *chan jobs.Job) {
 		return
 	}
 
+	// Check to ensure the index is correct, if not, return it to the job channel to be processed again
+
+	if conn.(*Connection).Count != job.Index {
+		//fmt.Printf("Index mismatch, expected %d, got %d\n", conn.(*Connection).Count, job.Index)
+		*jobsIn <- msg
+		return
+	}
+
+	// If there is data, write it to the SOCKS server
+	// Send data, if any, before closing the connection
+	if len(job.Data) > 0 {
+		conn.(*Connection).Count++
+		// Write the received data to the agent side pipe
+		var buff bytes.Buffer
+		_, err := buff.Write(job.Data)
+		if err != nil {
+			cli.Message(cli.WARN, fmt.Sprintf("there was an error writing SOCKS data to the buffer: %s", err))
+			return
+		}
+
+		//fmt.Printf("Writing %d bytes to SOCKS target \n", len(job.Data))
+		n, err := conn.(*Connection).Out.Write(buff.Bytes())
+		if err != nil {
+			cli.Message(cli.WARN, fmt.Sprintf("there was an error writing data to the SOCKS %s OUTBOUND pipe: %s", job.ID, err))
+			return
+		}
+		//time.Sleep(40 * time.Millisecond)
+
+		cli.Message(cli.DEBUG, fmt.Sprintf("Wrote %d bytes to the SOCKS %s OUTBOUND pipe with error %s", n, job.ID, err))
+	}
+
 	// If the SOCKS client has sent io.EOF to close the connection
 	if job.Close {
+		// Mythic is sending two Close messages so the counter needs to increment on close too
+		if len(job.Data) <= 0 {
+			conn.(*Connection).Count++
+		}
 		cli.Message(cli.NOTE, fmt.Sprintf("Closing SOCKS connection %s", job.ID))
 
 		cli.Message(cli.DEBUG, fmt.Sprintf("Closing SOCKS connection %s OUTBOUND pipe", job.ID))
@@ -97,39 +133,26 @@ func Handler(msg jobs.Job, jobsOut *chan jobs.Job) {
 		}
 
 		// Send a message back to the server, so it knows the connection has been shutdown/completed
-		j := jobs.Job{
-			AgentID: msg.AgentID,
-			ID:      msg.ID,
-			Token:   msg.Token,
-			Type:    jobs.SOCKS,
-		}
-		j.Payload = jobs.Socks{
-			ID:    job.ID,
-			Close: true,
-		}
-		*conn.(*Connection).JobChan <- j
-
+		/*
+			j := jobs.Job{
+				AgentID: msg.AgentID,
+				ID:      msg.ID,
+				Token:   msg.Token,
+				Type:    jobs.SOCKS,
+			}
+			j.Payload = jobs.Socks{
+				ID:    job.ID,
+				Close: true,
+			}
+			*conn.(*Connection).JobChan <- j
+		*/
 		// Remove the connection from the map
+		// Don't remove the connection, it is removed in the receiveFromSOCKSServer function
 		connections.Delete(job.ID)
 		done.Store(job.ID, true)
 		return
 	}
-
-	// Write the received data to the agent side pipe
-	var buff bytes.Buffer
-	_, err := buff.Write(job.Data)
-	if err != nil {
-		cli.Message(cli.WARN, fmt.Sprintf("there was an error writing SOCKS data to the buffer: %s", err))
-		return
-	}
-
-	//fmt.Printf("Writing bytes to SOCKS target %X\n", job.Data)
-	n, err := conn.(*Connection).Out.Write(buff.Bytes())
-	if err != nil {
-		cli.Message(cli.WARN, fmt.Sprintf("there was an error writing data to the SOCKS %s OUTBOUND pipe: %s", job.ID, err))
-		return
-	}
-	cli.Message(cli.DEBUG, fmt.Sprintf("Wrote %d bytes to the SOCKS %s OUTBOUND pipe with error %s", n, job.ID, err))
+	// TODO: When is the connection removed from the map?
 }
 
 // start uses an empty SOCKS server configuration and creates a new instance
@@ -188,7 +211,7 @@ func receiveFromSOCKSServer(id uuid.UUID) {
 
 		n, err := connection.(*Connection).Out.Read(data)
 		cli.Message(cli.DEBUG, fmt.Sprintf("Read %d bytes from the OUTBOUND pipe with error %s", n, err))
-
+		//fmt.Printf("[+] Read %d bytes from the OUTBOUND pipe %s with error %s, Data: %x\n", n, id, err, data[:n])
 		// Check to see if we closed the connection because we are done with it
 		fin, good := done.Load(id)
 		if !good {
@@ -202,6 +225,7 @@ func receiveFromSOCKSServer(id uuid.UUID) {
 
 		if err != nil {
 			cli.Message(cli.WARN, fmt.Sprintf("there was an error reading from the OUTBOUND pipe: %s", err))
+			//fmt.Printf("ERROR reading %d bytes for ID: %s, Index: %d, Close: %t, Data Length: %d, Error: %s\n", n, id, i, j.Payload.(jobs.Socks).Close, len(j.Payload.(jobs.Socks).Data), err)
 			return
 		}
 
@@ -222,4 +246,5 @@ type Connection struct {
 	In      net.Conn
 	Out     net.Conn
 	JobChan *chan jobs.Job
+	Count   int
 }
