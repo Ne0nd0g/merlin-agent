@@ -666,6 +666,17 @@ func (client *Client) Deconstruct(data []byte) (returnMessages []messages.Base, 
 			err = fmt.Errorf("there was an error unmarshalling the JSON object to a mythic.ServerTaskResponse structure in the message handler:\n%s", err)
 			return
 		}
+		// SOCKS5
+		if len(msg.SOCKS) > 0 {
+			// There is SOCKS data to send to the SOCKS server
+			returnMessage, err = client.convertSocksToJobs(msg.SOCKS)
+			if err != nil {
+				cli.Message(cli.WARN, err.Error())
+			}
+			if len(returnMessage.Payload.([]jobs.Job)) > 0 {
+				returnMessages = append(returnMessages, returnMessage)
+			}
+		}
 		cli.Message(cli.DEBUG, fmt.Sprintf("post_response results from the server: %+v", msg))
 		for _, response := range msg.Responses {
 			if response.Error != "" {
@@ -978,7 +989,6 @@ func (client *Client) convertSocksToJobs(socks []Socks) (base messages.Base, err
 		// Load the data packet counter
 		i, ok := socksCounter.Load(id)
 		if !ok {
-			fmt.Println("******* ERROR ******")
 			err = fmt.Errorf("there was an error getting the SOCKS counter for the UUID: %s", id)
 			return
 		}
@@ -1054,15 +1064,6 @@ func (client *Client) convertTasksToJobs(tasks []Task) (messages.Base, error) {
 			}
 			job.Payload = payload
 			returnJobs = append(returnJobs, job)
-		case jobs.SOCKS:
-			// TODO: I don't think this code is ever used?
-			var payload jobs.Socks
-			err = json.Unmarshal([]byte(mythicJob.Payload), &payload)
-			if err != nil {
-				return base, fmt.Errorf("there was an error unmarshalling the Mythic job payload to a jobs.Socks structure:\n%s", err)
-			}
-			job.Payload = payload
-			returnJobs = append(returnJobs, job)
 		case 0:
 			// case 0 means that a job type was not added to the task from the Mythic server
 			// Commonly seen with SOCKS messages
@@ -1075,7 +1076,6 @@ func (client *Client) convertTasksToJobs(tasks []Task) (messages.Base, error) {
 				}
 				switch params.Action {
 				case "start", "stop":
-					// TODO Set agent sleep to 0 if start
 					// Send message back to Mythic that SOCKS has been started/stopped
 					job.Type = jobs.RESULT
 					job.Payload = jobs.Results{}

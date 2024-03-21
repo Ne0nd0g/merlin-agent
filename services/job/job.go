@@ -76,7 +76,7 @@ func NewJobService(agentID uuid.UUID) *Service {
 	return memoryService
 }
 
-// AddResult creates a Job Results structure and places it in the out going channel
+// AddResult creates a Job Results structure and places it in the outgoing channel
 func (s *Service) AddResult(agent uuid.UUID, stdOut, stdErr string) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("services/job.AddResult(): entering into function with agent: %s, stdOut: %s, stdErr: %s", agent, stdOut, stdErr))
 	result := jobs.Results{
@@ -278,7 +278,7 @@ func (s *Service) Control(job jobs.Job) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("services/job.Control(): leaving function with %+v", aInfo))
 }
 
-// Handle takes a list of jobs and places them into job channel if they are a valid type, so they can be executed
+// Handle takes a list of jobs and places them into a job channel if they are a valid type, so they can be executed
 func (s *Service) Handle(Jobs []jobs.Job) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("services/job.Handle(): entering into function with %+v", Jobs))
 	for _, job := range Jobs {
@@ -305,7 +305,7 @@ func (s *Service) Handle(Jobs []jobs.Job) {
 			case jobs.RESULT:
 				out <- job
 			case jobs.SOCKS:
-				socks.Handler(job, &out, &in)
+				socks.Handler(job, &out)
 			default:
 				var result jobs.Results
 				result.Stderr = fmt.Sprintf("%s is not a valid job type", job.Type)
@@ -398,7 +398,7 @@ func execute() {
 			case jobs.SHELLCODE:
 				result = commands.ExecuteShellcode(job.Payload.(jobs.Shellcode))
 			case jobs.SOCKS:
-				socks.Handler(job, &out, &in)
+				socks.Handler(job, &out)
 				return
 			default:
 				result.Stderr = fmt.Sprintf("Invalid job type: %d", job.Type)
