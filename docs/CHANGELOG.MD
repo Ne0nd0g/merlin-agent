@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.0 - 2024-03-21
+
+### Added
+
+- Mythic client handles multiple HTTP headers with the Mythic `http` C2 Profile
+
+### Fixed
+
+- Resolved several SOCKS5 issues
+  - Updated Mythic client to handle `post_response` actions with `ServerPostResponse` structure to include SOCKS information
+  - Created a go routine and a channel just for sending SOCKS data in place of using the Jobs channel
+
+### Changed
+
+- Upgraded the following libraries to their latest version
+  - upgraded golang.org/x/net v0.21.0 => v0.22.0
+  - upgraded github.com/google/uuid v1.5.0 => v1.6.0
+  - upgraded github.com/quic-go/quic-go v0.40.1 => v0.42.0
+  - upgraded github.com/refraction-networking/utls v1.6.0 => v1.6.3
+
+### Security
+
+- Upgraded go-jose/v3 to v3.0.3 to address CVE-2024-28180
+
 ## 2.3.0 - 2023-12-26
 
 ### Added
