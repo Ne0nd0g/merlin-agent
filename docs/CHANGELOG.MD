@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.3.1 - 2024-03-21
+
+### Fixed
+
+- Resolved several SOCKS5 issues
+  - Updated Mythic client to handle `post_response` actions with `ServerPostResponse` structure to include SOCKS information
+  - Created a go routine and a channel just for sending SOCKS data in place of using the Jobs channel
+
 ## 2.3.0 - 2023-12-26
 
 ### Added

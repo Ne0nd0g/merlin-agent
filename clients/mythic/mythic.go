@@ -77,6 +77,9 @@ var socksConnection = sync.Map{}
 // mythicSocksConnection is used to map Merlin's connection UUID to Mythic's integer server_id; Inverse of socksConnection
 var mythicSocksConnection = sync.Map{}
 
+// socksCounter is used to track and order the SOCKS data packets coming from Mythic
+var socksCounter = sync.Map{}
+
 // Client is a type of MerlinClient that is used to send and receive Merlin messages from the Merlin server
 type Client struct {
 	Authenticator authenticators.Authenticator
@@ -663,6 +666,17 @@ func (client *Client) Deconstruct(data []byte) (returnMessages []messages.Base, 
 			err = fmt.Errorf("there was an error unmarshalling the JSON object to a mythic.ServerTaskResponse structure in the message handler:\n%s", err)
 			return
 		}
+		// SOCKS5
+		if len(msg.SOCKS) > 0 {
+			// There is SOCKS data to send to the SOCKS server
+			returnMessage, err = client.convertSocksToJobs(msg.SOCKS)
+			if err != nil {
+				cli.Message(cli.WARN, err.Error())
+			}
+			if len(returnMessage.Payload.([]jobs.Job)) > 0 {
+				returnMessages = append(returnMessages, returnMessage)
+			}
+		}
 		cli.Message(cli.DEBUG, fmt.Sprintf("post_response results from the server: %+v", msg))
 		for _, response := range msg.Responses {
 			if response.Error != "" {
@@ -738,7 +752,9 @@ func (client *Client) Construct(m messages.Base) ([]byte, error) {
 		// Convert Merlin jobs to mythic response
 		for _, job := range m.Payload.([]jobs.Job) {
 			var response ClientTaskResponse
-			response.ID = uuid.MustParse(job.ID)
+			if job.ID != "" {
+				response.ID = uuid.MustParse(job.ID)
+			}
 			response.Completed = true
 			cli.Message(cli.DEBUG, fmt.Sprintf("Converting Merlin job type: %d to Mythic response", job.Type))
 			switch job.Type {
@@ -844,6 +860,7 @@ func (client *Client) Construct(m messages.Base) ([]byte, error) {
 
 				// Base64 encode the data
 				sock.Data = base64.StdEncoding.EncodeToString(sockMsg.Data)
+				//fmt.Printf("\t[*] SOCKS Data size: %d\n", len(sockMsg.Data))
 
 				// Add to return messages
 				returnMessage.SOCKS = append(returnMessage.SOCKS, sock)
@@ -929,6 +946,7 @@ func (client *Client) Construct(m messages.Base) ([]byte, error) {
 // convertSocksToJobs takes in Mythic socks messages and translates them into Merlin jobs
 func (client *Client) convertSocksToJobs(socks []Socks) (base messages.Base, err error) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("Entering into clients.mythic.convertSocksToJobs() with %+v", socks))
+	//fmt.Printf("Entering into clients.mythic.convertSocksToJobs() with %d socks messages: %+v\n", len(socks), socks)
 
 	base.Type = messages.JOBS
 	base.ID = client.AgentID
@@ -951,10 +969,11 @@ func (client *Client) convertSocksToJobs(socks []Socks) (base messages.Base, err
 			id = uuid.New()
 			socksConnection.Store(sock.ServerId, id)
 			mythicSocksConnection.Store(id, sock.ServerId)
-
+			socksCounter.Store(id, 0)
 			// Spoof SOCKS handshake with Merlin Agent
 			payload.ID = id.(uuid.UUID)
 			payload.Data = []byte{0x05, 0x01, 0x00}
+			payload.Index = 0
 			job.Payload = payload
 			returnJobs = append(returnJobs, job)
 		}
@@ -966,7 +985,17 @@ func (client *Client) convertSocksToJobs(socks []Socks) (base messages.Base, err
 			err = fmt.Errorf("there was an error base64 decoding the SOCKS message data: %s", err)
 			return
 		}
+		//fmt.Printf("\tID: %d, Data length: %d\n", sock.ServerId, len(payload.Data))
+		// Load the data packet counter
+		i, ok := socksCounter.Load(id)
+		if !ok {
+			err = fmt.Errorf("there was an error getting the SOCKS counter for the UUID: %s", id)
+			return
+		}
+
+		payload.Index = i.(int) + 1
 		job.Payload = payload
+		socksCounter.Store(id, i.(int)+1)
 		returnJobs = append(returnJobs, job)
 	}
 	base.Payload = returnJobs
@@ -1035,12 +1064,6 @@ func (client *Client) convertTasksToJobs(tasks []Task) (messages.Base, error) {
 			}
 			job.Payload = payload
 			returnJobs = append(returnJobs, job)
-		case jobs.SOCKS:
-			var payload jobs.Socks
-			err = json.Unmarshal([]byte(mythicJob.Payload), &payload)
-			if err != nil {
-				return base, fmt.Errorf("there was an error unmarshalling the Mythic job payload to a jobs.Socks structure:\n%s", err)
-			}
 		case 0:
 			// case 0 means that a job type was not added to the task from the Mythic server
 			// Commonly seen with SOCKS messages
@@ -1053,7 +1076,6 @@ func (client *Client) convertTasksToJobs(tasks []Task) (messages.Base, error) {
 				}
 				switch params.Action {
 				case "start", "stop":
-					// TODO Set agent sleep to 0 if start
 					// Send message back to Mythic that SOCKS has been started/stopped
 					job.Type = jobs.RESULT
 					job.Payload = jobs.Results{}

@@ -91,7 +91,7 @@ type Tasking struct {
 type Tasks struct {
 	Action string  `json:"action"`
 	Tasks  []Task  `json:"tasks"`
-	SOCKS  []Socks `json:"socks"`
+	SOCKS  []Socks `json:"socks,omitempty"`
 }
 
 // Task contains the task identifier, command, and parameters for the agent to execute
@@ -139,6 +139,7 @@ type ServerTaskResponse struct {
 type ServerPostResponse struct {
 	Action    string               `json:"action"`
 	Responses []ServerTaskResponse `json:"responses"`
+	SOCKS     []Socks              `json:"socks,omitempty"`
 }
 
 // PostResponseFile is the structure used to send a list of messages from the agent to the server
