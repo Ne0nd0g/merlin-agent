@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Resolved several SOCKS5 issues
   - Updated Mythic client to handle `post_response` actions with `ServerPostResponse` structure to include SOCKS information
   - Created a go routine and a channel just for sending SOCKS data in place of using the Jobs channel
+- [Issue 38](https://github.com/Ne0nd0g/merlin-agent/issues/38) - Added `evasion_386.go` to facilitate x86 Windows builds 
 
 ### Changed
 
