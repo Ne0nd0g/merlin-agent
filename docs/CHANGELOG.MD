@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 
 - Mythic client handles multiple HTTP headers with the Mythic `http` C2 Profile
+- Automatic Windows HTTP proxy authentication through the `winhttp` API
+- Added the `-http-client` command line argument and `HTTPCLIENT` Makefile variable to specify which HTTP client to use
+  - Use `go` for the default Go HTTP client
+  - Use `winhttp` API for HTTP C2
+- Use `go build` tags to control which C2 clients are compiled into the agent. [Build Tags](https://merlin-c2.readthedocs.io/en/latest/agent/custom.html#build-tags)
+  - When ANY build tag is included, the agent will ONLY include that feature and nothing else. For example, if ONLY the http tag is provided, the SMB, TCP, and UDP clients will not be included.
+  - If one of the following build tags is used, then only the C2 profiles provided will be compiled in
+  - `http` - Include all HTTP clients (including HTTP/1.1, HTTP/2, and HTTP/3)
+  - `http1` - Include HTTP/1.1 client
+  - `http2` - Include HTTP/2 client
+  - `http3` - Include HTTP/3 client
+  - `winhttp` - Include Windows `winhttp` API client
+  - `mythic` - Include the Mythic client for the Mythic `http` C2 profile
+  - `smb` - Include SMB client
+  - `tcp` - Include TCP client
+  - `udp` - Include UDP client
 
 ### Fixed
 
