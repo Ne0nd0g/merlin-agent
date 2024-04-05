@@ -6,9 +6,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## 2.4.1 - 2024-04-04
 
+### Changed
+
+- Upgraded golang.org/x/crypto v0.21.0 => v0.22.0
+- Upgraded golang.org/x/sys v0.18.0 => v0.19.0
+- GoVulnCheck to use the latest version of Go
+
 ### Security
 
-- [GO-2024-2687](https://pkg.go.dev/vuln/GO-2024-2687) - Upgraded `golang.org/x/net` to v0.23.0 to address CVE-2024-2687
+- [GO-2024-2687](https://pkg.go.dev/vuln/GO-2024-2687) - Upgraded `golang.org/x/net` to v0.24.0 to address CVE-2024-2687
 
 ## 2.4.0 - 2024-03-23
 
