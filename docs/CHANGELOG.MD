@@ -4,12 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## 2.4.1 - 2024-04-04
+## 2.4.1 - 2024-04-23
 
 ### Changed
 
 - Upgraded golang.org/x/crypto v0.21.0 => v0.22.0
 - Upgraded golang.org/x/sys v0.18.0 => v0.19.0
+- Upgraded golang.org/x/mod v0.16.0 => v0.17.0
+- Upgraded golang.org/x/tools v0.19.0 => v0.20.0
+- Upgraded golang.org/x/exp v0.0.0-20240318143956-a85f2c67cd81 => v0.0.0-20240416160154-fe59bbe5cc7f
+- Upgraded github.com/google/pprof v0.0.0-20240320155624-b11c3daa6f07 => v0.0.0-20240422182052-72c8669ad3e7
+- Upgraded github.com/onsi/ginkgo/v2 v2.17.0 => v2.17.1
+- Upgraded github.com/klauspost/compress v1.17.7 => v1.17.8
+- Upgraded github.com/refraction-networking/utls v1.6.3 => v1.6.4
 - GoVulnCheck to use the latest version of Go
 
 ### Security
