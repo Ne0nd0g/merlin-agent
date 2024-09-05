@@ -23,6 +23,7 @@ along with Merlin.  If not, see <http://www.gnu.org/licenses/>.
 package commands
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 )
