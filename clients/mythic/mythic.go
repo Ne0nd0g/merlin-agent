@@ -148,20 +148,14 @@ func New(config Config) (*Client, error) {
 		return &client, err
 	}
 
-	// Get the HTTP client
-	/*
-		client.Client, err = getClient(client.Protocol, client.Proxy, client.JA3, client.Parrot, client.insecureTLS)
-		if err != nil {
-			return &client, err
-		}
-	*/
-
 	// Set PSK
-	client.psk, err = base64.StdEncoding.DecodeString(config.PSK)
-	if err != nil {
-		return &client, fmt.Errorf("there was an error Base64 decoding the PSK:\n%s", err)
+	if config.PSK != "" {
+		client.psk, err = base64.StdEncoding.DecodeString(config.PSK)
+		if err != nil {
+			return &client, fmt.Errorf("there was an error Base64 decoding the PSK:\n%s", err)
+		}
+		client.secret = client.psk
 	}
-	client.secret = client.psk
 
 	// Set up the Authenticator
 	switch strings.ToLower(config.AuthPackage) {
@@ -186,6 +180,10 @@ func New(config Config) (*Client, error) {
 		var t transformer.Transformer
 		switch strings.ToLower(transform) {
 		case "aes":
+			// Ensure there is a key
+			if config.PSK == "" || len(client.psk) <= 0 {
+				return nil, fmt.Errorf("AES transformer requires a PSK to be set")
+			}
 			t = aes2.NewEncrypter()
 		case "base64-byte":
 			t = b64.NewEncoder(b64.BYTE)
