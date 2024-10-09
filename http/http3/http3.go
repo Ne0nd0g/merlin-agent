@@ -54,7 +54,7 @@ func NewHTTPClient(insecure bool) (*http.Client, error) {
 
 	TLSConfig.NextProtos = []string{"h3"} // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids
 	transport := &http3.RoundTripper{
-		QuicConfig: &quic.Config{
+		QUICConfig: &quic.Config{
 			// Opted for a long timeout to prevent the client from sending a PING Frame.
 			// If MaxIdleTimeout is too high, agent will never get an error if the server is offline and will perpetually run without exiting because MaxFailedCheckins is never incremented
 			MaxIdleTimeout: time.Second * 30,
