@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   - golang.org/x/text v0.14.0 => v0.19.0
   - github.com/fatih/color v1.16.0 => v1.17.0
   - github.com/quic-go/quic-go v0.42.0 => v0.47.0
+  - github.com/refraction-networking/utls v1.6.4 => v1.6.7
 
 ## 2.4.1 - 2024-04-23
 
