@@ -6,9 +6,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## 2.5.0 - 2024-10-09
 
+### Fixed
+
+- Fixed [Issue 43](https://github.com/Ne0nd0g/merlin-agent/issues/43) - Added `fmt` import to FreeBSD shell
+
 ### Changed
 
 - Check if Mythic client configuration contained a PSK for the Mythic `http` C2 profile
+- Upgraded the following libraries:
+  - golang.org/x/crypto v0.22.0 => v0.28.0
+  - golang.org/x/net v0.24.0 => v0.30.0
+  - golang.org/x/sys v0.19.0 => v0.26.0
+  - golang.org/x/text v0.14.0 => v0.19.0
+  - golang.org/x/tools v0.20.0 => v0.21.1-0.20240508182429-e35e4ccd0d2d
+  - github.com/fatih/color v1.16.0 => v1.17.0
+
 
 ## 2.4.1 - 2024-04-23
 
