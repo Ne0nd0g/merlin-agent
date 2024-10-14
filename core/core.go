@@ -37,7 +37,7 @@ var Verbose = false
 var Debug = false
 
 // Version is the Merlin Agent's version number
-var Version = "2.4.1"
+var Version = "2.4.2"
 
 // Build is the build number of the Merlin Agent program set at compile time
 var Build = "nonRelease"
