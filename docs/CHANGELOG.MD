@@ -11,10 +11,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Upgraded the minimum version of go to v1.23
 - Upgraded the following libraries
   - golang.org/x/crypto v0.28.0 => v0.37.0
+  - golang.org/x/net v0.30.0 => v0.39.0
   - golang.org/x/sync v0.8.0 => v0.13.0
   - golang.org/x/sys v0.26.0 => v0.32.0
   - golang.org/x/text v0.19.0 => v0.24.0
   - github.com/go-jose/go-jose/v3 v3.0.3 => v3.0.4
+  - github.com/quic-go/quic-go v0.47.0 => v0.50.1
 
 ## 2.4.2 - 2024-10-14
 
