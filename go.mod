@@ -1,8 +1,8 @@
 module github.com/Ne0nd0g/merlin-agent/v2
 
-go 1.22.0
+go 1.23.0
 
-toolchain go1.23.0
+toolchain go1.24.2
 
 require (
 	github.com/C-Sto/BananaPhone v0.0.0-20220220002628-6585e5913761
@@ -13,15 +13,15 @@ require (
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 	github.com/cretz/gopaque v0.1.0
 	github.com/fatih/color v1.17.0
-	github.com/go-jose/go-jose/v3 v3.0.3
+	github.com/go-jose/go-jose/v3 v3.0.4
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.6.0
 	github.com/quic-go/quic-go v0.47.0
 	github.com/refraction-networking/utls v1.6.7
-	golang.org/x/crypto v0.28.0
+	golang.org/x/crypto v0.37.0
 	golang.org/x/net v0.30.0
-	golang.org/x/sys v0.26.0
-	golang.org/x/text v0.19.0
+	golang.org/x/sys v0.32.0
+	golang.org/x/text v0.24.0
 )
 
 require (
@@ -41,6 +41,6 @@ require (
 	go.uber.org/mock v0.4.0 // indirect
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
 	golang.org/x/mod v0.21.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
+	golang.org/x/sync v0.13.0 // indirect
 	golang.org/x/tools v0.26.0 // indirect
 )
