@@ -334,26 +334,6 @@ func (client *Client) Listen() (returnMessages []messages.Base, err error) {
 	return
 }
 
-func (client *Client) proxy() (err error) {
-	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.proxy(): Sending CONNECT request to proxy: %s", client.Proxy))
-	fmt.Printf("clients/http.proxy(): client.URL: %+v\n", client.URL[client.currentURL])
-
-	req, err := http.NewRequest("CONNECT", client.URL[client.currentURL], nil)
-	if err != nil {
-		err = fmt.Errorf("there was an error building the HTTP CONNECT request: %s", err)
-		return
-	}
-
-	var resp *http.Response
-	resp, err = client.Client.Do(req)
-	if err != nil {
-		err = fmt.Errorf("there was an error sending the HTTP CONNECT request: %s", err)
-		return
-	}
-	cli.Message(cli.DEBUG, fmt.Sprintf("clients/http.proxy(): HTTP CONNECT response: %+v", resp))
-	return
-}
-
 // Send takes in a Merlin message structure, performs any encoding or encryption, and sends it to the server.
 // The function also decodes and decrypts response messages and returns a Merlin message structure.
 // This is where the client's logic is for communicating with the server.
