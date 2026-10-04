@@ -1,0 +1,99 @@
+name: "Build, Test & Lint"
+
+on:
+  push:
+    branches: [ "dev", "main" ]
+    paths-ignore:
+      - '.github/**'
+      - 'data/**'
+      - 'docs/**'
+      - '.gitattributes'
+      - '.gitignore'
+      - '.gitmodules'
+      - 'LICENSE'
+      - 'README.MD'
+  pull_request:
+    branches: [ "dev", "main" ]
+    paths-ignore:
+      - '.github/**'
+      - 'data/**'
+      - 'docs/**'
+      - '.gitattributes'
+      - '.gitignore'
+      - '.gitmodules'
+      - 'LICENSE'
+      - 'README.MD'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          # Single source of truth for the Go version: the module's go directive.
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Build
+        # make all cross-compiles the agent for every supported platform
+        # (windows, windows-debug, linux, darwin) so a change that breaks any
+        # target's build is caught here, not at release time. Pure-Go builds,
+        # no CGO toolchain required.
+        run: make all
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Vulnerability scan (govulncheck)
+        # Built with the toolchain selected above so it can analyze this module's Go version.
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  lint:
+    name: Lint (golangci-lint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+  gosec:
+    name: Security scan (gosec)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: gosec
+        # Run gosec with the toolchain selected above (mirrors the govulncheck step) so it can
+        # analyze this module's Go version; the securego/gosec Docker action can ship an older Go.
+        # G115 (integer overflow on conversion) is excluded repo-wide, matching the previous CI;
+        # individual findings are annotated inline with #nosec.
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.29.0 -exclude G115 ./...

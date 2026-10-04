@@ -401,7 +401,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 				address = fmt.Sprintf("%s:443", req.URL.Host)
 			}
 		}
-		conn, err = net.Dial("tcp", address)
+		conn, err = net.Dial("tcp", address) // #nosec G704 -- the agent connects to its operator-configured C2 endpoint by design; not attacker-controlled SSRF
 		if err != nil {
 			return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): %w", err)
 		}
@@ -434,7 +434,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			var proxyReq *http.Request
 			// The protocol should match the protocol the proxy is expecting and host:port should be the destination
 			connectURL := fmt.Sprintf("%s://%s", proxyURL.Scheme, req.URL.Host)
-			proxyReq, err = http.NewRequest(http.MethodConnect, connectURL, nil)
+			proxyReq, err = http.NewRequest(http.MethodConnect, connectURL, nil) // #nosec G704 -- the agent connects through its operator-configured proxy by design; not attacker-controlled SSRF
 			if err != nil {
 				return nil, fmt.Errorf("clients/utls/utls.go RoundTrip(): there was an error creating the CONNECT request: %w", err)
 			}
