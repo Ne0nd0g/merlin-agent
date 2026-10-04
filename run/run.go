@@ -106,9 +106,8 @@ func Run(a agent.Agent, c clients.Client) {
 				}
 			}
 		}
-		// Get the latest copy of agent and client after incoming messages have been processed
+		// Get the latest copy of the agent after incoming messages have been processed
 		a = agentService.Get()
-		c = clientService.Get()
 
 		// Determine if the max number of failed checkins has been reached
 		if a.Failed() >= a.MaxRetry() && a.MaxRetry() != 0 {

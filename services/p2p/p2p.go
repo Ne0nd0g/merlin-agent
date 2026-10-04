@@ -169,7 +169,7 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 				} else {
 					stop = (i + 1) * p2p.MaxSizeSMB
 				}
-				n, err = link.Conn().(net.Conn).Write(delegate.Payload[start:stop])
+				_, err = link.Conn().(net.Conn).Write(delegate.Payload[start:stop])
 				if err != nil {
 					cli.Message(cli.WARN, fmt.Sprintf("services/p2p.Handle(): there was an error writing a message to the linked agent %s: %s\n", link.Conn().(net.Conn).RemoteAddr(), err))
 					break
@@ -201,9 +201,9 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 				}
 				switch link.Type() {
 				case p2p.UDPBIND:
-					n, err = link.Conn().(net.Conn).Write(delegate.Payload[start:stop])
+					_, err = link.Conn().(net.Conn).Write(delegate.Payload[start:stop])
 				case p2p.UDPREVERSE:
-					n, err = link.Conn().(net.PacketConn).WriteTo(delegate.Payload[start:stop], link.Remote())
+					_, err = link.Conn().(net.PacketConn).WriteTo(delegate.Payload[start:stop], link.Remote())
 				}
 				if err != nil {
 					cli.Message(cli.WARN, fmt.Sprintf("services/p2p.Handle(): there was an error writing a message to the linked agent %s: %s\n", link.Conn().(net.Conn).RemoteAddr(), err))
@@ -219,7 +219,6 @@ func (s *Service) Handle(delegates []messages.Delegate) {
 			}
 		default:
 			cli.Message(cli.WARN, fmt.Sprintf("services/p2p.Handle(): unhandled Agent type: %d", link.Type()))
-			break
 		}
 
 		if err != nil {
