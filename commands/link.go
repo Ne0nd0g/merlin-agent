@@ -272,7 +272,9 @@ func Connect(network string, args []string) (results jobs.Results) {
 
 	errD := gob.NewDecoder(reader).Decode(&msg)
 	if errD != nil {
-		err = fmt.Errorf("there was an error decoding the gob message:\r\n%s", errD.Error())
+		errMsg := fmt.Sprintf("there was an error decoding the gob message:\r\n%s", errD.Error())
+		results.Stderr = errMsg
+		cli.Message(cli.WARN, errMsg)
 		return
 	}
 
