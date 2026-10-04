@@ -1,0 +1,20 @@
+# golangci-lint v2 configuration.
+# Based on the shared Merlin template (v2 defaults: errcheck, govet, ineffassign,
+# staticcheck, unused + lax generated-file exclusion), tuned for this repo.
+version: "2"
+
+linters:
+  exclusions:
+    rules:
+      # SA4023 ("comparison is always true"): these call sites invoke functions
+      # that have build-tag-specific implementations. On the build golangci-lint
+      # analyzes (linux / without the `smb` client) they resolve to no-op stubs
+      # that ALWAYS return a non-nil error, so staticcheck sees the `err != nil`
+      # check as always true. The real implementations on other build tags
+      # (commands/smb_windows.go, commands/exec_windows.go, clients/smb/smb_windows.go)
+      # can return nil, so the checks are required there. Scoped to the specific
+      # files so a genuine SA4023 elsewhere is still reported.
+      - path: (^main\.go$|^commands/listener\.go$|^commands/modules\.go$)
+        linters:
+          - staticcheck
+        text: SA4023

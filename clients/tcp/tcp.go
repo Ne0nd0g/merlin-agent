@@ -186,10 +186,7 @@ func New(config Config) (*Client, error) {
 		case "xor":
 			t = xor.NewEncrypter()
 		default:
-			err := fmt.Errorf("clients/tcp.New(): unhandled transform type: %s", transform)
-			if err != nil {
-				return nil, err
-			}
+			return nil, fmt.Errorf("clients/tcp.New(): unhandled transform type: %s", transform)
 		}
 		client.transformers = append(client.transformers, t)
 	}
