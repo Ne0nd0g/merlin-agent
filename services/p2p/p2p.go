@@ -125,7 +125,7 @@ func (s *Service) Check() (delegates []messages.Delegate) {
 // Handle takes in a list of incoming Delegate messages to this parent Agent and sends it to the child or linked Agent
 func (s *Service) Handle(delegates []messages.Delegate) {
 	cli.Message(cli.DEBUG, fmt.Sprintf("services/p2p.Handle(): entering into function with %d delegate messages", len(delegates)))
-	defer cli.Message(cli.DEBUG, fmt.Sprintf("services/p2p.Handle(): exiting function"))
+	defer cli.Message(cli.DEBUG, "services/p2p.Handle(): exiting function")
 
 	for _, delegate := range delegates {
 		cli.Message(cli.DEBUG, fmt.Sprintf("services/p2p.Handle(): processing delegate message for %s, payload size: %d, delegate messages: %d", delegate.Agent, len(delegate.Payload), len(delegate.Delegates)))

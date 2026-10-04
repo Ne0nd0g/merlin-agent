@@ -379,7 +379,7 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 		//fmt.Printf("Transformer %T: %+v\n", transform, transform)
 		ret, err := transform.Deconstruct(data, client.secret)
 		if err != nil {
-			cli.Message(cli.WARN, fmt.Sprintf("clients/tcp.Deconstruct(): unable to deconstruct with Agent's secret, retrying with PSK"))
+			cli.Message(cli.WARN, "clients/tcp.Deconstruct(): unable to deconstruct with Agent's secret, retrying with PSK")
 			// Try to see if the PSK works
 			k := sha256.Sum256([]byte(client.psk))
 			ret, err = transform.Deconstruct(data, k[:])

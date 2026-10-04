@@ -43,7 +43,7 @@ const (
 
 // Message is used to print text to Standard Out
 func Message(level int, message string) {
-	if core.Verbose == false && core.Debug == false {
+	if !core.Verbose && !core.Debug {
 		return
 	}
 	switch level {

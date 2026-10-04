@@ -25,7 +25,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"strconv"
 
 	// Merlin Main
@@ -99,7 +98,7 @@ func MiniDump(cmd jobs.Command) (jobs.FileTransfer, error) {
 	}
 
 	fileHash := sha256.New()
-	_, errW := io.WriteString(fileHash, string(miniD["FileContent"].([]byte)))
+	_, errW := fileHash.Write(miniD["FileContent"].([]byte))
 	if errW != nil {
 		cli.Message(cli.WARN, fmt.Sprintf("There was an error generating the SHA256 file hash e:\r\n%s", errW.Error()))
 	}

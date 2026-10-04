@@ -26,7 +26,6 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"os"
 
 	// Merlin Main
@@ -66,7 +65,7 @@ func Upload(transfer jobs.FileTransfer) (ft jobs.FileTransfer, err error) {
 	}
 
 	fileHash := sha1.New() // #nosec G401 // Use SHA1 because it is what many Blue Team tools use
-	_, errW := io.WriteString(fileHash, string(fileData))
+	_, errW := fileHash.Write(fileData)
 	if errW != nil {
 		cli.Message(cli.WARN, fmt.Sprintf("There was an error generating the SHA1 file hash e:\r\n%s", errW.Error()))
 	}

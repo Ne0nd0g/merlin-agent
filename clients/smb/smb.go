@@ -66,7 +66,7 @@ func (client *Client) Authenticate(messages.Base) (err error) {
 
 // Get is a generic function used to retrieve the value of a Client's field
 func (client *Client) Get(string) string {
-	return fmt.Sprintf("clients/smb.Get(): SMB client not compiled into this program")
+	return "clients/smb.Get(): SMB client not compiled into this program"
 }
 
 // Initial executes the specific steps required to establish a connection with the C2 server and checkin or register an agent
