@@ -18,3 +18,15 @@ linters:
         linters:
           - staticcheck
         text: SA4023
+      # SA1019 (deprecated golang.org/x/net/http2): http/utls/utls.go drives HTTP/2
+      # over a custom uTLS connection (TLS-fingerprint / JA3 evasion) via
+      # x/net/http2.Transport.NewClientConn, which takes a caller-supplied net.Conn.
+      # The stdlib replacement (http.Transport.NewClientConn) dials its own
+      # connection by address and cannot run HTTP/2 over the pre-established uTLS
+      # conn, so migrating would lose the fingerprint spoofing. Kept deliberately on
+      # x/net/http2. A future migration (net/http DialTLSContext + a ConnectionState
+      # wrapper, Go 1.24+) is tracked separately in the revival notes.
+      - path: ^http/utls/utls\.go$
+        linters:
+          - staticcheck
+        text: SA1019

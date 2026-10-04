@@ -25,15 +25,10 @@ package http2
 
 import (
 	// Standard
-	"context"
 	"crypto/tls"
 	"fmt"
-	"net"
 	"net/http"
 	"strings"
-
-	// X Packages
-	"golang.org/x/net/http2"
 
 	// Internal
 	"github.com/Ne0nd0g/merlin-agent/v2/cli"
@@ -57,16 +52,18 @@ func NewHTTPClient(protocol string, insecure bool) (*http.Client, error) {
 	switch strings.ToLower(protocol) {
 	case "h2", "http2":
 		TLSConfig.NextProtos = []string{"h2"} // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids
-		transport = &http2.Transport{
+		protocols := new(http.Protocols)
+		protocols.SetHTTP2(true)
+		transport = &http.Transport{
 			TLSClientConfig: TLSConfig,
+			Protocols:       protocols,
 		}
 	case "h2c":
-		transport = &http2.Transport{
-			AllowHTTP: true,
-			DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
-				return net.Dial(network, addr)
-			},
-		}
+		// Cleartext HTTP/2 (H2C) served natively by net/http (Go 1.24+), replacing
+		// the deprecated x/net/http2.Transport{AllowHTTP, DialTLSContext}.
+		protocols := new(http.Protocols)
+		protocols.SetUnencryptedHTTP2(true)
+		transport = &http.Transport{Protocols: protocols}
 	default:
 		return nil, fmt.Errorf("%s is not a valid client protocol", protocol)
 	}
