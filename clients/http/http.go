@@ -746,14 +746,14 @@ func (client *Client) Deconstruct(data []byte) (messages.Base, error) {
 			client.authenticated = false
 			client.secret = k[:]
 		}
-		switch ret.(type) {
+		switch ret := ret.(type) {
 		case []uint8:
-			data = ret.([]byte)
+			data = ret
 		case string:
-			data = []byte(ret.(string)) // Probably not what I should be doing
+			data = []byte(ret) // Probably not what I should be doing
 		case messages.Base:
-			//fmt.Printf("pkg/listeners.Deconstruct(): returning Base message: %+v\n", ret.(messages.Base))
-			return ret.(messages.Base), nil
+			//fmt.Printf("pkg/listeners.Deconstruct(): returning Base message: %+v\n", ret)
+			return ret, nil
 		default:
 			return messages.Base{}, fmt.Errorf("clients/http.Deconstruct(): unhandled data type for Deconstruct(): %T", ret)
 		}
