@@ -214,10 +214,8 @@ func JA3toClientHello(ja3 string) (*tls.ClientHelloSpec, error) {
 		clientHello.CipherSuites = append(clientHello.CipherSuites, uint16(cid))
 	}
 
-	// Parse EllipticCurve
-	if len(curves) == 1 && curves[0] == "" {
-		curves = []string{}
-	} else if len(curves) > 0 {
+	// Parse EllipticCurve (skip an empty JA3 field, represented as a single "" element)
+	if len(curves) > 0 && (len(curves) != 1 || curves[0] != "") {
 		var targetCurves []tls.CurveID
 		for _, c := range curves {
 			cid, err := strconv.ParseUint(c, 10, 16)
@@ -229,10 +227,8 @@ func JA3toClientHello(ja3 string) (*tls.ClientHelloSpec, error) {
 		tlsExtensions["10"] = &tls.SupportedCurvesExtension{Curves: targetCurves}
 	}
 
-	// Parse EllipticCurvePointFormat
-	if len(pointFormats) == 1 && pointFormats[0] == "" {
-		pointFormats = []string{}
-	} else if len(pointFormats) > 0 {
+	// Parse EllipticCurvePointFormat (skip an empty JA3 field, represented as a single "" element)
+	if len(pointFormats) > 0 && (len(pointFormats) != 1 || pointFormats[0] != "") {
 		var targetPointFormats []byte
 		for _, p := range pointFormats {
 			pid, err := strconv.ParseUint(p, 10, 8)
