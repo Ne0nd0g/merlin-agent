@@ -5,8 +5,8 @@ github.com/C-Sto/BananaPhone v0.0.0-20220220002628-6585e5913761 h1:0144WWUvo86bV
 github.com/C-Sto/BananaPhone v0.0.0-20220220002628-6585e5913761/go.mod h1:QsEPWHZooj8uXL2YEdpQX+hDr00Plw7myenTiduBHRA=
 github.com/Ne0nd0g/go-clr v1.0.4 h1:NVs/wxUuo8DQZO1jY6T0bZGIqoRqOr4voAx+YQXqrDE=
 github.com/Ne0nd0g/go-clr v1.0.4/go.mod h1:vkwuMjmUqtXgZYoYr1kcNqRvE4yQYC9KGwQFhOr0aYc=
-github.com/Ne0nd0g/merlin-message v1.3.0 h1:HelXwN6Gtk80C2ted0+PAprq+zRiQRGLG6s6phyFY5o=
-github.com/Ne0nd0g/merlin-message v1.3.0/go.mod h1:6eAh2KI4XrOAF+y4W2DN0qfRVWiAGzYlq148iKe3sSA=
+github.com/Ne0nd0g/merlin-message v1.4.0-rc1 h1:fSC3xCNrSB29Pyqr2oQR0SR0DtZ0wXFeCSA845zlid0=
+github.com/Ne0nd0g/merlin-message v1.4.0-rc1/go.mod h1:lGsAP7uYbC0AOmlVyi+ZtiAS1N57lqqqppgVRFvNgmA=
 github.com/Ne0nd0g/npipe v1.1.1 h1:kAlWGT/O5q+5RlzsB/629Xvd2YWJUcp22RXMwRIWcFU=
 github.com/Ne0nd0g/npipe v1.1.1/go.mod h1:ul0D+vfZJ95/+/xwbzY5+clEUrRVuUcY8Sg0X3h99I4=
 github.com/Ne0nd0g/winhttp v1.0.1 h1:ltilMX306jUuuz4v4vZ++vnPA/ztxmC4m3zxCHXajYE=

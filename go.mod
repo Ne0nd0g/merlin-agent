@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/C-Sto/BananaPhone v0.0.0-20220220002628-6585e5913761
 	github.com/Ne0nd0g/go-clr v1.0.4
-	github.com/Ne0nd0g/merlin-message v1.3.0
+	github.com/Ne0nd0g/merlin-message v1.4.0-rc1
 	github.com/Ne0nd0g/npipe v1.1.1
 	github.com/Ne0nd0g/winhttp v1.0.1
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
