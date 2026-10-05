@@ -5,6 +5,7 @@ W=Windows-x64
 L=Linux-x64
 B=FreeBSD-x64
 A=Linux-arm
+A64=Linux-arm64
 M=Linux-mips
 D=Darwin-x64
 
@@ -90,7 +91,7 @@ $(shell mkdir -p ${DIR})
 default:
 	go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT} ./main.go
 
-all: windows windows-debug linux darwin
+all: windows windows-debug linux darwin arm arm64
 
 # Compile Agent - Windows x64
 windows:
@@ -115,6 +116,10 @@ mips:
 # Compile Agent - Linux arm
 arm:
 	export GOOS=linux;export GOARCH=arm;export GOARM=7;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${A} ./main.go
+
+# Compile Agent - Linux arm64
+arm64:
+	export GOOS=linux;export GOARCH=arm64;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${A64} ./main.go
 
 # Compile Agent - Linux x64
 linux:
@@ -159,6 +164,14 @@ package-darwin:
 	${PACKAGE} ${DIR}/${MAGENT}-${D}.7z ${F}
 	cd ${DIR};${PACKAGE} ${MAGENT}-${D}.7z ${MAGENT}-${D}
 
+package-arm:
+	${PACKAGE} ${DIR}/${MAGENT}-${A}.7z ${F}
+	cd ${DIR};${PACKAGE} ${MAGENT}-${A}.7z ${MAGENT}-${A}
+
+package-arm64:
+	${PACKAGE} ${DIR}/${MAGENT}-${A64}.7z ${F}
+	cd ${DIR};${PACKAGE} ${MAGENT}-${A64}.7z ${MAGENT}-${A64}
+
 package-freebsd:
 	${PACKAGE} ${DIR}/${MAGENT}-${B}.7z ${F}
 	cd ${DIR};${PACKAGE} ${MAGENT}-${B}.7z ${MAGENT}-${D}
@@ -169,7 +182,7 @@ package-move:
 clean:
 	rm -rf ${DIR}*
 
-package-all: package-windows package-windows-debug package-linux package-darwin
+package-all: package-windows package-windows-debug package-linux package-darwin package-arm package-arm64
 
 #Build all files for release distribution
 distro: clean all package-all package-move
