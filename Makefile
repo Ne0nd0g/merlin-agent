@@ -75,6 +75,13 @@ WINAGENTLDFLAGS=-ldflags '-s -w ${XAUTH} ${XADDR} ${XTRANSFORMS} ${XLISTENER} ${
 GCFLAGS=-gcflags=all=-trimpath=$(GOPATH)
 ASMFLAGS=-asmflags=all=-trimpath=$(GOPATH)# -asmflags=-trimpath=$(GOPATH)
 
+# Build fully static, pure-Go agents for every target. The agent uses no cgo, so
+# this only forces static linking + Go's native net/user resolvers and makes
+# builds deterministic regardless of which C toolchains exist on the build host.
+# NOTE: this is the plain agent only. merlin-agent-dll builds a c-archive from
+# this code and MUST keep CGO_ENABLED=1 (mingw) — that lives in its own Makefile.
+export CGO_ENABLED := 0
+
 # Package Command
 PACKAGE=7za a -p${PASSWORD} -mhe -mx=9
 F=LICENSE
@@ -113,13 +120,13 @@ windows-garble-debug:
 mips:
 	export GOOS=linux;export GOARCH=mips;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${M} ./main.go
 
-# Compile Agent - Linux arm (armv7, static/pure-Go: CGO disabled)
+# Compile Agent - Linux arm (armv7)
 arm:
-	export GOOS=linux;export GOARCH=arm;export GOARM=7;export CGO_ENABLED=0;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${A} ./main.go
+	export GOOS=linux;export GOARCH=arm;export GOARM=7;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${A} ./main.go
 
-# Compile Agent - Linux arm64 (static/pure-Go: CGO disabled)
+# Compile Agent - Linux arm64
 arm64:
-	export GOOS=linux;export GOARCH=arm64;export CGO_ENABLED=0;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${A64} ./main.go
+	export GOOS=linux;export GOARCH=arm64;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${A64} ./main.go
 
 # Compile Agent - Linux x64
 linux:
