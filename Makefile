@@ -113,13 +113,13 @@ windows-garble-debug:
 mips:
 	export GOOS=linux;export GOARCH=mips;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${M} ./main.go
 
-# Compile Agent - Linux arm
+# Compile Agent - Linux arm (armv7, static/pure-Go: CGO disabled)
 arm:
-	export GOOS=linux;export GOARCH=arm;export GOARM=7;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${A} ./main.go
+	export GOOS=linux;export GOARCH=arm;export GOARM=7;export CGO_ENABLED=0;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${A} ./main.go
 
-# Compile Agent - Linux arm64
+# Compile Agent - Linux arm64 (static/pure-Go: CGO disabled)
 arm64:
-	export GOOS=linux;export GOARCH=arm64;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${A64} ./main.go
+	export GOOS=linux;export GOARCH=arm64;export CGO_ENABLED=0;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${A64} ./main.go
 
 # Compile Agent - Linux x64
 linux:
