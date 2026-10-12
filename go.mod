@@ -1,11 +1,11 @@
 module github.com/Ne0nd0g/merlin-agent/v2
 
-go 1.27.0
+go 1.27.2
 
 require (
 	github.com/C-Sto/BananaPhone v0.0.0-20220220002628-6585e5913761
 	github.com/Ne0nd0g/go-clr v1.0.4
-	github.com/Ne0nd0g/merlin-message v1.4.0-rc1
+	github.com/Ne0nd0g/merlin-message v1.4.0
 	github.com/Ne0nd0g/npipe v1.1.1
 	github.com/Ne0nd0g/winhttp v1.0.1
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
@@ -17,7 +17,7 @@ require (
 	github.com/quic-go/quic-go v0.63.0
 	github.com/refraction-networking/utls v1.8.2
 	golang.org/x/crypto v0.57.0
-	golang.org/x/net v0.59.0
+	golang.org/x/net v0.60.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/text v0.42.0
 )
