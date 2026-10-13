@@ -11,7 +11,7 @@ D=Darwin-x64
 D64=Darwin-arm64
 
 # Merlin version number
-VERSION=$(shell cat ./core/core.go |grep "var Version ="|cut -d"\"" -f2)
+VERSION=$(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//')
 
 MAGENT=merlinAgent
 PASSWORD=merlin
@@ -29,6 +29,7 @@ TAGS ?=
 
 # Merlin Agent Variables
 XBUILD=-X "github.com/Ne0nd0g/merlin-agent/v2/core.Build=${BUILD}"
+XVERSION=-X "github.com/Ne0nd0g/merlin-agent/v2/core.Version=${VERSION}"
 URL ?= https://127.0.0.1:443
 XURL=-X "main.url=${URL}"
 PSK ?= merlin
@@ -71,8 +72,8 @@ LISTENER ?=
 XLISTENER=-X "main.listener=${LISTENER}"
 
 # Compile Flags
-LDFLAGS=-ldflags '-s -w ${XADDR} ${XAUTH} ${XTRANSFORMS} ${XLISTENER} ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XHTTPCLIENT} ${XPSK} ${XSECURE} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} ${XPARROT} -buildid='
-WINAGENTLDFLAGS=-ldflags '-s -w ${XAUTH} ${XADDR} ${XTRANSFORMS} ${XLISTENER} ${XBUILD} ${XPROTO} ${XURL} ${XHOST} ${XHTTPCLIENT} ${XPSK} ${XSECURE} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} ${XPARROT} -H=windowsgui -buildid='
+LDFLAGS=-ldflags '-s -w ${XADDR} ${XAUTH} ${XTRANSFORMS} ${XLISTENER} ${XBUILD} ${XVERSION} ${XPROTO} ${XURL} ${XHOST} ${XHTTPCLIENT} ${XPSK} ${XSECURE} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} ${XPARROT} -buildid='
+WINAGENTLDFLAGS=-ldflags '-s -w ${XAUTH} ${XADDR} ${XTRANSFORMS} ${XLISTENER} ${XBUILD} ${XVERSION} ${XPROTO} ${XURL} ${XHOST} ${XHTTPCLIENT} ${XPSK} ${XSECURE} ${XSLEEP} ${XPROXY} $(XUSERAGENT) $(XHEADERS) ${XSKEW} ${XPAD} ${XKILLDATE} ${XRETRY} ${XPARROT} -H=windowsgui -buildid='
 GCFLAGS=-gcflags=all=-trimpath=$(GOPATH)
 ASMFLAGS=-asmflags=all=-trimpath=$(GOPATH)# -asmflags=-trimpath=$(GOPATH)
 
