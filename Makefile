@@ -8,6 +8,7 @@ A=Linux-arm
 A64=Linux-arm64
 M=Linux-mips
 D=Darwin-x64
+D64=Darwin-arm64
 
 # Merlin version number
 VERSION=$(shell cat ./core/core.go |grep "var Version ="|cut -d"\"" -f2)
@@ -98,7 +99,7 @@ $(shell mkdir -p ${DIR})
 default:
 	go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT} ./main.go
 
-all: windows windows-debug linux darwin arm arm64
+all: windows windows-debug linux darwin darwin-arm64 arm arm64
 
 # Compile Agent - Windows x64
 windows:
@@ -150,6 +151,10 @@ freebsd-garble:
 darwin:
 	export GOOS=darwin;export GOARCH=amd64;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${D} ./main.go
 
+# Compile Agent - Darwin arm64 (Apple Silicon)
+darwin-arm64:
+	export GOOS=darwin;export GOARCH=arm64;go build -tags ${TAGS} -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/${MAGENT}-${D64} ./main.go
+
 # Compile  Agent - macOS (Darwin) x64 with Garble - The SEED must be the exact same that was used when compiling the server
 # Garble version 0.5.2 or later must be installed and accessible in the PATH environment variable
 darwin-garble:
@@ -171,6 +176,10 @@ package-darwin:
 	${PACKAGE} ${DIR}/${MAGENT}-${D}.7z ${F}
 	cd ${DIR};${PACKAGE} ${MAGENT}-${D}.7z ${MAGENT}-${D}
 
+package-darwin-arm64:
+	${PACKAGE} ${DIR}/${MAGENT}-${D64}.7z ${F}
+	cd ${DIR};${PACKAGE} ${MAGENT}-${D64}.7z ${MAGENT}-${D64}
+
 package-arm:
 	${PACKAGE} ${DIR}/${MAGENT}-${A}.7z ${F}
 	cd ${DIR};${PACKAGE} ${MAGENT}-${A}.7z ${MAGENT}-${A}
@@ -189,7 +198,7 @@ package-move:
 clean:
 	rm -rf ${DIR}*
 
-package-all: package-windows package-windows-debug package-linux package-darwin package-arm package-arm64
+package-all: package-windows package-windows-debug package-linux package-darwin package-darwin-arm64 package-arm package-arm64
 
 #Build all files for release distribution
 distro: clean all package-all package-move
